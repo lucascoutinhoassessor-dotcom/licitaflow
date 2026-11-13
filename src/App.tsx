@@ -8,6 +8,7 @@ import { Carregando } from '@/components/ui'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { ConfiguracaoPendente } from '@/pages/ConfiguracaoPendente'
 import { ContaSuspensa } from '@/pages/ContaSuspensa'
+import { AcessoNegadoMaster } from '@/pages/master/AcessoNegado'
 
 const Landing = lazy(() => import('@/pages/landing/Landing'))
 const Entrar = lazy(() => import('@/pages/auth/Entrar'))
@@ -21,6 +22,7 @@ const Empresas = lazy(() => import('@/pages/app/Empresas'))
 const Equipe = lazy(() => import('@/pages/app/Equipe'))
 const Configuracoes = lazy(() => import('@/pages/app/Configuracoes'))
 const EmBreve = lazy(() => import('@/pages/app/EmBreve'))
+const MasterEntrar = lazy(() => import('@/pages/master/MasterEntrar'))
 const MasterLayout = lazy(() => import('@/pages/master/MasterLayout'))
 const MasterVisaoGeral = lazy(() => import('@/pages/master/VisaoGeral'))
 const MasterOrganizacoes = lazy(() => import('@/pages/master/Organizacoes'))
@@ -51,10 +53,13 @@ function ExigeOrganizacao() {
   )
 }
 
-function ExigeAdmin() {
+/** Guarda do console master: independente do app do cliente (não exige organização). */
+function ExigeMaster() {
+  const { user, carregando: carregandoAuth } = useAuth()
   const { ehAdmin, carregando } = useEhAdmin()
-  if (carregando) return <Carregando telaCheia />
-  if (!ehAdmin) return <NaoEncontrada />
+  if (carregandoAuth || (user && carregando)) return <Carregando telaCheia />
+  if (!user) return <Navigate to="/master/entrar" replace />
+  if (!ehAdmin) return <AcessoNegadoMaster />
   return (
     <Suspense fallback={<Carregando telaCheia />}>
       <MasterLayout />
@@ -92,7 +97,8 @@ export default function App() {
             <Route path=":modulo" element={<EmBreve />} />
           </Route>
 
-          <Route path="/master" element={<ExigeLogin><ExigeAdmin /></ExigeLogin>}>
+          <Route path="/master/entrar" element={<MasterEntrar />} />
+          <Route path="/master" element={<ExigeMaster />}>
             <Route index element={<MasterVisaoGeral />} />
             <Route path="organizacoes" element={<MasterOrganizacoes />} />
             <Route path="usuarios" element={<MasterUsuarios />} />

@@ -208,15 +208,15 @@ export default function Organizacoes() {
       {q.error && <Aviso>{(q.error as Error).message}</Aviso>}
 
       <Card className="overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[760px] text-sm">
+        <div>
+          <table className="w-full text-sm">
             <thead className="bg-muted/50 text-left text-xs uppercase tracking-wide text-muted-foreground">
               <tr>
                 <th className="px-4 py-3 font-medium">Organização</th>
                 <th className="px-4 py-3 font-medium">Status</th>
-                <th className="px-4 py-3 font-medium">Implantação</th>
-                <th className="px-4 py-3 text-right font-medium">Uso</th>
-                <th className="px-4 py-3 font-medium">Última atividade</th>
+                <th className="hidden px-4 py-3 font-medium md:table-cell">Implantação</th>
+                <th className="hidden px-4 py-3 text-right font-medium lg:table-cell">Uso</th>
+                <th className="hidden px-4 py-3 font-medium md:table-cell">Última atividade</th>
               </tr>
             </thead>
             <tbody className="divide-y">
@@ -224,12 +224,12 @@ export default function Organizacoes() {
                 const { pct } = progresso(o)
                 return (
                   <tr key={o.id} onClick={() => setEditando(o)} className="cursor-pointer hover:bg-muted/40">
-                    <td className="px-4 py-3">
-                      <div className="font-medium">{o.nome}</div>
-                      <div className="text-xs text-muted-foreground">{o.dono_email} · {o.tipo === 'assessoria' ? 'assessoria' : 'fornecedor'}</div>
+                    <td className="max-w-0 px-4 py-3">
+                      <div className="truncate font-medium">{o.nome}</div>
+                      <div className="truncate text-xs text-muted-foreground">{o.dono_email} · {o.tipo === 'assessoria' ? 'assessoria' : 'fornecedor'}</div>
                     </td>
-                    <td className="px-4 py-3">{statusOrg(o)}</td>
-                    <td className="px-4 py-3">
+                    <td className="whitespace-nowrap px-4 py-3 text-right md:text-left">{statusOrg(o)}</td>
+                    <td className="hidden px-4 py-3 md:table-cell">
                       <div className="flex items-center gap-2">
                         <div className="h-1.5 w-20 rounded-full bg-muted">
                           <div className="h-1.5 rounded-full bg-accent" style={{ width: `${pct}%` }} />
@@ -237,10 +237,10 @@ export default function Organizacoes() {
                         <span className="text-xs tabular-nums text-muted-foreground">{pct}%</span>
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-right text-xs tabular-nums text-muted-foreground">
+                    <td className="hidden px-4 py-3 text-right text-xs tabular-nums text-muted-foreground lg:table-cell">
                       {o.membros} memb. · {o.empresas} emp. · {o.processos} proc.
                     </td>
-                    <td className="px-4 py-3 text-xs text-muted-foreground">{formatarDataHora(o.ultima_atividade)}</td>
+                    <td className="hidden px-4 py-3 text-xs text-muted-foreground md:table-cell">{formatarDataHora(o.ultima_atividade)}</td>
                   </tr>
                 )
               })}

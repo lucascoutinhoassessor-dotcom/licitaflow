@@ -62,6 +62,25 @@
     --sidebar-border: 222 30% 12%;
   }
 
+  /* Console master: paleta própria (grafite + âmbar), independente do tema do app */
+  .console {
+    --background: 240 10% 4%;
+    --foreground: 0 0% 96%;
+    --card: 240 6% 9%;
+    --card-foreground: 0 0% 96%;
+    --primary: 38 92% 50%;
+    --primary-foreground: 240 10% 4%;
+    --secondary: 240 5% 15%;
+    --secondary-foreground: 0 0% 96%;
+    --accent: 38 92% 50%;
+    --accent-foreground: 240 10% 4%;
+    --muted: 240 5% 14%;
+    --muted-foreground: 240 5% 62%;
+    --border: 240 5% 17%;
+    --input: 240 5% 22%;
+    --ring: 38 92% 50%;
+  }
+
   * {
     @apply border-border;
   }

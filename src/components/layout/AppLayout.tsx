@@ -1,12 +1,11 @@
 import { useState, type ReactNode } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
-import { Building, ChevronsUpDown, LogOut, Menu, Moon, ShieldCheck, Sun, X } from 'lucide-react'
+import { Building, ChevronsUpDown, LogOut, Menu, Moon, Sun, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { NAV_CONTA, NAV_PRINCIPAL, type ItemNav } from '@/lib/navegacao'
 import { useAuth } from '@/providers/AuthProvider'
 import { useOrg } from '@/providers/OrgProvider'
 import { Logo } from '@/components/ui'
-import { useEhAdmin } from '@/hooks/useAdmin'
 
 function ItemMenu({ item, aoClicar }: { item: ItemNav; aoClicar: () => void }) {
   const Icone = item.icone
@@ -42,7 +41,6 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const [aberto, setAberto] = useState(false)
   const { user, sair } = useAuth()
   const { org, organizacoes, trocarOrg, empresas, empresa, trocarEmpresa } = useOrg()
-  const { ehAdmin } = useEhAdmin()
   const navigate = useNavigate()
   const fechar = () => setAberto(false)
 
@@ -91,15 +89,6 @@ export function AppLayout({ children }: { children: ReactNode }) {
           {NAV_CONTA.map((i) => (
             <ItemMenu key={i.rota} item={i} aoClicar={fechar} />
           ))}
-          {ehAdmin && (
-            <NavLink
-              to="/master"
-              onClick={fechar}
-              className="mt-4 flex items-center gap-3 rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-sm font-medium text-warning hover:bg-warning/20"
-            >
-              <ShieldCheck className="h-4 w-4" /> Painel master
-            </NavLink>
-          )}
         </nav>
 
         <div className="border-t border-sidebar-border p-3">
