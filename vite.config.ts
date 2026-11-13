@@ -9,6 +9,9 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  // Porta 3100 (a 3000 costuma estar ocupada por outros projetos). Precisa estar nas Redirect URLs do Supabase Auth.
+  server: { port: 3100, strictPort: true },
+  preview: { port: 3100 },
   build: {
     rollupOptions: {
       output: {
