@@ -23,7 +23,10 @@ export function ContratoForm({ contrato, processo, aoSalvar }: { contrato?: Cont
     orgao_nome: contrato?.orgao_nome ?? processo?.orgao_nome ?? '',
     orgao_cnpj: contrato?.orgao_cnpj ?? processo?.orgao_cnpj ?? '',
     objeto: contrato?.objeto ?? processo?.objeto ?? '',
-    valor_total: contrato?.valor_total != null ? String(contrato.valor_total).replace('.', ',') : processo?.valor_adjudicado != null ? String(processo.valor_adjudicado).replace('.', ',') : '',
+    valor_total: (() => {
+      const v = contrato?.valor_total ?? processo?.valor_adjudicado ?? processo?.valor_proposto ?? processo?.valor_estimado
+      return v != null ? String(v).replace('.', ',') : ''
+    })(),
     inicio_vigencia: contrato?.inicio_vigencia ?? '',
     fim_vigencia: contrato?.fim_vigencia ?? '',
     status: contrato?.status ?? 'ativo',
