@@ -19,9 +19,14 @@ export default function Entrar() {
     setErro('')
     setEnviando(true)
     const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password: senha })
+    if (error) {
+      setEnviando(false)
+      return setErro(mensagemErro(error))
+    }
+    // Conta de administração da plataforma vai direto para o console master
+    const { data: admin } = await supabase.rpc('is_platform_admin')
     setEnviando(false)
-    if (error) return setErro(mensagemErro(error))
-    navigate(destino, { replace: true })
+    navigate(admin === true && !voltar ? '/master' : destino, { replace: true })
   }
 
   return (

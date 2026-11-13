@@ -8,17 +8,21 @@ import { useAuth } from '@/providers/AuthProvider'
 import { Aviso, Button, Campo, Card, Carregando, Input, Logo } from '@/components/ui'
 import { EmpresaForm } from '@/components/EmpresaForm'
 import type { TipoOrg } from '@/types/db'
+import { useEhAdmin } from '@/hooks/useAdmin'
 
 export default function Onboarding() {
   const { org, empresas, carregando, recarregar, trocarOrg, trocarEmpresa } = useOrg()
   const { sair } = useAuth()
+  const { ehAdmin, carregando: carregandoAdmin } = useEhAdmin()
   const navigate = useNavigate()
   const [nome, setNome] = useState('')
   const [tipo, setTipo] = useState<TipoOrg>('fornecedor')
   const [erro, setErro] = useState('')
   const [salvando, setSalvando] = useState(false)
 
-  if (carregando) return <Carregando telaCheia />
+  if (carregando || carregandoAdmin) return <Carregando telaCheia />
+  // Conta de administração sem organização própria: o lugar dela é o console
+  if (ehAdmin && !org) return <Navigate to="/master" replace />
   if (org && empresas.length > 0) return <Navigate to="/app" replace />
 
   const etapa = org ? 2 : 1
