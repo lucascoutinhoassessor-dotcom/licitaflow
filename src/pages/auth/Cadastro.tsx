@@ -1,0 +1,82 @@
+import { useState, type FormEvent } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { MailCheck } from 'lucide-react'
+import { supabase, mensagemErro } from '@/lib/supabase'
+import { Aviso, Button, Campo, Input } from '@/components/ui'
+import { AuthShell } from './AuthShell'
+
+export default function Cadastro() {
+  const [nome, setNome] = useState('')
+  const [email, setEmail] = useState('')
+  const [senha, setSenha] = useState('')
+  const [erro, setErro] = useState('')
+  const [enviando, setEnviando] = useState(false)
+  const [confirmar, setConfirmar] = useState(false)
+  const navigate = useNavigate()
+  const [params] = useSearchParams()
+  const voltar = params.get('voltar')
+  const destino = voltar && voltar.startsWith('/') && !voltar.startsWith('//') ? voltar : '/onboarding'
+
+  async function enviar(e: FormEvent) {
+    e.preventDefault()
+    setErro('')
+    if (senha.length < 8) return setErro('A senha precisa ter pelo menos 8 caracteres.')
+    setEnviando(true)
+    const { data, error } = await supabase.auth.signUp({
+      email: email.trim(),
+      password: senha,
+      options: { data: { nome: nome.trim() }, emailRedirectTo: `${window.location.origin}${destino}` },
+    })
+    setEnviando(false)
+    if (error) return setErro(mensagemErro(error))
+    if (data.session) navigate(destino, { replace: true })
+    else setConfirmar(true)
+  }
+
+  if (confirmar) {
+    return (
+      <AuthShell titulo="Confirme seu e-mail">
+        <div className="flex flex-col items-center gap-3 text-center">
+          <MailCheck className="h-12 w-12 text-accent" />
+          <p className="text-sm text-muted-foreground">
+            Enviamos um link de confirmação para <strong className="text-foreground">{email}</strong>. Clique nele para ativar sua conta e continuar o cadastro.
+          </p>
+          <Link to="/entrar" className="text-sm font-medium text-primary hover:underline">
+            Voltar para o login
+          </Link>
+        </div>
+      </AuthShell>
+    )
+  }
+
+  return (
+    <AuthShell
+      titulo="Criar sua conta"
+      subtitulo="14 dias grátis. Sem cartão de crédito."
+      rodape={
+        <>
+          Já tem conta?{' '}
+          <Link to="/entrar" className="font-medium text-primary hover:underline">
+            Entrar
+          </Link>
+        </>
+      }
+    >
+      <form onSubmit={enviar} className="space-y-4">
+        {erro && <Aviso>{erro}</Aviso>}
+        <Campo rotulo="Seu nome" htmlFor="nome">
+          <Input id="nome" autoComplete="name" required value={nome} onChange={(e) => setNome(e.target.value)} />
+        </Campo>
+        <Campo rotulo="E-mail" htmlFor="email">
+          <Input id="email" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+        </Campo>
+        <Campo rotulo="Senha" htmlFor="senha" ajuda="Mínimo de 8 caracteres.">
+          <Input id="senha" type="password" autoComplete="new-password" required minLength={8} value={senha} onChange={(e) => setSenha(e.target.value)} />
+        </Campo>
+        <Button type="submit" className="w-full" carregando={enviando}>
+          Criar conta
+        </Button>
+      </form>
+    </AuthShell>
+  )
+}
