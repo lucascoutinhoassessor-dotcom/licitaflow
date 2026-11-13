@@ -3,10 +3,13 @@ import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation } from 'rea
 import { useAuth } from '@/providers/AuthProvider'
 import { OrgProvider, useOrg } from '@/providers/OrgProvider'
 import { supabaseNaoConfigurado } from '@/lib/supabase'
+import { useEhAdmin } from '@/hooks/useAdmin'
 import { Carregando } from '@/components/ui'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { ConfiguracaoPendente } from '@/pages/ConfiguracaoPendente'
+import { ContaSuspensa } from '@/pages/ContaSuspensa'
 
+const Landing = lazy(() => import('@/pages/landing/Landing'))
 const Entrar = lazy(() => import('@/pages/auth/Entrar'))
 const Cadastro = lazy(() => import('@/pages/auth/Cadastro'))
 const RecuperarSenha = lazy(() => import('@/pages/auth/RecuperarSenha'))
@@ -18,6 +21,11 @@ const Empresas = lazy(() => import('@/pages/app/Empresas'))
 const Equipe = lazy(() => import('@/pages/app/Equipe'))
 const Configuracoes = lazy(() => import('@/pages/app/Configuracoes'))
 const EmBreve = lazy(() => import('@/pages/app/EmBreve'))
+const MasterLayout = lazy(() => import('@/pages/master/MasterLayout'))
+const MasterVisaoGeral = lazy(() => import('@/pages/master/VisaoGeral'))
+const MasterOrganizacoes = lazy(() => import('@/pages/master/Organizacoes'))
+const MasterUsuarios = lazy(() => import('@/pages/master/Usuarios'))
+const MasterAtividade = lazy(() => import('@/pages/master/Atividade'))
 const NaoEncontrada = lazy(() => import('@/pages/NaoEncontrada'))
 
 function ExigeLogin({ children }: { children: ReactNode }) {
@@ -32,6 +40,7 @@ function ExigeLogin({ children }: { children: ReactNode }) {
 function ExigeOrganizacao() {
   const { carregando, org, empresas } = useOrg()
   if (carregando) return <Carregando telaCheia />
+  if (org?.suspensa) return <ContaSuspensa />
   if (!org || empresas.length === 0) return <Navigate to="/onboarding" replace />
   return (
     <AppLayout>
@@ -39,6 +48,17 @@ function ExigeOrganizacao() {
         <Outlet />
       </Suspense>
     </AppLayout>
+  )
+}
+
+function ExigeAdmin() {
+  const { ehAdmin, carregando } = useEhAdmin()
+  if (carregando) return <Carregando telaCheia />
+  if (!ehAdmin) return <NaoEncontrada />
+  return (
+    <Suspense fallback={<Carregando telaCheia />}>
+      <MasterLayout />
+    </Suspense>
   )
 }
 
@@ -56,7 +76,7 @@ export default function App() {
     <BrowserRouter>
       <Suspense fallback={<Carregando telaCheia />}>
         <Routes>
-          <Route path="/" element={<Navigate to="/app" replace />} />
+          <Route path="/" element={<Landing />} />
           <Route path="/entrar" element={<SoVisitante><Entrar /></SoVisitante>} />
           <Route path="/cadastro" element={<SoVisitante><Cadastro /></SoVisitante>} />
           <Route path="/recuperar-senha" element={<SoVisitante><RecuperarSenha /></SoVisitante>} />
@@ -70,6 +90,13 @@ export default function App() {
             <Route path="equipe" element={<Equipe />} />
             <Route path="configuracoes" element={<Configuracoes />} />
             <Route path=":modulo" element={<EmBreve />} />
+          </Route>
+
+          <Route path="/master" element={<ExigeLogin><ExigeAdmin /></ExigeLogin>}>
+            <Route index element={<MasterVisaoGeral />} />
+            <Route path="organizacoes" element={<MasterOrganizacoes />} />
+            <Route path="usuarios" element={<MasterUsuarios />} />
+            <Route path="atividade" element={<MasterAtividade />} />
           </Route>
 
           <Route path="*" element={<NaoEncontrada />} />

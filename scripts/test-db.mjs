@@ -11,7 +11,7 @@ const db = new PGlite();
 const stubs = `
 create role anon nologin; create role authenticated nologin; create role service_role nologin bypassrls;
 create schema auth; create schema storage;
-create table auth.users (id uuid primary key, email text, raw_user_meta_data jsonb default '{}');
+create table auth.users (id uuid primary key, email text, raw_user_meta_data jsonb default '{}', created_at timestamptz default now(), last_sign_in_at timestamptz, email_confirmed_at timestamptz);
 create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.sub', true), '')::uuid $$;
 create table storage.buckets (id text primary key, name text, public boolean, file_size_limit bigint);
 create table storage.objects (id uuid primary key default gen_random_uuid(), bucket_id text, name text);
@@ -95,6 +95,40 @@ expect(!blocked, 'upload no próprio prefixo é permitido');
 blocked = false;
 try { await as(U2, `insert into storage.objects (bucket_id, name) values ('arquivos', '${o1}/x.pdf')`); } catch { blocked = true; }
 expect(blocked, 'upload no prefixo de org onde é leitor é bloqueado');
+
+// painel master
+blocked = false;
+try { await as(U2, `select public.admin_resumo()`); } catch { blocked = true; }
+expect(blocked, 'usuário comum não acessa o painel master');
+
+blocked = false;
+try { await as(U2, `insert into public.platform_admins (user_id) values ('${U2}')`); } catch { blocked = true; }
+expect(blocked, 'usuário comum não consegue se tornar admin');
+
+await db.exec(`insert into public.platform_admins (user_id) values ('${U2}')`);  // via SQL Editor
+const resumo = (await as(U2, `select public.admin_resumo() r`)).rows[0].r;
+expect(resumo.organizacoes === 2 && resumo.usuarios === 2, 'admin vê totais de toda a plataforma');
+expect((await as(U2, `select * from public.admin_organizacoes()`)).rows.length === 2, 'admin lista todas as organizações');
+expect((await as(U2, `select * from public.admin_usuarios()`)).rows.length === 2, 'admin lista todos os usuários');
+expect((await as(U2, `select * from public.admin_atividade(50)`)).rows.length > 0, 'admin vê a atividade da plataforma');
+
+// cliente não altera o próprio plano
+await as(U1, `update public.organizations set plano = 'profissional', trial_ate = '2099-01-01' where id = '${o1}'`);
+const planoU1 = (await db.query(`select plano from public.organizations where id = '${o1}'`)).rows[0].plano;
+expect(planoU1 === 'trial', 'cliente não consegue mudar o próprio plano');
+
+// admin suspende org de U1
+await as(U2, `select public.admin_atualizar_org('${o1}', 'trial', current_date + 30, true, 'teste', null)`);
+await db.exec(`delete from public.memberships where org_id = '${o1}' and user_id = '${U2}'`); // U2 deixa de ser membro (só admin)
+expect((await as(U1, `select * from public.processos`)).rows.length === 0, 'org suspensa: membros perdem acesso aos dados');
+expect((await as(U1, `select suspensa from public.organizations where id = '${o1}'`)).rows[0]?.suspensa === true, 'org suspensa: dono ainda vê o aviso de suspensão');
+await as(U2, `select public.admin_atualizar_org('${o1}', 'profissional', current_date, false, null, null)`);
+expect((await as(U1, `select * from public.processos`)).rows.length === 1, 'reativar org devolve o acesso');
+expect((await db.query(`select plano from public.organizations where id = '${o1}'`)).rows[0].plano === 'profissional', 'admin muda o plano');
+
+blocked = false;
+try { await as(U2, `select public.admin_definir_admin('${U2}', false)`); } catch { blocked = true; }
+expect(blocked, 'admin não remove o próprio acesso master');
 
 // delete em cascata da org
 await as(U1, `delete from public.organizations where id = '${o1}'`);

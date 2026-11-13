@@ -30,6 +30,9 @@ module.exports = {
           border: 'hsl(var(--sidebar-border))',
         },
       },
+      keyframes: {
+        marquee: { from: { transform: 'translateX(0)' }, to: { transform: 'translateX(-50%)' } },
+      },
       borderRadius: {
         lg: 'var(--radius)',
         md: 'calc(var(--radius) - 2px)',

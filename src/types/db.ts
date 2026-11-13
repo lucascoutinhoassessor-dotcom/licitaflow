@@ -11,6 +11,8 @@ export interface Organizacao {
   tipo: TipoOrg
   plano: string
   trial_ate: string
+  suspensa: boolean
+  motivo_suspensao: string | null
   created_at: string
 }
 
