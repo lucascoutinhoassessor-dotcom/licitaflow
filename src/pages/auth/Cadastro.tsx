@@ -29,6 +29,10 @@ export default function Cadastro() {
     })
     setEnviando(false)
     if (error) return setErro(mensagemErro(error))
+    // E-mail já cadastrado: o Supabase responde "sucesso" sem identidades e não envia e-mail.
+    if (data.user && (data.user.identities?.length ?? 0) === 0) {
+      return setErro('Já existe uma conta com este e-mail. Use "Entrar" ou "Esqueci minha senha".')
+    }
     if (data.session) navigate(destino, { replace: true })
     else setConfirmar(true)
   }
