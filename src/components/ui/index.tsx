@@ -1,3 +1,4 @@
+import type React from 'react'
 import { forwardRef, type ButtonHTMLAttributes, type HTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes } from 'react'
 import { Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -73,6 +74,56 @@ export const Select = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSel
   />
 ))
 Select.displayName = 'Select'
+
+export const Textarea = forwardRef<HTMLTextAreaElement, React.TextareaHTMLAttributes<HTMLTextAreaElement>>(({ className, ...props }, ref) => (
+  <textarea
+    ref={ref}
+    className={cn(
+      'flex min-h-[80px] w-full rounded-md border border-input bg-card px-3 py-2 text-sm',
+      'placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50',
+      className,
+    )}
+    {...props}
+  />
+))
+Textarea.displayName = 'Textarea'
+
+export function Vazio({ icone: Icone, titulo, texto, acao }: { icone?: React.ComponentType<{ className?: string }>; titulo: string; texto?: string; acao?: ReactNode }) {
+  return (
+    <div className="flex flex-col items-center justify-center rounded-lg border border-dashed px-6 py-14 text-center">
+      {Icone && (
+        <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
+          <Icone className="h-6 w-6 text-primary" />
+        </div>
+      )}
+      <div className="font-medium">{titulo}</div>
+      {texto && <p className="mt-1 max-w-md text-sm text-muted-foreground">{texto}</p>}
+      {acao && <div className="mt-4">{acao}</div>}
+    </div>
+  )
+}
+
+export function Abas<T extends string>({ abas, atual, aoTrocar }: { abas: { id: T; rotulo: string; contagem?: number }[]; atual: T; aoTrocar: (id: T) => void }) {
+  return (
+    <div className="mb-5 flex gap-1 overflow-x-auto border-b [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" role="tablist">
+      {abas.map((a) => (
+        <button
+          key={a.id}
+          role="tab"
+          aria-selected={atual === a.id}
+          onClick={() => aoTrocar(a.id)}
+          className={cn(
+            '-mb-px flex shrink-0 items-center gap-2 border-b-2 px-3 py-2 text-sm transition-colors',
+            atual === a.id ? 'border-primary font-medium text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground',
+          )}
+        >
+          {a.rotulo}
+          {a.contagem != null && <span className="rounded-full bg-muted px-1.5 text-xs tabular-nums">{a.contagem}</span>}
+        </button>
+      ))}
+    </div>
+  )
+}
 
 export function Campo({ rotulo, erro, ajuda, htmlFor, children }: { rotulo: string; erro?: string; ajuda?: string; htmlFor?: string; children: ReactNode }) {
   return (

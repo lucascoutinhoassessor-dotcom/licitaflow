@@ -22,6 +22,13 @@ const Empresas = lazy(() => import('@/pages/app/Empresas'))
 const Equipe = lazy(() => import('@/pages/app/Equipe'))
 const Configuracoes = lazy(() => import('@/pages/app/Configuracoes'))
 const EmBreve = lazy(() => import('@/pages/app/EmBreve'))
+const Processos = lazy(() => import('@/pages/app/processos/Processos'))
+const ProcessoDetalhe = lazy(() => import('@/pages/app/processos/ProcessoDetalhe'))
+const Prazos = lazy(() => import('@/pages/app/Prazos'))
+const Documentos = lazy(() => import('@/pages/app/Documentos'))
+const Contratos = lazy(() => import('@/pages/app/contratos/Contratos'))
+const ContratoDetalhe = lazy(() => import('@/pages/app/contratos/ContratoDetalhe'))
+const Financeiro = lazy(() => import('@/pages/app/Financeiro'))
 const MasterEntrar = lazy(() => import('@/pages/master/MasterEntrar'))
 const MasterLayout = lazy(() => import('@/pages/master/MasterLayout'))
 const MasterVisaoGeral = lazy(() => import('@/pages/master/VisaoGeral'))
@@ -94,6 +101,13 @@ export default function App() {
             <Route path="empresas" element={<Empresas />} />
             <Route path="equipe" element={<Equipe />} />
             <Route path="configuracoes" element={<Configuracoes />} />
+            <Route path="processos" element={<Processos />} />
+            <Route path="processos/:id" element={<ProcessoDetalhe />} />
+            <Route path="prazos" element={<Prazos />} />
+            <Route path="documentos" element={<Documentos />} />
+            <Route path="contratos" element={<Contratos />} />
+            <Route path="contratos/:id" element={<ContratoDetalhe />} />
+            <Route path="financeiro" element={<Financeiro />} />
             <Route path=":modulo" element={<EmBreve />} />
           </Route>
 

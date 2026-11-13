@@ -88,11 +88,11 @@ const DORES = [
 
 const MODULOS: { icone: LucideIcon; titulo: string; texto: string; pronto: boolean }[] = [
   { icone: Radar, titulo: 'Radar de oportunidades', texto: 'Pregões e dispensas eletrônicas do PNCP filtrados pelo que sua empresa vende, por UF, órgão e valor.', pronto: false },
-  { icone: Gavel, titulo: 'Funil de processos', texto: 'Kanban da captação à homologação, com itens, preço-limite, responsáveis e linha do tempo.', pronto: false },
-  { icone: CalendarClock, titulo: 'Prazos que não escapam', texto: 'Sessões, esclarecimentos, impugnações, recursos e entregas com alertas automáticos.', pronto: false },
-  { icone: FileCheck2, titulo: 'Certidões sempre válidas', texto: 'Documentos de habilitação organizados, com aviso antes de cada vencimento.', pronto: false },
-  { icone: FileSignature, titulo: 'Contratos e empenhos', texto: 'Atas, contratos, saldos, notas de empenho e entregas em um só lugar.', pronto: false },
-  { icone: Wallet, titulo: 'Faturamento', texto: 'Notas fiscais, recebimentos e quanto cada órgão ainda deve para você.', pronto: false },
+  { icone: Gavel, titulo: 'Funil de processos', texto: 'Kanban da captação à homologação, com itens, preço-limite, responsáveis e linha do tempo.', pronto: true },
+  { icone: CalendarClock, titulo: 'Prazos que não escapam', texto: 'Sessões, esclarecimentos, impugnações, recursos e entregas com alertas automáticos.', pronto: true },
+  { icone: FileCheck2, titulo: 'Certidões sempre válidas', texto: 'Documentos de habilitação organizados, com aviso antes de cada vencimento.', pronto: true },
+  { icone: FileSignature, titulo: 'Contratos e empenhos', texto: 'Atas, contratos, saldos, notas de empenho e entregas em um só lugar.', pronto: true },
+  { icone: Wallet, titulo: 'Faturamento', texto: 'Notas fiscais, recebimentos e quanto cada órgão ainda deve para você.', pronto: true },
   { icone: Building2, titulo: 'Multiempresa', texto: 'Assessorias gerenciam vários CNPJs com dados isolados e troca em um clique.', pronto: true },
   { icone: Users, titulo: 'Equipe com permissões', texto: 'Convide sua equipe como administrador, membro ou somente leitura.', pronto: true },
 ]
