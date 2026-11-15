@@ -1,64 +1,46 @@
-# LicitaFlow - Plataforma de Gestão de Licitações
+# LicitaFlow
 
-SaaS completo para gestão de licitações públicas brasileiras.
+Plataforma SaaS de gestão de licitações (pregões e dispensas eletrônicas) para fornecedores e assessorias.
 
-## Estrutura do Projeto
+## Stack
 
-- **Produção**: `licitaflow.com.br` - Com banco Supabase real
-- **Demo**: `demo.licitaflow.com.br` - Com dados mockados
+- React 18 + Vite + TypeScript + Tailwind
+- Supabase: Postgres com RLS por organização, Auth, Storage
+- Vercel: deploy automático a cada push na `main`
 
-## Deploy no Vercel
-
-### 1. Configurar Variáveis de Ambiente (Produção)
-
-No Vercel Dashboard, adicione estas variáveis:
-
-```
-VITE_SUPABASE_URL=https://seu-projeto.supabase.co
-VITE_SUPABASE_ANON_KEY=sua-chave-anon
-VITE_STRIPE_PUBLIC_KEY=pk_live_...
-VITE_DEMO_MODE=false
-```
-
-### 2. Configurar Variáveis de Ambiente (Demo)
-
-```
-VITE_SUPABASE_URL=https://demo.supabase.co
-VITE_SUPABASE_ANON_KEY=demo-key
-VITE_STRIPE_PUBLIC_KEY=pk_test_...
-VITE_DEMO_MODE=true
-```
-
-### 3. Build
+## Rodar localmente
 
 ```bash
-pnpm install
-pnpm build
+npm install
+cp .env.example .env.local   # preencha com os dados do projeto Supabase
+npm run dev                   # http://localhost:3100
 ```
 
-## Desenvolvimento Local
+## Variáveis de ambiente (frontend)
+
+| Nome | O que é |
+|---|---|
+| `VITE_SUPABASE_URL` | URL do projeto Supabase |
+| `VITE_SUPABASE_ANON_KEY` | Chave **publicável** do Supabase (os dados são protegidos pelas políticas RLS) |
+
+Na Vercel: *Settings → Environment Variables* (Production e Preview). Depois de alterar, é preciso uma nova publicação.
+
+Chaves secretas (Claude, Resend, WhatsApp, Stripe, service role) **nunca** vão no frontend: ficam em *Supabase → Edge Functions → Secrets*.
+
+## Banco de dados
+
+As migrations ficam em `supabase/migrations/` e devem ser aplicadas em ordem.
+
+## Testes
 
 ```bash
-pnpm install
-pnpm dev
+npm test        # regras de domínio (Vitest) + RLS do banco (PGlite)
+npm run lint
+npm run build
 ```
 
-## Funcionalidades
+## Áreas
 
-- Dashboard com métricas
-- Gestão de editais (integração PNCP)
-- Funil de vendas de licitações
-- Ordens de serviço
-- Contratos e parcelas
-- Financeiro
-- Configurações multi-empresa
-- Planos: Básico (R$97), Business (R$197), Enterprise (R$497)
-
-## Tecnologias
-
-- React + TypeScript
-- Vite
-- Tailwind CSS
-- shadcn/ui
-- Supabase
-- Stripe
+- `/`: landing page
+- `/app`: app do cliente (processos, prazos, documentos, contratos, financeiro, empresas, equipe)
+- `/master/entrar`: console de administração da plataforma (somente contas master)
