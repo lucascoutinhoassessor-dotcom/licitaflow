@@ -130,6 +130,51 @@ blocked = false;
 try { await as(U2, `select public.admin_definir_admin('${U2}', false)`); } catch { blocked = true; }
 expect(blocked, 'admin não remove o próprio acesso master');
 
+// Gestão master e conteúdo: autorização no banco, isolamento e concorrência.
+blocked = false;
+try { await as(U1, `select public.admin_cliente('${o2}')`); } catch { blocked = true; }
+expect(blocked, 'cliente comum não consulta ficha administrativa');
+const ficha = (await as(U2, `select public.admin_cliente('${o1}') r`)).rows[0].r;
+expect(ficha.processos === 1 && ficha.empresas.length === 1, 'master consulta ficha de qualquer cliente');
+blocked = false;
+try { await as(U2, `select public.admin_papel_membro('${o1}', '${U1}', 'leitor', 'teste de proteção')`); } catch { blocked = true; }
+expect(blocked, 'master não rebaixa proprietário por alteração de membro');
+await db.exec(`insert into public.memberships(org_id,user_id,papel) values('${o1}','${U2}','membro')`);
+await as(U2, `select public.admin_papel_membro('${o1}', '${U2}', 'leitor', 'Acesso apenas para consulta')`);
+expect((await db.query(`select papel from public.memberships where org_id='${o1}' and user_id='${U2}'`)).rows[0].papel === 'leitor', 'master altera papel do membro com motivo');
+expect((await as(U1, `select * from public.admin_audit`)).rows.length === 0, 'auditoria administrativa fica oculta ao cliente');
+expect((await as(U2, `select * from public.admin_audit where acao='ALTERAR_PAPEL'`)).rows.length === 1, 'mudança de papel tem motivo registrado');
+const conteudo = JSON.stringify({titulo:'Nova landing',botao:'Começar agora',descricao:'Rascunho privado',contato:''});
+blocked = false;
+try { await as(U1, `select public.admin_salvar_site('${conteudo}'::jsonb,0,false)`); } catch { blocked = true; }
+expect(blocked, 'cliente comum não edita a landing page');
+await as(U2, `select public.admin_salvar_site('${conteudo}'::jsonb,0,false)`);
+expect(Object.keys((await as(U1, `select public.site_publico() r`)).rows[0].r).length === 0, 'rascunho nunca aparece na leitura pública');
+expect((await as(U1, `select * from public.site_content`)).rows.length === 0, 'cliente não lê rascunhos diretamente');
+blocked = false;
+try { await as(U2, `select public.admin_salvar_site('${conteudo}'::jsonb,0,true)`); } catch { blocked = true; }
+expect(blocked, 'editor rejeita sobrescrita de versão desatualizada');
+await as(U2, `select public.admin_salvar_site('${conteudo}'::jsonb,1,true)`);
+await db.exec(`set role anon;`);
+try {
+  expect((await db.query(`select public.site_publico() r`)).rows[0].r.titulo === 'Nova landing', 'visitante anônimo lê somente a versão publicada');
+  blocked = false;
+  try { await db.query(`select public.admin_cliente('${o1}')`); } catch { blocked = true; }
+  expect(blocked, 'visitante anônimo não executa funções master');
+} finally {await db.exec('reset role;');}
+blocked = false;
+try { await as(U2, `select public.admin_salvar_site('{"titulo":"Teste","botao":"Entrar","html":"<script>"}'::jsonb,2,true)`); } catch { blocked = true; }
+expect(blocked, 'servidor rejeita campos fora do contrato de conteúdo');
+blocked = false;
+try { await as(U2, `delete from public.admin_audit`); } catch { blocked = true; }
+expect((await as(U2, `select * from public.admin_audit`)).rows.length > 0, 'master não apaga histórico pela API');
+expect((await as(U2, `select * from public.site_content_history`)).rows.length === 2, 'histórico guarda rascunho e publicação');
+
+await as(U2, `select public.admin_atualizar_org('${o1}', 'profissional', current_date, false, null, 'Nota confidencial de atendimento')`);
+expect((await as(U1, `select notas_admin from public.organizations where id='${o1}'`)).rows[0].notas_admin === null, 'notas internas não vazam pela organização do cliente');
+expect((await as(U1, `select * from public.organization_admin_notes`)).rows.length === 0, 'cliente não acessa a tabela privada de notas');
+expect((await as(U2, `select * from public.admin_organizacoes()`)).rows.find(o=>o.id===o1).notas_admin === 'Nota confidencial de atendimento', 'master continua consultando notas internas');
+
 // delete em cascata da org
 await as(U1, `delete from public.organizations where id = '${o1}'`);
 expect((await db.query(`select count(*)::int c from public.processos`)).rows[0].c === 0, 'excluir organização remove dados em cascata');

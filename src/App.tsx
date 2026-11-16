@@ -34,6 +34,9 @@ const MasterLayout = lazy(() => import('@/pages/master/MasterLayout'))
 const MasterVisaoGeral = lazy(() => import('@/pages/master/VisaoGeral'))
 const MasterOrganizacoes = lazy(() => import('@/pages/master/Organizacoes'))
 const MasterUsuarios = lazy(() => import('@/pages/master/Usuarios'))
+const MasterConteudo = lazy(() => import('@/pages/master/Conteudo'))
+const MasterCliente = lazy(() => import('@/pages/master/ClienteDetalhe'))
+const MasterAuditoria = lazy(() => import('@/pages/master/Auditoria'))
 const MasterAtividade = lazy(() => import('@/pages/master/Atividade'))
 const NaoEncontrada = lazy(() => import('@/pages/NaoEncontrada'))
 
@@ -116,6 +119,9 @@ export default function App() {
             <Route index element={<MasterVisaoGeral />} />
             <Route path="organizacoes" element={<MasterOrganizacoes />} />
             <Route path="usuarios" element={<MasterUsuarios />} />
+            <Route path="organizacoes/:id" element={<MasterCliente />} />
+            <Route path="conteudo" element={<MasterConteudo />} />
+            <Route path="auditoria" element={<MasterAuditoria />} />
             <Route path="atividade" element={<MasterAtividade />} />
           </Route>
 

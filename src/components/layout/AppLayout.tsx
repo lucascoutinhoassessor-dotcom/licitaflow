@@ -1,22 +1,21 @@
-import { useState, type ReactNode } from 'react'
+import { type ReactNode } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
-import { Building, ChevronsUpDown, LogOut, Menu, Moon, Sun, X } from 'lucide-react'
+import { Building, ChevronsUpDown, LogOut, Moon, Sun } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { NAV_CONTA, NAV_PRINCIPAL, type ItemNav } from '@/lib/navegacao'
 import { useAuth } from '@/providers/AuthProvider'
 import { useOrg } from '@/providers/OrgProvider'
-import { Logo } from '@/components/ui'
+import { MenuLateral } from './MenuLateral'
 
-function ItemMenu({ item, aoClicar }: { item: ItemNav; aoClicar: () => void }) {
+function ItemMenu({ item }: { item: ItemNav }) {
   const Icone = item.icone
   return (
     <NavLink
       to={item.rota}
       end={item.rota === '/app'}
-      onClick={aoClicar}
       className={({ isActive }) =>
         cn(
-          'flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors',
+          'flex items-center gap-3 rounded-md px-3 py-3 text-sm transition-colors',
           isActive ? 'bg-sidebar-accent text-sidebar-foreground font-medium' : 'text-sidebar-muted hover:bg-sidebar-accent/60 hover:text-sidebar-foreground',
         )
       }
@@ -38,29 +37,11 @@ function alternarTema() {
 }
 
 export function AppLayout({ children }: { children: ReactNode }) {
-  const [aberto, setAberto] = useState(false)
   const { user, sair } = useAuth()
   const { org, organizacoes, trocarOrg, empresas, empresa, trocarEmpresa } = useOrg()
   const navigate = useNavigate()
-  const fechar = () => setAberto(false)
 
-  return (
-    <div className="flex h-full">
-      {aberto && <div className="fixed inset-0 z-30 bg-black/50 lg:hidden" onClick={fechar} />}
-
-      <aside
-        className={cn(
-          'fixed inset-y-0 left-0 z-40 flex w-64 flex-col bg-sidebar text-sidebar-foreground transition-transform lg:static lg:translate-x-0',
-          aberto ? 'translate-x-0' : '-translate-x-full',
-        )}
-      >
-        <div className="flex h-16 items-center justify-between border-b border-sidebar-border px-4">
-          <Logo claro />
-          <button className="lg:hidden" onClick={fechar} aria-label="Fechar menu">
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-
+  const menu = <>
         {organizacoes.length > 1 && (
           <div className="border-b border-sidebar-border p-3">
             <label className="mb-1 block text-[11px] uppercase tracking-wide text-sidebar-muted">Organização</label>
@@ -81,17 +62,17 @@ export function AppLayout({ children }: { children: ReactNode }) {
           </div>
         )}
 
-        <nav className="flex-1 space-y-1 overflow-y-auto p-3">
+        <nav aria-label="Módulos do usuário" className="min-h-0 flex-1 space-y-1 overflow-y-auto p-3">
           {NAV_PRINCIPAL.map((i) => (
-            <ItemMenu key={i.rota} item={i} aoClicar={fechar} />
+            <ItemMenu key={i.rota} item={i} />
           ))}
           <div className="px-3 pb-1 pt-5 text-[11px] uppercase tracking-wide text-sidebar-muted">Conta</div>
           {NAV_CONTA.map((i) => (
-            <ItemMenu key={i.rota} item={i} aoClicar={fechar} />
+            <ItemMenu key={i.rota} item={i} />
           ))}
         </nav>
 
-        <div className="border-t border-sidebar-border p-3">
+        <div className="shrink-0 border-t border-sidebar-border p-3">
           <div className="truncate px-3 text-xs text-sidebar-muted">{user?.email}</div>
           <div className="mt-2 flex gap-1">
             <button onClick={alternarTema} className="flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2 text-sm text-sidebar-muted hover:bg-sidebar-accent" aria-label="Alternar tema">
@@ -111,24 +92,23 @@ export function AppLayout({ children }: { children: ReactNode }) {
             </button>
           </div>
         </div>
-      </aside>
+    </>
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-16 items-center gap-3 border-b bg-card px-4">
-          <button className="lg:hidden" onClick={() => setAberto(true)} aria-label="Abrir menu">
-            <Menu className="h-5 w-5" />
-          </button>
+  return (
+    <div className="flex h-dvh min-w-0 flex-col xl:pl-72">
+        <header className="flex min-h-16 shrink-0 flex-wrap items-center gap-2 border-b bg-card px-3 py-2 sm:gap-3 sm:px-4">
+          <MenuLateral titulo="Menu do LicitaFlow">{menu}</MenuLateral>
           <div className="min-w-0 flex-1 truncate text-sm text-muted-foreground">
             <span className="font-medium text-foreground">{org?.nome}</span>
             {org?.plano === 'trial' && <span className="ml-2 hidden sm:inline">· teste grátis até {new Date(`${org.trial_ate}T00:00:00`).toLocaleDateString('pt-BR')}</span>}
           </div>
           {empresas.length > 1 && (
-            <div className="relative">
+            <div className="relative w-full min-w-0 sm:w-auto sm:max-w-[50%]">
               <Building className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <select
                 value={empresa?.id ?? ''}
                 onChange={(e) => trocarEmpresa(e.target.value || null)}
-                className="h-9 max-w-[14rem] appearance-none rounded-md border border-input bg-card pl-8 pr-8 text-sm sm:max-w-xs"
+                className="h-11 w-full min-w-0 max-w-full appearance-none rounded-md border border-input bg-card pl-8 pr-8 text-sm"
                 aria-label="Empresa"
               >
                 <option value="">Todas as empresas</option>
@@ -142,10 +122,9 @@ export function AppLayout({ children }: { children: ReactNode }) {
             </div>
           )}
         </header>
-        <main className="flex-1 overflow-y-auto">
-          <div className="mx-auto max-w-6xl p-4 lg:p-8">{children}</div>
+        <main id="conteudo-principal" className="min-h-0 min-w-0 flex-1 overflow-y-auto">
+          <div className="painel-conteudo mx-auto w-full min-w-0 max-w-6xl p-4 lg:p-8">{children}</div>
         </main>
-      </div>
     </div>
   )
 }

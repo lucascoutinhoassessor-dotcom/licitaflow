@@ -96,3 +96,14 @@
     font-feature-settings: 'cv11', 'ss01';
   }
 }
+
+@layer components {
+  .painel-conteudo {
+    overflow-wrap: anywhere;
+  }
+
+  .painel-conteudo :where(.grid) > *,
+  .painel-conteudo :where(input, select, textarea) {
+    min-width: 0;
+  }
+}

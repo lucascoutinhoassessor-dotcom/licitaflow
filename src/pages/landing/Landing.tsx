@@ -1,4 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { supabase } from '@/lib/supabase'
+import { lerConteudo } from '@/lib/conteudoSite'
 import { Link } from 'react-router-dom'
 import { AnimatePresence, motion, useScroll, useSpring } from 'framer-motion'
 import {
@@ -337,6 +340,15 @@ function Faq() {
 }
 
 export default function Landing() {
+  const conteudoQ = useQuery({
+    queryKey: ['site-publico'], staleTime: 60_000, retry: 1,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('site_publico')
+      if (error) throw error
+      return data
+    },
+  })
+  const conteudo = lerConteudo(conteudoQ.data)
   const { scrollYProgress } = useScroll()
   const progresso = useSpring(scrollYProgress, { stiffness: 120, damping: 30 })
 
@@ -381,14 +393,14 @@ export default function Landing() {
                 transition={{ duration: 0.8, delay: 0.1, ease }}
                 className="mt-6 text-4xl font-semibold leading-[1.08] tracking-tight text-white sm:text-6xl"
               >
-                Ganhe mais licitações.{' '}
-                <span className="bg-gradient-to-r from-sky-400 via-cyan-300 to-emerald-300 bg-clip-text text-transparent">Sem perder nenhum prazo.</span>
+                {conteudo.titulo}{' '}
+                <span className="bg-gradient-to-r from-sky-400 via-cyan-300 to-emerald-300 bg-clip-text text-transparent">{conteudo.destaque}</span>
               </motion.h1>
               <motion.p initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8, delay: 0.2, ease }} className="mt-6 max-w-xl text-lg leading-relaxed text-slate-400">
-                O LicitaFlow encontra pregões e dispensas eletrônicas para a sua empresa, organiza documentos, prazos e contratos e coloca agentes de IA para trabalhar por você, do edital ao pagamento.
+                {conteudo.descricao}
               </motion.p>
               <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8, delay: 0.3, ease }} className="mt-9 flex flex-col gap-3 sm:flex-row sm:items-center">
-                <BotaoPrincipal>Testar grátis por {DIAS_TESTE} dias</BotaoPrincipal>
+                <BotaoPrincipal>{conteudo.botao}</BotaoPrincipal>
                 <a href="#produto" className="inline-flex items-center justify-center gap-2 rounded-full border border-white/15 px-7 py-3.5 font-medium text-white transition hover:bg-white/5">
                   Ver como funciona
                 </a>
@@ -555,10 +567,10 @@ export default function Landing() {
               <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(52,211,153,0.25),transparent_60%)]" />
               <div className="relative">
                 <Bell className="mx-auto h-10 w-10 text-emerald-300" />
-                <h2 className="mx-auto mt-6 max-w-2xl text-3xl font-semibold tracking-tight text-white sm:text-5xl">A próxima oportunidade da sua empresa já foi publicada.</h2>
-                <p className="mx-auto mt-5 max-w-xl text-lg text-slate-300">Comece hoje e deixe o LicitaFlow encontrar, organizar e acompanhar cada licitação por você.</p>
+                <h2 className="mx-auto mt-6 max-w-2xl text-3xl font-semibold tracking-tight text-white sm:text-5xl">{conteudo.titulo_final}</h2>
+                <p className="mx-auto mt-5 max-w-xl text-lg text-slate-300">{conteudo.descricao_final}</p>
                 <div className="mt-10 flex justify-center">
-                  <BotaoPrincipal className="px-9 py-4">Criar minha conta grátis</BotaoPrincipal>
+                  <BotaoPrincipal className="px-9 py-4">{conteudo.botao}</BotaoPrincipal>
                 </div>
                 <p className="mt-4 text-sm text-slate-400">{DIAS_TESTE} dias grátis · sem cartão · cancele quando quiser</p>
               </div>
@@ -577,6 +589,7 @@ export default function Landing() {
             <a href="#planos" className="hover:text-slate-300">Planos</a>
             <a href="#seguranca" className="hover:text-slate-300">Segurança</a>
             <Link to="/entrar" className="hover:text-slate-300">Entrar</Link>
+            {conteudo.contato && <a href={`mailto:${conteudo.contato}`} className="hover:text-slate-300">Contato</a>}
           </nav>
           <p>© {new Date().getFullYear()} LicitaFlow</p>
         </div>

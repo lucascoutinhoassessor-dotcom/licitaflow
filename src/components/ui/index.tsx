@@ -127,7 +127,7 @@ export function Abas<T extends string>({ abas, atual, aoTrocar }: { abas: { id: 
 
 export function Campo({ rotulo, erro, ajuda, htmlFor, children }: { rotulo: string; erro?: string; ajuda?: string; htmlFor?: string; children: ReactNode }) {
   return (
-    <div className="space-y-1.5">
+    <div className="min-w-0 space-y-1.5">
       <label htmlFor={htmlFor} className="text-sm font-medium">
         {rotulo}
       </label>
@@ -173,11 +173,11 @@ export function Carregando({ texto = 'Carregando…', telaCheia }: { texto?: str
 export function CabecalhoPagina({ titulo, descricao, acoes }: { titulo: string; descricao?: string; acoes?: ReactNode }) {
   return (
     <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-      <div>
+      <div className="min-w-0">
         <h1 className="text-2xl font-semibold tracking-tight">{titulo}</h1>
         {descricao && <p className="mt-1 text-sm text-muted-foreground">{descricao}</p>}
       </div>
-      {acoes && <div className="flex gap-2">{acoes}</div>}
+      {acoes && <div className="flex flex-wrap gap-2">{acoes}</div>}
     </div>
   )
 }
@@ -190,13 +190,13 @@ export function Modal({ aberto, aoFechar, titulo, children }: { aberto: boolean;
         role="dialog"
         aria-modal="true"
         aria-label={titulo}
-        className="max-h-[92vh] w-full overflow-y-auto rounded-t-xl border bg-card p-6 shadow-xl sm:max-w-lg sm:rounded-xl"
+        className="max-h-[92dvh] w-full min-w-0 overflow-y-auto overscroll-contain rounded-t-xl border bg-card p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-xl sm:max-w-lg sm:rounded-xl sm:p-6"
         onMouseDown={(e) => e.stopPropagation()}
         onKeyDown={(e) => e.key === 'Escape' && aoFechar()}
       >
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold">{titulo}</h2>
-          <button onClick={aoFechar} className="rounded-md p-1 text-muted-foreground hover:bg-muted" aria-label="Fechar">
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <h2 className="min-w-0 break-words text-lg font-semibold">{titulo}</h2>
+          <button onClick={aoFechar} className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted" aria-label="Fechar">
             ✕
           </button>
         </div>
