@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { supabase, mensagemErro } from '@/lib/supabase'
 import { useOrg } from '@/providers/OrgProvider'
+import { useAuth } from '@/providers/AuthProvider'
 
 type Filtro = (q: any) => any
 
@@ -29,11 +30,13 @@ export function useLista<T>(tabela: string, opcoes: { filtro?: Filtro; chave?: u
 
 /** Busca um registro pelo id. */
 export function useRegistro<T>(tabela: string, id: string | undefined) {
+  const { org } = useOrg()
+  const { user } = useAuth()
   return useQuery({
-    queryKey: [tabela, 'id', id],
-    enabled: !!id,
+    queryKey: [tabela, 'id', org?.id, user?.id, id],
+    enabled: !!id && !!org && !!user,
     queryFn: async () => {
-      const { data, error } = await supabase.from(tabela).select('*').eq('id', id!).maybeSingle()
+      const { data, error } = await supabase.from(tabela).select('*').eq('org_id', org!.id).eq('id', id!).maybeSingle()
       if (error) throw error
       return data as T | null
     },
@@ -53,7 +56,7 @@ export function useSalvar(tabela: string, invalidar: string[] = []) {
     mutationFn: async ({ id, dados }: { id?: string; dados: Record<string, unknown> }) => {
       const limpo = Object.fromEntries(Object.entries(dados).map(([k, v]) => [k, v === '' ? null : v]))
       if (id) {
-        const { data, error } = await supabase.from(tabela).update(limpo).eq('id', id).select().single()
+        const { data, error } = await supabase.from(tabela).update(limpo).eq('org_id', org!.id).eq('id', id).select().single()
         if (error) throw error
         return data
       }
@@ -67,7 +70,7 @@ export function useSalvar(tabela: string, invalidar: string[] = []) {
 
   const excluir = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from(tabela).delete().eq('id', id)
+      const { error } = await supabase.from(tabela).delete().eq('org_id', org!.id).eq('id', id)
       if (error) throw error
     },
     onSuccess: posOperacao,
