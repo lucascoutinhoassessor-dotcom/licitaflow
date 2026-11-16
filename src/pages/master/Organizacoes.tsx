@@ -1,3 +1,4 @@
+import { useCatalogoPlanos } from '@/hooks/useCatalogoPlanos'
 import { Link } from 'react-router-dom'
 import { useMemo, useState, type FormEvent } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -53,11 +54,13 @@ function statusOrg(o: OrgAdmin) {
     return <Badge>Teste · {d}d</Badge>
   }
   if (o.plano === 'cancelado') return <Badge>Cancelado</Badge>
-  return <Badge cor="verde">{NOME_PLANO[o.plano]}</Badge>
+  return <Badge cor="verde">{NOME_PLANO[o.plano] ?? o.plano}</Badge>
 }
 
 function EditarOrg({ org, aoFechar }: { org: OrgAdmin; aoFechar: () => void }) {
   const qc = useQueryClient()
+  const catalogo = useCatalogoPlanos()
+  const planos = catalogo.data?.length ? catalogo.data : [...new Set([...PLANOS, org.plano])].map(id => ({id,nome:NOME_PLANO[id] ?? id}))
   const [plano, setPlano] = useState(org.plano)
   const [trial, setTrial] = useState(org.trial_ate)
   const [suspensa, setSuspensa] = useState(org.suspensa)
@@ -120,9 +123,9 @@ function EditarOrg({ org, aoFechar }: { org: OrgAdmin; aoFechar: () => void }) {
       <div className="grid gap-4 sm:grid-cols-2">
         <Campo rotulo="Plano" htmlFor="plano">
           <Select id="plano" value={plano} onChange={(e) => setPlano(e.target.value)}>
-            {PLANOS.map((p) => (
-              <option key={p} value={p}>
-                {NOME_PLANO[p]}
+            {planos.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.nome}
               </option>
             ))}
           </Select>
@@ -182,7 +185,7 @@ export default function Organizacoes() {
       if (filtro === 'suspensas') return o.suspensa
       if (filtro === 'trial') return o.plano === 'trial' && !o.suspensa
       if (filtro === 'vencidos') return o.plano === 'trial' && diasAte(o.trial_ate) < 0
-      if (filtro === 'pagantes') return ['essencial', 'profissional', 'assessoria'].includes(o.plano)
+      if (filtro === 'pagantes') return !['trial', 'cancelado'].includes(o.plano)
       return true
     })
   }, [q.data, busca, filtro])
@@ -200,7 +203,7 @@ export default function Organizacoes() {
           <option value="todas">Todas</option>
           <option value="trial">Em teste</option>
           <option value="vencidos">Teste vencido</option>
-          <option value="pagantes">Pagantes</option>
+          <option value="pagantes">Planos comerciais</option>
           <option value="suspensas">Suspensas</option>
         </Select>
       </div>

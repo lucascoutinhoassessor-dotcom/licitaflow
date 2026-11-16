@@ -1,5 +1,5 @@
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
-import { Activity, FileText, History, Building2, LayoutDashboard, LogOut, ShieldCheck, Users } from 'lucide-react'
+import { Settings, Wallet, Plug, CreditCard, Headphones, Megaphone, BarChart3, Activity, FileText, History, Building2, LayoutDashboard, LogOut, ShieldCheck, Users } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/providers/AuthProvider'
 import { MenuLateral } from '@/components/layout/MenuLateral'
@@ -8,8 +8,15 @@ const abas = [
   { rota: '/master', rotulo: 'Visão geral', icone: LayoutDashboard, end: true },
   { rota: '/master/organizacoes', rotulo: 'Organizações', icone: Building2 },
   { rota: '/master/usuarios', rotulo: 'Usuários', icone: Users },
+  { rota: '/master/financeiro', rotulo: 'Financeiro SaaS', icone: Wallet },
+  { rota: '/master/integracoes', rotulo: 'Integrações', icone: Plug },
+  { rota: '/master/planos', rotulo: 'Planos e limites', icone: CreditCard },
+  { rota: '/master/suporte', rotulo: 'Suporte e sugestões', icone: Headphones },
+  { rota: '/master/avisos', rotulo: 'Avisos aos clientes', icone: Megaphone },
+  { rota: '/master/relatorios', rotulo: 'Relatórios', icone: BarChart3 },
   { rota: '/master/conteudo', rotulo: 'Landing page', icone: FileText },
   { rota: '/master/auditoria', rotulo: 'Auditoria', icone: History },
+  { rota: '/master/configuracoes', rotulo: 'Configurações', icone: Settings },
   { rota: '/master/atividade', rotulo: 'Atividade', icone: Activity },
 ]
 

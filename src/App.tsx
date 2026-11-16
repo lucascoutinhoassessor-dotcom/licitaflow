@@ -38,6 +38,15 @@ const MasterUsuarios = lazy(() => import('@/pages/master/Usuarios'))
 const MasterConteudo = lazy(() => import('@/pages/master/Conteudo'))
 const MasterCliente = lazy(() => import('@/pages/master/ClienteDetalhe'))
 const MasterAuditoria = lazy(() => import('@/pages/master/Auditoria'))
+const Suporte = lazy(() => import('@/pages/relacionamento/Suporte'))
+const Avisos = lazy(() => import('@/pages/relacionamento/Avisos'))
+const RelatoriosMaster = lazy(() => import('@/pages/master/Relatorios'))
+const RelatoriosCliente = lazy(() => import('@/pages/app/Relatorios'))
+const Planos = lazy(() => import('@/pages/master/Planos'))
+const MeuPlano = lazy(() => import('@/pages/app/MeuPlano'))
+const Cobrancas = lazy(() => import('@/pages/app/Cobrancas'))
+const Integracoes = lazy(() => import('@/pages/master/Integracoes'))
+const ConfiguracoesMaster = lazy(() => import('@/pages/master/Configuracoes'))
 const MasterAtividade = lazy(() => import('@/pages/master/Atividade'))
 const NaoEncontrada = lazy(() => import('@/pages/NaoEncontrada'))
 
@@ -98,6 +107,8 @@ export default function App() {
           <Route path="/recuperar-senha" element={<SoVisitante><RecuperarSenha /></SoVisitante>} />
           <Route path="/redefinir-senha" element={<RedefinirSenha />} />
           <Route path="/convite/:token" element={<Convite />} />
+          <Route path="/cobrancas" element={<ExigeLogin><div className="painel-conteudo mx-auto max-w-5xl p-4 sm:p-8"><Cobrancas /></div></ExigeLogin>} />
+          <Route path="/suporte" element={<ExigeLogin><div className="painel-conteudo mx-auto max-w-5xl p-4 sm:p-8"><Suporte /></div></ExigeLogin>} />
           <Route path="/onboarding" element={<ExigeLogin><Onboarding /></ExigeLogin>} />
 
           <Route path="/app" element={<ExigeLogin><ExigeOrganizacao /></ExigeLogin>}>
@@ -113,6 +124,9 @@ export default function App() {
             <Route path="contratos" element={<Contratos />} />
             <Route path="contratos/:id" element={<ContratoDetalhe />} />
             <Route path="financeiro" element={<Financeiro />} />
+            <Route path="avisos" element={<Avisos />} />
+            <Route path="relatorios" element={<RelatoriosCliente />} />
+            <Route path="plano" element={<MeuPlano />} />
             <Route path=":modulo" element={<EmBreve />} />
           </Route>
 
@@ -124,6 +138,13 @@ export default function App() {
             <Route path="organizacoes/:id" element={<MasterCliente />} />
             <Route path="conteudo" element={<MasterConteudo />} />
             <Route path="auditoria" element={<MasterAuditoria />} />
+            <Route path="suporte" element={<Suporte master />} />
+            <Route path="avisos" element={<Avisos master />} />
+            <Route path="relatorios" element={<RelatoriosMaster />} />
+            <Route path="planos" element={<Planos />} />
+            <Route path="financeiro" element={<Cobrancas master />} />
+            <Route path="integracoes" element={<Integracoes />} />
+            <Route path="configuracoes" element={<ConfiguracoesMaster />} />
             <Route path="atividade" element={<MasterAtividade />} />
           </Route>
 

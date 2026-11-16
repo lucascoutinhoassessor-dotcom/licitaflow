@@ -47,7 +47,7 @@ export default function VisaoGeral() {
     { rotulo: 'Organizações', valor: r.organizacoes },
     { rotulo: 'Usuários', valor: r.usuarios, sub: `${r.usuarios_confirmados} com e-mail confirmado` },
     { rotulo: 'Ativos (7 dias)', valor: r.ativos_7d },
-    { rotulo: 'Pagantes', valor: r.pagantes },
+    { rotulo: 'Em plano comercial', valor: r.pagantes },
     { rotulo: 'Testes ativos', valor: r.trials_ativos, sub: `${r.trials_vencendo} vencem em até 3 dias` },
     { rotulo: 'Testes vencidos', valor: r.trials_vencidos, alerta: r.trials_vencidos > 0 },
     { rotulo: 'Suspensas', valor: r.suspensas, alerta: r.suspensas > 0 },
