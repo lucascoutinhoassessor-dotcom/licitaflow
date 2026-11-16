@@ -208,4 +208,3 @@ begin
     on conflict(org_id) do update set notas=excluded.notas;
 end;
 $$;
-
