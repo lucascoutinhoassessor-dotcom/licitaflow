@@ -1,5 +1,5 @@
 // Apenas a tela pública offline é armazenada. APIs, sessões e documentos não são cacheados.
-const CACHE = 'licitaflow-offline-v1'
+const CACHE = 'licitaflow-offline-v2'
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.add('/offline.html')))
   self.skipWaiting()

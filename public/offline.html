@@ -1,2 +1,62 @@
 <!doctype html>
-<html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#0f172a"><title>LicitaFlow · Sem conexão</title><style>body{margin:0;min-height:100dvh;display:grid;place-items:center;background:#0f172a;color:#f8fafc;font:16px system-ui}main{max-width:28rem;padding:2rem}p{color:#cbd5e1;line-height:1.6}a{display:inline-block;padding:1rem;background:#2563eb;color:white;border-radius:.5rem;text-decoration:none}</style></head><body><main><h1>Não foi possível conectar</h1><p>O LicitaFlow precisa de conexão para consultar seus dados. Suas alterações não são enviadas enquanto você estiver offline.</p><a href="/">Tentar novamente</a></main></body></html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#0f172a">
+  <title>LicitaFlow · Reconectando</title>
+  <style>
+    body{margin:0;min-height:100dvh;display:grid;place-items:center;background:#0f172a;color:#f8fafc;font:16px system-ui}
+    main{box-sizing:border-box;width:100%;max-width:32rem;padding:2rem}
+    p{color:#cbd5e1;line-height:1.6}button{border:0;padding:1rem;background:#2563eb;color:white;border-radius:.5rem;font:inherit;cursor:pointer;min-height:44px}button:disabled{opacity:.6}button:focus-visible{outline:3px solid #93c5fd;outline-offset:3px}small{display:block;margin-top:1rem;color:#cbd5e1;line-height:1.5}
+  </style>
+</head>
+<body><main>
+  <h1>Não foi possível acessar o LicitaFlow</h1>
+  <p>A conexão com a plataforma está indisponível. Pode ser uma interrupção da rede ou do serviço. Quando a conexão voltar, esta página tentará reabrir automaticamente.</p>
+  <button id="tentar" type="button">Tentar novamente</button>
+  <small id="estado" role="status" aria-live="polite">Seus dados precisam de conexão para serem consultados. Esta tela não salva alterações.</small>
+</main>
+<script>
+  const botao = document.getElementById('tentar')
+  const estado = document.getElementById('estado')
+  let pendente = false, timer, tentativas = 0
+  function agendar() {
+    clearTimeout(timer)
+    timer = setTimeout(verificar, Math.min(30000, 5000 * Math.pow(2, Math.min(tentativas, 3))))
+  }
+  async function verificar() {
+    if (pendente) return
+    clearTimeout(timer)
+    if (document.hidden) { agendar(); return }
+    pendente = true
+    botao.disabled = true
+    estado.textContent = 'Verificando a conexão…'
+    const abort = new AbortController()
+    const limite = setTimeout(() => abort.abort(), 6000)
+    try {
+      // Requisição não navegacional: o service worker não pode respondê-la com esta tela.
+      const resposta = await fetch('/manifest.webmanifest?conexao=' + Date.now(), { cache: 'no-store', signal: abort.signal })
+      if (!resposta.ok) throw new Error('Serviço indisponível')
+      const manifesto = await resposta.json()
+      if (manifesto.name !== 'LicitaFlow') throw new Error('Resposta inesperada')
+      estado.textContent = 'Conexão restabelecida. Abrindo a plataforma…'
+      window.location.reload()
+      return
+    } catch (_) {
+      tentativas++
+      estado.textContent = 'A conexão ainda não foi restabelecida. Tentaremos novamente em instantes.'
+    } finally {
+      clearTimeout(limite)
+      pendente = false
+      botao.disabled = false
+    }
+    agendar()
+  }
+  botao.addEventListener('click', () => { tentativas = 0; verificar() })
+  window.addEventListener('online', () => { tentativas = 0; verificar() })
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) verificar() })
+  agendar()
+</script>
+</body>
+</html>
