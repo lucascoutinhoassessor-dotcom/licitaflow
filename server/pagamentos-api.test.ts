@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import handler from './pagamentos.js'
+import handler from '../api/pagamentos.js'
 afterEach(()=>{vi.unstubAllGlobals();vi.unstubAllEnvs()})
 function res() {return {setHeader:vi.fn(),status:vi.fn().mockReturnThis(),json:vi.fn()}}
 function ambiente(){vi.stubEnv('SUPABASE_URL','https://teste.supabase.co');vi.stubEnv('SUPABASE_ANON_KEY','publica');vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY','privada');vi.stubEnv('BILLING_PUBLIC_URL','https://exemplo.com');vi.stubEnv('PAYMENTS_ENABLED_PROVIDERS','stripe');vi.stubEnv('STRIPE_SECRET_KEY','segredo')}
