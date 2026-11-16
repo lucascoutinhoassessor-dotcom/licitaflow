@@ -107,3 +107,11 @@
     min-width: 0;
   }
 }
+
+/* Reserva espaço de rolagem quando o convite de instalação está aberto. */
+#root .painel-conteudo {
+  padding-bottom: calc(2rem + var(--instalacao-espaco, 0px));
+}
+#root #topo > footer {
+  padding-bottom: calc(3rem + var(--instalacao-espaco, 0px));
+}
