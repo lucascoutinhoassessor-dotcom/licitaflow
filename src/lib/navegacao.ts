@@ -28,8 +28,7 @@ export const NAV_PRINCIPAL: ItemNav[] = [
     rota: '/app/oportunidades',
     rotulo: 'Oportunidades',
     icone: Radar,
-    fase: 'F2',
-    descricao: 'Radar automático no PNCP: pregões e dispensas eletrônicas que combinam com o perfil da sua empresa, com nota de aderência e alerta.',
+    descricao: 'Consulta de publicações no PNCP por período, modalidade e UF, com importação para Processos.',
   },
   {
     rota: '/app/processos',
