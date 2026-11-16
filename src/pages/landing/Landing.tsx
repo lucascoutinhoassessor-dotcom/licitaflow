@@ -1,3 +1,4 @@
+import { InstalarApp } from '@/components/InstalarApp'
 import { useEffect, useState, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
@@ -579,6 +580,7 @@ export default function Landing() {
         </Secao>
       </main>
 
+      <div className="relative mx-auto max-w-6xl px-4 pb-8"><InstalarApp compacto /></div>
       <footer className="relative border-t border-white/5 px-4 py-12">
         <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-6 text-sm text-slate-500 sm:flex-row">
           <div className="flex items-center gap-2 font-semibold text-slate-300">
