@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import { useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Search, ShieldCheck } from 'lucide-react'
@@ -71,7 +72,7 @@ export default function Usuarios() {
               <div className="mt-1 flex flex-wrap gap-1">
                 {u.organizacoes.map((o) => (
                   <Badge key={o.id}>
-                    {o.nome} · {o.papel}
+                    <Link to={`/master/organizacoes/${o.id}`} className="hover:underline">{o.nome} · {o.papel}</Link>
                   </Badge>
                 ))}
                 {u.organizacoes.length === 0 && <span className="text-xs text-warning">Sem organização (não concluiu a configuração)</span>}

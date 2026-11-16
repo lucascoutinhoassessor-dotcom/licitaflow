@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import { useMemo, useState, type FormEvent } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { CheckCircle2, Circle, Search } from 'lucide-react'
@@ -208,7 +209,7 @@ export default function Organizacoes() {
       {q.error && <Aviso>{(q.error as Error).message}</Aviso>}
 
       <Card className="overflow-hidden">
-        <div>
+        <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-muted/50 text-left text-xs uppercase tracking-wide text-muted-foreground">
               <tr>
@@ -225,7 +226,8 @@ export default function Organizacoes() {
                 return (
                   <tr key={o.id} onClick={() => setEditando(o)} className="cursor-pointer hover:bg-muted/40">
                     <td className="max-w-0 px-4 py-3">
-                      <div className="truncate font-medium">{o.nome}</div>
+                      <Link onClick={(e) => e.stopPropagation()} to={`/master/organizacoes/${o.id}`} className="block truncate font-medium text-primary hover:underline">{o.nome} · Ver ficha</Link>
+                      <button className="text-xs text-primary hover:underline" onClick={() => setEditando(o)}>Gerenciar plano e acesso</button>
                       <div className="truncate text-xs text-muted-foreground">{o.dono_email} · {o.tipo === 'assessoria' ? 'assessoria' : 'fornecedor'}</div>
                     </td>
                     <td className="whitespace-nowrap px-4 py-3 text-right md:text-left">{statusOrg(o)}</td>

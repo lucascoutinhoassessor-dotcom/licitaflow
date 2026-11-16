@@ -1,0 +1,57 @@
+import { useState } from 'react'
+import { Link, useParams } from 'react-router-dom'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
+import { supabase, mensagemErro } from '@/lib/supabase'
+import { formatarMoeda, formatarDataHora } from '@/lib/format'
+import { Aviso, Badge, Button, CabecalhoPagina, Campo, Card, Carregando, Input, Modal, Select } from '@/components/ui'
+
+interface Membro { id:string; nome:string|null; email:string; papel:string; ultimo_acesso:string|null }
+interface Cliente {
+  nome:string; processos:number; contratos:number; documentos:number; prazos_pendentes:number; recebido:number; a_receber:number
+  membros:Membro[]
+  empresas:{id:string;nome:string;cnpj:string;uf:string|null;ativa:boolean}[]
+}
+export default function ClienteDetalhe() {
+  const {id}=useParams()
+  const qc=useQueryClient()
+  const [membro,setMembro]=useState<Membro|null>(null)
+  const [papel,setPapel]=useState('leitor')
+  const [motivo,setMotivo]=useState('')
+  const [salvando,setSalvando]=useState(false)
+  const q=useQuery({queryKey:['admin-cliente',id],enabled:!!id,queryFn:async()=>{
+    const {data,error}=await supabase.rpc('admin_cliente',{p_org:id})
+    if(error) throw error
+    return data as Cliente
+  }})
+  async function salvar() {
+    if(!membro || motivo.trim().length<5) return toast.error('Informe o motivo com pelo menos 5 caracteres.')
+    setSalvando(true)
+    try {
+      const {error}=await supabase.rpc('admin_papel_membro',{p_org:id,p_usuario:membro.id,p_papel:papel,p_motivo:motivo})
+      if(error) throw error
+      await qc.invalidateQueries({queryKey:['admin-cliente',id]})
+      await qc.invalidateQueries({queryKey:['admin-usuarios']})
+      toast.success('Permissão atualizada e registrada na auditoria.');setMembro(null)
+    } catch(e) {toast.error(mensagemErro(e))} finally {setSalvando(false)}
+  }
+  if(q.isLoading) return <Carregando/>
+  if(q.isError) return <Aviso>{mensagemErro(q.error)} <button className="underline" onClick={()=>q.refetch()}>Tentar novamente</button></Aviso>
+  const c=q.data
+  if(!c) return null
+  return <>
+    <Link className="mb-4 inline-block text-sm text-primary hover:underline" to="/master/organizacoes">← Organizações</Link>
+    <CabecalhoPagina titulo={c.nome} descricao="Ficha do cliente: empresas, equipe e uso da plataforma. Alterações de acesso são auditadas."/>
+    <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-3">{[
+      ['Processos',c.processos],['Contratos',c.contratos],['Documentos',c.documentos],['Prazos pendentes',c.prazos_pendentes],['Recebido nos contratos',formatarMoeda(c.recebido)],['A receber nos contratos',formatarMoeda(c.a_receber)],
+    ].map(([r,v])=><Card className="p-4" key={r}><p className="text-sm text-muted-foreground">{r}</p><p className="mt-1 text-2xl font-semibold">{v}</p></Card>)}</div>
+    <p className="mb-5 text-xs text-muted-foreground">Os valores financeiros são da operação do cliente. Não representam pagamentos de assinatura ao LicitaFlow.</p>
+    <div className="grid gap-6 lg:grid-cols-2">
+      <Card className="divide-y"><h2 className="p-4 font-semibold">Empresas ({c.empresas.length})</h2>{c.empresas.map(e=><div className="p-4" key={e.id}><p className="font-medium">{e.nome} {!e.ativa && <Badge>Inativa</Badge>}</p><p className="text-sm text-muted-foreground">{e.cnpj} · {e.uf ?? 'UF não informada'}</p></div>)}{!c.empresas.length && <p className="p-4 text-sm text-muted-foreground">Nenhuma empresa cadastrada.</p>}</Card>
+      <Card className="divide-y"><h2 className="p-4 font-semibold">Equipe ({c.membros.length})</h2>{c.membros.map(m=><div className="space-y-2 p-4" key={m.id}><p className="break-all font-medium">{m.nome || m.email}</p><p className="break-all text-sm text-muted-foreground">{m.email}</p><p className="text-xs text-muted-foreground">Último acesso: {formatarDataHora(m.ultimo_acesso)}</p><div className="flex items-center justify-between gap-2"><Badge>{m.papel}</Badge>{m.papel!=='owner' && <Button tamanho="sm" variante="contorno" onClick={()=>{setMembro(m);setPapel(m.papel);setMotivo('')}}>Alterar acesso</Button>}</div></div>)}</Card>
+    </div>
+    <Modal aberto={!!membro} aoFechar={()=>{if(!salvando)setMembro(null)}} titulo="Alterar permissão do membro">
+      <div className="space-y-4"><p className="break-all text-sm">{membro?.email}</p><Campo rotulo="Papel" htmlFor="membro-papel"><Select id="membro-papel" value={papel} onChange={e=>setPapel(e.target.value)}><option value="admin">Administrador do cliente</option><option value="membro">Membro</option><option value="leitor">Somente leitura</option></Select></Campo><Campo rotulo="Motivo da alteração" htmlFor="membro-motivo"><Input id="membro-motivo" value={motivo} onChange={e=>setMotivo(e.target.value)} minLength={5} maxLength={1000}/></Campo><Button carregando={salvando} disabled={motivo.trim().length<5} onClick={salvar}>Confirmar alteração</Button></div>
+    </Modal>
+  </>
+}
