@@ -149,10 +149,10 @@ export default function Painel() {
           <div className="flex items-center gap-3">
             <Radar className="h-5 w-5 text-primary" />
             <div className="flex-1">
-              <div className="font-semibold">Radar de oportunidades e agentes de IA</div>
-              <div className="text-sm text-muted-foreground">Próxima fase: oportunidades do PNCP entrando sozinhas no seu funil, com nota de aderência.</div>
+              <div className="font-semibold">Oportunidades do PNCP</div>
+              <div className="text-sm text-muted-foreground">Consulte publicações oficiais por período, modalidade e UF e importe para seus processos.</div>
             </div>
-            <Badge>Em breve</Badge>
+            <Badge>Consultar</Badge>
             <Link to="/app/oportunidades"><ArrowRight className="h-4 w-4 text-muted-foreground" /></Link>
           </div>
         </Card>

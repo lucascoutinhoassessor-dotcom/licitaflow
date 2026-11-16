@@ -1,3 +1,4 @@
+import { InstalarApp } from '@/components/InstalarApp'
 import { useState, type FormEvent } from 'react'
 import { toast } from 'sonner'
 import { supabase, mensagemErro } from '@/lib/supabase'
@@ -40,6 +41,7 @@ export default function Configuracoes() {
   return (
     <>
       <CabecalhoPagina titulo="Configurações" />
+      <InstalarApp />
       <div className="grid gap-6 lg:grid-cols-2">
         <Card className="p-6">
           <h2 className="font-semibold">Seu perfil</h2>
