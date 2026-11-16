@@ -72,5 +72,6 @@ export const NAV_PRINCIPAL: ItemNav[] = [
 export const NAV_CONTA: ItemNav[] = [
   { rota: '/app/empresas', rotulo: 'Empresas', icone: Building2 },
   { rota: '/app/equipe', rotulo: 'Equipe', icone: Users },
+  { rota: '/cobrancas', rotulo: 'Cobranças do LicitaFlow', icone: Wallet },
   { rota: '/app/configuracoes', rotulo: 'Configurações', icone: Settings },
 ]

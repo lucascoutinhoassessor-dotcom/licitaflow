@@ -1,5 +1,5 @@
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
-import { Activity, FileText, History, Building2, LayoutDashboard, LogOut, ShieldCheck, Users } from 'lucide-react'
+import { Wallet, Plug, Activity, FileText, History, Building2, LayoutDashboard, LogOut, ShieldCheck, Users } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/providers/AuthProvider'
 import { MenuLateral } from '@/components/layout/MenuLateral'
@@ -8,6 +8,8 @@ const abas = [
   { rota: '/master', rotulo: 'Visão geral', icone: LayoutDashboard, end: true },
   { rota: '/master/organizacoes', rotulo: 'Organizações', icone: Building2 },
   { rota: '/master/usuarios', rotulo: 'Usuários', icone: Users },
+  { rota: '/master/financeiro', rotulo: 'Financeiro SaaS', icone: Wallet },
+  { rota: '/master/integracoes', rotulo: 'Integrações', icone: Plug },
   { rota: '/master/conteudo', rotulo: 'Landing page', icone: FileText },
   { rota: '/master/auditoria', rotulo: 'Auditoria', icone: History },
   { rota: '/master/atividade', rotulo: 'Atividade', icone: Activity },

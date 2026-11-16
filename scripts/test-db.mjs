@@ -175,6 +175,27 @@ expect((await as(U1, `select notas_admin from public.organizations where id='${o
 expect((await as(U1, `select * from public.organization_admin_notes`)).rows.length === 0, 'cliente não acessa a tabela privada de notas');
 expect((await as(U2, `select * from public.admin_organizacoes()`)).rows.find(o=>o.id===o1).notas_admin === 'Nota confidencial de atendimento', 'master continua consultando notas internas');
 
+// Cobranças SaaS: clientes não criam nem confirmam pagamentos.
+blocked=false;
+try { await as(U1, `select public.admin_criar_cobranca('${o1}', 'Acesso mensal', 19700, current_date+5, 'stripe')`); } catch {blocked=true;}
+expect(blocked, 'cliente não cria cobranças da plataforma');
+const cb=(await as(U2, `select public.admin_criar_cobranca('${o1}', 'Acesso mensal', 19700, current_date+5, 'stripe') id`)).rows[0].id;
+expect((await as(U1, `select * from public.plataforma_cobrancas`)).rows.length===1, 'dono vê a cobrança da própria organização');
+await db.exec(`delete from public.memberships where org_id='${o1}' and user_id='${U2}'`);
+await db.exec(`delete from public.platform_admins where user_id='${U2}'`);
+expect((await as(U2, `select * from public.plataforma_cobrancas`)).rows.length===0, 'outro cliente não vê a cobrança');
+await as(U1, `update public.plataforma_cobrancas set status='paga' where id='${cb}'`);
+expect((await db.query(`select status from public.plataforma_cobrancas where id='${cb}'`)).rows[0].status==='rascunho', 'cliente não confirma pagamento pela API do banco');
+await db.exec(`insert into public.platform_admins(user_id) values('${U2}')`);
+blocked=false;
+try {await as(U2, `select public.admin_criar_cobranca('${o1}', 'Valor negativo', -100, current_date+5, 'stripe')`);}catch{blocked=true;}
+expect(blocked,'banco rejeita cobrança com valor negativo');
+// O histórico financeiro preserva a organização por FK até resolver a retenção.
+blocked=false;
+try {await as(U1, `delete from public.organizations where id='${o1}'`);}catch{blocked=true;}
+expect(blocked,'organização com cobrança não é excluída em cascata');
+await db.exec(`delete from public.plataforma_cobrancas where id='${cb}'`);
+
 // delete em cascata da org
 await as(U1, `delete from public.organizations where id = '${o1}'`);
 expect((await db.query(`select count(*)::int c from public.processos`)).rows[0].c === 0, 'excluir organização remove dados em cascata');

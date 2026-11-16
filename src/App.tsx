@@ -38,6 +38,8 @@ const MasterUsuarios = lazy(() => import('@/pages/master/Usuarios'))
 const MasterConteudo = lazy(() => import('@/pages/master/Conteudo'))
 const MasterCliente = lazy(() => import('@/pages/master/ClienteDetalhe'))
 const MasterAuditoria = lazy(() => import('@/pages/master/Auditoria'))
+const Cobrancas = lazy(() => import('@/pages/app/Cobrancas'))
+const Integracoes = lazy(() => import('@/pages/master/Integracoes'))
 const MasterAtividade = lazy(() => import('@/pages/master/Atividade'))
 const NaoEncontrada = lazy(() => import('@/pages/NaoEncontrada'))
 
@@ -98,6 +100,7 @@ export default function App() {
           <Route path="/recuperar-senha" element={<SoVisitante><RecuperarSenha /></SoVisitante>} />
           <Route path="/redefinir-senha" element={<RedefinirSenha />} />
           <Route path="/convite/:token" element={<Convite />} />
+          <Route path="/cobrancas" element={<ExigeLogin><div className="painel-conteudo mx-auto max-w-5xl p-4 sm:p-8"><Cobrancas /></div></ExigeLogin>} />
           <Route path="/onboarding" element={<ExigeLogin><Onboarding /></ExigeLogin>} />
 
           <Route path="/app" element={<ExigeLogin><ExigeOrganizacao /></ExigeLogin>}>
@@ -124,6 +127,8 @@ export default function App() {
             <Route path="organizacoes/:id" element={<MasterCliente />} />
             <Route path="conteudo" element={<MasterConteudo />} />
             <Route path="auditoria" element={<MasterAuditoria />} />
+            <Route path="financeiro" element={<Cobrancas master />} />
+            <Route path="integracoes" element={<Integracoes />} />
             <Route path="atividade" element={<MasterAtividade />} />
           </Route>
 
