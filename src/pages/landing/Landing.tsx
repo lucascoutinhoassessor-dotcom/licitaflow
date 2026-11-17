@@ -92,7 +92,7 @@ const DORES = [
 ]
 
 const MODULOS: { icone: LucideIcon; titulo: string; texto: string; pronto: boolean }[] = [
-  { icone: Radar, titulo: 'Radar de oportunidades', texto: 'Pregões e dispensas eletrônicas do PNCP filtrados pelo que sua empresa vende, por UF, órgão e valor.', pronto: false },
+  { icone: Radar, titulo: 'Radar de oportunidades', texto: 'Encontre publicações oficiais por modalidade, portal de origem, UF, órgão e valor estimado.', pronto: false },
   { icone: Gavel, titulo: 'Funil de processos', texto: 'Kanban da captação à homologação, com itens, preço-limite, responsáveis e linha do tempo.', pronto: true },
   { icone: CalendarClock, titulo: 'Prazos que não escapam', texto: 'Sessões, esclarecimentos, impugnações, recursos e entregas com alertas automáticos.', pronto: true },
   { icone: FileCheck2, titulo: 'Certidões sempre válidas', texto: 'Documentos de habilitação organizados, com aviso antes de cada vencimento.', pronto: true },
@@ -103,7 +103,7 @@ const MODULOS: { icone: LucideIcon; titulo: string; texto: string; pronto: boole
 ]
 
 const AGENTES: { icone: LucideIcon; nome: string; texto: string; cor: string }[] = [
-  { icone: Radar, nome: 'Radar', texto: 'Varre o PNCP todos os dias, dá nota de aderência a cada edital e coloca os melhores no seu funil.', cor: 'from-sky-500 to-blue-600' },
+  { icone: Radar, nome: 'Radar', texto: 'Planejado: acompanhamento periódico de publicações e avaliação de aderência ao perfil da empresa.', cor: 'from-sky-500 to-blue-600' },
   { icone: FileSearch, nome: 'Leitor', texto: 'Lê o edital inteiro e devolve o checklist de habilitação, itens, prazos e riscos.', cor: 'from-emerald-500 to-teal-600' },
   { icone: ShoppingCart, nome: 'Cotador', texto: 'Pesquisa preços praticados, sugere fornecedores e monta a cotação item a item.', cor: 'from-violet-500 to-purple-600' },
   { icone: Scale, nome: 'Jurídico', texto: 'Redige minutas de esclarecimento, impugnação e recurso com base na Lei 14.133.', cor: 'from-orange-500 to-red-600' },
@@ -243,7 +243,7 @@ function Precos() {
   const planos = catalogo.data ? catalogo.data.filter(p=>!['trial','cancelado'].includes(p.id)).map(p=>({
     id:p.id,nome:p.nome,mensal:p.mensal_centavos/100,anual:p.anual_centavos/1200,
     publico:'Gestão de licitações para sua organização',destaque:p.id==='profissional',
-    itens:[`${p.limite_empresas ?? 'Ilimitado'} empresa(s)`,`${p.limite_usuarios ?? 'Ilimitado'} usuário(s)`,`${p.limite_processos ?? 'Ilimitado'} processo(s) cadastrado(s)`,'Consulta de oportunidades no PNCP','Prazos, documentos e contratos','Suporte no painel'],
+    itens:[`${p.limite_empresas ?? 'Ilimitado'} empresa(s)`,`${p.limite_usuarios ?? 'Ilimitado'} usuário(s)`,`${p.limite_processos ?? 'Ilimitado'} processo(s) cadastrado(s)`,'Busca de oportunidades nos portais de compras','Prazos, documentos e contratos','Suporte no painel'],
   })) : PLANOS
   return (
     <Secao id="planos">
@@ -429,7 +429,7 @@ export default function Landing() {
         <div className="relative overflow-hidden border-y border-white/5 bg-white/[0.02] py-5">
           <div className="flex w-max animate-[marquee_40s_linear_infinite] gap-12 whitespace-nowrap text-sm font-medium uppercase tracking-widest text-slate-500">
             {[...Array(2)].flatMap((_, k) =>
-              ['Pregão eletrônico', 'Dispensa eletrônica', 'Dados oficiais do PNCP', 'Lei 14.133/2021', 'Atas de registro de preço', 'Contratos e empenhos', 'Certidões e habilitação', 'Agentes de IA'].map((t) => (
+              ['Pregão eletrônico', 'Dispensa eletrônica', 'Fontes oficiais de compras', 'Lei 14.133/2021', 'Atas de registro de preço', 'Contratos e empenhos', 'Certidões e habilitação', 'Agentes de IA'].map((t) => (
                 <span key={`${k}-${t}`} className="flex items-center gap-12">
                   {t} <span className="h-1 w-1 rounded-full bg-emerald-400/60" />
                 </span>

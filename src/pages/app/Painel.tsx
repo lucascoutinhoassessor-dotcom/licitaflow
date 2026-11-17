@@ -149,7 +149,7 @@ export default function Painel() {
           <div className="flex items-center gap-3">
             <Radar className="h-5 w-5 text-primary" />
             <div className="flex-1">
-              <div className="font-semibold">Oportunidades do PNCP</div>
+              <div className="font-semibold">Buscar oportunidades</div>
               <div className="text-sm text-muted-foreground">Consulte publicações oficiais por período, modalidade e UF e importe para seus processos.</div>
             </div>
             <Badge>Consultar</Badge>

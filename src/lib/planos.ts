@@ -18,7 +18,7 @@ export const PLANOS: Plano[] = [
     publico: 'Para quem está começando a disputar licitações',
     mensal: 197,
     anual: 164,
-    itens: ['1 empresa (CNPJ)', 'Até 3 usuários', 'Radar de oportunidades no PNCP', 'Funil de processos e prazos', 'Controle de certidões com alertas', 'Suporte por e-mail'],
+    itens: ['1 empresa (CNPJ)', 'Até 3 usuários', 'Busca de oportunidades nos portais de compras', 'Funil de processos e prazos', 'Controle de certidões com alertas', 'Suporte por e-mail'],
   },
   {
     id: 'profissional',

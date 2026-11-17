@@ -152,7 +152,7 @@ export default function Processos() {
         <Vazio
           icone={Gavel}
           titulo="Nenhum processo ainda"
-          texto="Cadastre o primeiro pregão ou dispensa que sua empresa vai disputar. Em breve o Radar trará oportunidades do PNCP automaticamente."
+          texto="Cadastre um processo ou busque publicações em Oportunidades para importar os editais de interesse."
           acao={podeEditar && <Button onClick={() => setNovo(true)}><Plus className="h-4 w-4" /> Novo processo</Button>}
         />
       ) : visao === 'kanban' ? (

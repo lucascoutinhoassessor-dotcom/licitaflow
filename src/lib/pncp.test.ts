@@ -26,7 +26,7 @@ describe('integração PNCP', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 204 })))
     await expect(consultarPNCP(filtros, 1)).resolves.toEqual({ data: [], totalPaginas: 0, totalRegistros: 0 })
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 503 })))
-    await expect(consultarPNCP(filtros, 1)).rejects.toThrow('PNCP não respondeu')
+    await expect(consultarPNCP(filtros, 1)).rejects.toThrow('fonte de oportunidades não respondeu')
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{}')))
     await expect(consultarPNCP(filtros, 1)).rejects.toThrow('resposta inesperada')
   })

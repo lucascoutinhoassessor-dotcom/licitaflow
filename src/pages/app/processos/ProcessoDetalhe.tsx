@@ -1,3 +1,4 @@
+import { rotuloPortal } from '@/lib/portais'
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, Check, ExternalLink, FileSignature, FileText, MessageSquarePlus, Pencil, Plus, Trash2 } from 'lucide-react'
@@ -355,7 +356,7 @@ export default function ProcessoDetalhe() {
     ['Órgão', p.orgao_nome],
     ['UASG', p.uasg],
     ['Local', [p.municipio, p.uf].filter(Boolean).join('/') || null],
-    ['Portal', p.portal],
+    ['Portal', rotuloPortal(p.portal)],
     ['Sessão / abertura', p.data_abertura ? formatarDataHora(p.data_abertura) : null],
     ['Valor estimado', p.valor_estimado != null ? formatarMoeda(p.valor_estimado) : null],
     ['Empresa', nomeEmpresa(p.empresa_id)],
