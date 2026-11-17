@@ -32,7 +32,7 @@ export const NAV_PRINCIPAL: ItemNav[] = [
     rota: '/app/oportunidades',
     rotulo: 'Oportunidades',
     icone: Radar,
-    descricao: 'Consulta de publicações no PNCP com filtros e importação para Processos.',
+    descricao: 'Busca de oportunidades nos portais de compras com filtros e importação para Processos.',
   },
   {
     rota: '/app/processos',

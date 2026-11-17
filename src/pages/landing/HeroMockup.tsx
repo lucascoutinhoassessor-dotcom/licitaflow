@@ -108,7 +108,7 @@ export function HeroMockup() {
                 <span key={k} className="absolute h-2 w-2 animate-pulse rounded-full bg-emerald-300 shadow-[0_0_12px_rgba(52,211,153,0.9)]" style={{ left: `${x}%`, top: `${y}%`, animationDelay: `${k * 0.5}s` }} />
               ))}
             </div>
-            <span className="absolute bottom-2 text-[10px] uppercase tracking-widest text-emerald-300/80">Radar PNCP</span>
+            <span className="absolute bottom-2 text-[10px] uppercase tracking-widest text-emerald-300/80">Oportunidades</span>
           </div>
         </div>
       </motion.div>

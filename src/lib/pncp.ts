@@ -1,6 +1,10 @@
+import { portalCompra } from './portais'
 import type { Modalidade } from './dominio'
 
 export interface CompraPNCP {
+  usuarioNome?: string
+  linkSistemaOrigem?: string | null
+  srp?: boolean
   numeroControlePNCP: string
   numeroCompra: string
   anoCompra: number
@@ -30,9 +34,9 @@ export function urlConsulta(f: FiltrosPNCP, pagina: number) {
 export async function consultarPNCP(f: FiltrosPNCP, pagina: number, signal?: AbortSignal): Promise<{ data: CompraPNCP[]; totalPaginas: number; totalRegistros: number }> {
   const r = await fetch(urlConsulta(f, pagina), { signal })
   if (r.status === 204) return { data: [], totalPaginas: 0, totalRegistros: 0 }
-  if (!r.ok) throw new Error('O PNCP não respondeu à consulta. Tente novamente em alguns instantes.')
+  if (!r.ok) throw new Error('A fonte de oportunidades não respondeu à consulta. Tente novamente em alguns instantes.')
   const dados = await r.json()
-  if (!Array.isArray(dados.data)) throw new Error('O PNCP retornou uma resposta inesperada. Tente novamente.')
+  if (!Array.isArray(dados.data)) throw new Error('A fonte de oportunidades retornou uma resposta inesperada. Tente novamente.')
   return dados
 }
 
@@ -49,7 +53,7 @@ export function dadosProcesso(c: CompraPNCP, empresaId: string) {
     numero: c.numeroCompra, objeto: c.objetoCompra,
     orgao_nome: c.orgaoEntidade.razaoSocial, orgao_cnpj: c.orgaoEntidade.cnpj,
     uf: c.unidadeOrgao?.ufSigla ?? null, municipio: c.unidadeOrgao?.municipioNome ?? null,
-    pncp_controle: c.numeroControlePNCP, portal: 'PNCP', link_edital: linkCompra(c),
+    pncp_controle: c.numeroControlePNCP, portal: portalCompra(c)[1], link_edital: linkCompra(c),
     valor_estimado: c.valorTotalEstimado, data_publicacao: c.dataPublicacaoPncp,
     data_abertura: c.dataAberturaProposta, data_limite_proposta: c.dataEncerramentoProposta,
   }

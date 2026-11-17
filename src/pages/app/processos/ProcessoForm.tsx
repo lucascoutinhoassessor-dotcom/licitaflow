@@ -1,3 +1,4 @@
+import { PORTAIS, rotuloPortal } from '@/lib/portais'
 import { useState, type FormEvent } from 'react'
 import { toast } from 'sonner'
 import { Button, Campo, Input, Select, Textarea } from '@/components/ui'
@@ -27,7 +28,7 @@ export function ProcessoForm({ processo, aoSalvar }: { processo?: Processo; aoSa
     uasg: processo?.uasg ?? '',
     uf: processo?.uf ?? '',
     municipio: processo?.municipio ?? '',
-    portal: processo?.portal ?? '',
+    portal: rotuloPortal(processo?.portal) ?? '',
     link_edital: processo?.link_edital ?? '',
     valor_estimado: processo?.valor_estimado?.toString() ?? '',
     data_abertura: local(processo?.data_abertura),
@@ -108,11 +109,7 @@ export function ProcessoForm({ processo, aoSalvar }: { processo?: Processo; aoSa
       <div className="grid gap-4 sm:grid-cols-3">
         <Campo rotulo="Portal" htmlFor="proc-portal">
           <Input id="proc-portal" list="portais" value={f.portal} onChange={set('portal')} />
-          <datalist id="portais">
-            {['Compras.gov.br', 'BLL Compras', 'Licitações-e (BB)', 'BNC', 'Portal de Compras Públicas', 'Licitanet'].map((p) => (
-              <option key={p} value={p} />
-            ))}
-          </datalist>
+          <datalist id="portais">{PORTAIS.map(([,nome])=><option key={nome} value={nome} />)}</datalist>
         </Campo>
         <Campo rotulo="Etapa" htmlFor="proc-etapa">
           <Select id="proc-etapa" value={f.etapa} onChange={set('etapa')}>

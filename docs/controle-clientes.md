@@ -4,7 +4,7 @@
 
 O console master recebe catálogo de planos, limites de uso, financeiro SaaS, status das integrações, fila de suporte/sugestões, avisos segmentados, relatórios operacionais e configurações de perfil/sessões. As áreas existentes de organizações, usuários, conteúdo da landing page, atividade e auditoria continuam disponíveis.
 
-No painel do cliente ficam disponíveis consulta PNCP e importação, processos, prazos, documentos, contratos, faturamento operacional, relatórios, plano/uso, avisos e atendimento. Proprietários e administradores consultam as cobranças da plataforma separadamente das notas fiscais de contratos públicos.
+No painel do cliente ficam disponíveis busca de oportunidades e importação, processos, prazos, documentos, contratos, faturamento operacional, relatórios, plano/uso, avisos e atendimento. Proprietários e administradores consultam as cobranças da plataforma separadamente das notas fiscais de contratos públicos.
 
 O atendimento tem mensagens persistidas, autoria definida pelo banco, leitura, prioridade e fluxo aberto/em andamento/aguardando cliente/resolvido/fechado. Cada cliente acessa seus próprios chamados; administradores da organização podem consultar os da equipe. Somente master pode alterar prioridade/status. Cliente suspenso mantém um canal de atendimento e consulta de cobranças, sem liberação de dados operacionais.
 
@@ -20,7 +20,7 @@ O projeto Supabase é o existente `licitaflow-app`, referência `tbsjasyvnuylnjr
 
 Para execução pelo SQL Editor, usar **somente** `supabase/deploy/20261116_controle_clientes.sql`: o arquivo inclui as migrações 0005, 0006 e 0007 em uma transação completa BEGIN/COMMIT. Não executar também os três arquivos individuais. Se alguma delas já tiver sido aplicada, conferir o estado antes de executar o consolidado. O script não se destina a execução repetida.
 
-Para execução pelo fluxo de migrações, aplicar os arquivos 0005, 0006 e 0007 em ordem, sem executar o consolidado. Nenhuma destas migrações foi aplicada à produção pelo assistente.
+Para execução pelo fluxo de migrações, aplicar os arquivos 0005, 0006 e 0007 em ordem, sem executar o consolidado. O consolidado 0005–0007 já foi aplicado ao projeto de produção pelo plugin Supabase, na migração `controle_clientes_planos_suporte_cobrancas`. Não reaplicar estes arquivos nesse projeto. As sete tabelas novas tiveram RLS confirmado; a leitura anônima retornou zero cobranças e zero chamados e somente os três planos ativos.
 
 Depois da atualização do banco, publicar a proposta e validar com contas separadas: master, proprietário de organização, leitor e cliente de outra organização. Testar chamado/resposta/leitura, aviso segmentado/arquivamento, exportação e filtro de empresa. Conferir o catálogo antes de habilitar os limites.
 
@@ -39,7 +39,7 @@ Pagamentos exigem ainda variáveis de servidor e homologação de cada conta. De
 | Colaboradores do master com permissões por área | Pendente; não conceder master total para simular suporte restrito |
 | Promoções, cupons, afiliação e recompensas | Pendente |
 | Provedores de IA, leitura automática de editais e consumo por agente | Pendente; não são apresentados como execução disponível |
-| Prospecção contínua, filas e monitoramento automático de portais | Pendente; PNCP atual funciona por consulta manual |
+| Prospecção contínua, filas e monitoramento automático de portais | Pendente; busca atual funciona por consulta manual |
 | Conversas do assistente e aprendizado dos agentes | Pendente |
 | Push, e-mail e WhatsApp automáticos | Pendentes de infraestrutura, consentimento e configuração |
 | Domínios próprios e contas financeiras vinculadas de clientes | Pendentes; contas de usuário não equivalem a subcontas de gateways |
