@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { consultarPNCP, dadosProcesso, urlConsulta, type CompraPNCP } from './pncp'
+import { consultarPNCP, consultarCatalogo, FonteLimitadaError, dadosProcesso, urlConsulta, type CompraPNCP } from './pncp'
 
 const filtros = { inicio: '2026-11-09', fim: '2026-11-16', modalidade: '6', uf: 'SP' }
 const compra: CompraPNCP = {
@@ -30,4 +30,12 @@ describe('integração PNCP', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{}')))
     await expect(consultarPNCP(filtros, 1)).rejects.toThrow('resposta inesperada')
   })
+  it('respeita a pausa pedida pela fonte sem tratar limite como resultado vazio',async()=>{
+    vi.stubGlobal('fetch',vi.fn().mockResolvedValue(new Response('{}',{status:429,headers:{'Retry-After':'120'}})))
+    const antes=Date.now()
+    const erro=await consultarCatalogo(filtros,1).catch(e=>e)
+    expect(erro).toBeInstanceOf(FonteLimitadaError)
+    expect(erro.retomarEm).toBeGreaterThanOrEqual(antes+120000)
+  })
+
 })

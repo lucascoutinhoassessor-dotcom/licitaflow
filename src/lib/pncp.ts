@@ -9,6 +9,7 @@ export interface CompraPNCP {
   numeroCompra: string
   anoCompra: number
   sequencialCompra: number
+  informacaoComplementar?: string | null
   objetoCompra: string
   modalidadeId: number
   modalidadeNome: string
@@ -20,7 +21,7 @@ export interface CompraPNCP {
   dataEncerramentoProposta: string | null
 }
 
-export interface FiltrosPNCP { inicio: string; fim: string; modalidade: string; uf: string }
+export interface FiltrosPNCP { inicio: string; fim: string; modalidade: string; uf: string; situacao?: 'abertas' | 'publicacoes' }
 
 export function urlConsulta(f: FiltrosPNCP, pagina: number) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(f.inicio) || !/^\d{4}-\d{2}-\d{2}$/.test(f.fim) || f.inicio > f.fim) {
@@ -57,4 +58,18 @@ export function dadosProcesso(c: CompraPNCP, empresaId: string) {
     valor_estimado: c.valorTotalEstimado, data_publicacao: c.dataPublicacaoPncp,
     data_abertura: c.dataAberturaProposta, data_limite_proposta: c.dataEncerramentoProposta,
   }
+}
+
+export class FonteLimitadaError extends Error {
+  retomarEm:number
+  constructor(segundos:number){super('A fonte pediu uma pausa temporária. Os resultados encontrados foram preservados.');this.name='FonteLimitadaError';this.retomarEm=Date.now()+segundos*1000}
+}
+export async function consultarCatalogo(f: FiltrosPNCP, pagina: number, signal?: AbortSignal) {
+  const p=new URLSearchParams({situacao:f.situacao??'publicacoes',codigoModalidadeContratacao:f.modalidade,pagina:String(pagina),uf:f.uf,inicio:f.inicio,fim:f.fim})
+  const r=await fetch(`/api/oportunidades?${p}`,{signal})
+  if(r.status===429)throw new FonteLimitadaError(Math.max(30,Math.min(300,Number(r.headers.get('Retry-After'))||60)))
+  if(!r.ok)throw new Error('A consulta foi interrompida pela fonte. Você pode retomar sem perder os resultados já encontrados.')
+  const d=await r.json()
+  if(!Array.isArray(d.data)||!Number.isInteger(d.totalPaginas)||!Number.isInteger(d.totalRegistros))throw new Error('A fonte não confirmou todas as páginas da pesquisa.')
+  return d as {data:CompraPNCP[];totalPaginas:number;totalRegistros:number}
 }
