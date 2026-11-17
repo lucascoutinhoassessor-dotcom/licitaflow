@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import { Lock } from 'lucide-react'
 import { useAuth } from '@/providers/AuthProvider'
 import { useOrg } from '@/providers/OrgProvider'
@@ -30,6 +31,8 @@ export function ContaSuspensa() {
             ))}
           </Select>
         )}
+        <Link className="mt-5 block text-sm font-medium text-primary hover:underline" to="/suporte">Falar com o suporte</Link>
+        <Link className="mt-3 block text-sm text-primary hover:underline" to="/cobrancas">Consultar cobranças</Link>
         <Button variante="contorno" className="mt-4 w-full" onClick={sair}>
           Sair
         </Button>

@@ -175,6 +175,107 @@ expect((await as(U1, `select notas_admin from public.organizations where id='${o
 expect((await as(U1, `select * from public.organization_admin_notes`)).rows.length === 0, 'cliente não acessa a tabela privada de notas');
 expect((await as(U2, `select * from public.admin_organizacoes()`)).rows.find(o=>o.id===o1).notas_admin === 'Nota confidencial de atendimento', 'master continua consultando notas internas');
 
+// Atendimento, avisos, relatórios e planos: controles reais no banco.
+const ch=(await as(U1, `select public.abrir_chamado('${o1}', 'Preciso de ajuda', 'Não encontro o edital', 'suporte') id`)).rows[0].id;
+expect((await as(U1, `select * from public.suporte_chamados`)).rows.length===1,'cliente abre e consulta o próprio chamado');
+await as(U2, `select public.responder_chamado('${ch}', 'Vamos verificar o processo.')`);
+expect((await as(U1, `select equipe from public.suporte_mensagens where chamado_id='${ch}' order by created_at desc limit 1`)).rows[0].equipe===true,'resposta do master é identificada pelo servidor');
+await as(U1, `select public.marcar_chamado_lido('${ch}')`);
+expect((await as(U1, `select nao_lido_cliente from public.suporte_chamados where id='${ch}'`)).rows[0].nao_lido_cliente===false,'leitura do cliente é persistida');
+blocked=false;
+try{await as(U1, `insert into public.suporte_mensagens(chamado_id,autor_id,autor_nome,equipe,texto) values('${ch}','${U1}','Equipe falsa',true,'Mensagem falsificada')`);}catch{blocked=true;}
+expect(blocked,'cliente não falsifica autoria da equipe');
+await as(U2, `select public.admin_atualizar_chamado('${ch}', 'fechado', 'alta')`);
+blocked=false;
+try{await as(U1, `select public.responder_chamado('${ch}', 'Mensagem em chamado fechado')`);}catch{blocked=true;}
+expect(blocked,'chamado fechado não recebe resposta sem reabertura');
+await as(U2, `select public.admin_atualizar_chamado('${ch}', 'aberto', 'normal')`);
+const av=(await as(U2, `select public.admin_publicar_aviso('Aviso privado','Comunicado para a organização','${o1}') id`)).rows[0].id;
+const globalAv=(await as(U2, `select public.admin_publicar_aviso('Aviso geral','Comunicado para todas as organizações') id`)).rows[0].id;
+await db.exec(`delete from public.memberships where org_id='${o1}' and user_id='${U2}'`);
+await db.exec(`delete from public.platform_admins where user_id='${U2}'`);
+expect((await as(U2, `select * from public.suporte_chamados where id='${ch}'`)).rows.length===0,'outra organização não vê o chamado');
+expect((await as(U2, `select * from public.suporte_mensagens where chamado_id='${ch}'`)).rows.length===0,'outra organização não vê as mensagens');
+blocked=false;
+try{await as(U2, `select public.responder_chamado('${ch}', 'Tentativa cruzada')`);}catch{blocked=true;}
+expect(blocked,'outra organização não responde ao chamado');
+expect((await as(U2, `select id from public.plataforma_avisos`)).rows.length===1,'aviso segmentado fica oculto a outro cliente');
+expect((await as(U1, `select id from public.plataforma_avisos`)).rows.length===2,'cliente recebe aviso próprio e geral');
+blocked=false;
+try{await as(U2, `insert into public.aviso_leituras(aviso_id,user_id) values('${av}','${U2}')`);}catch{blocked=true;}
+expect(blocked,'cliente não marca leitura de aviso invisível');
+blocked=false;
+try{await as(U1, `insert into public.aviso_leituras(aviso_id,user_id) values('${globalAv}','${U2}')`);}catch{blocked=true;}
+expect(blocked,'cliente não registra leitura em nome de outro usuário');
+await as(U1, `insert into public.aviso_leituras(aviso_id,user_id) values('${av}','${U1}')`);
+expect((await as(U1, `select * from public.aviso_leituras`)).rows.length===1,'cliente registra a própria leitura');
+blocked=false;
+try{await as(U1, `select public.admin_publicar_aviso('Tentativa','Cliente publicando')`);}catch{blocked=true;}
+expect(blocked,'cliente não publica comunicados administrativos');
+blocked=false;
+try{await as(U1, `select public.admin_relatorio_operacao()`);}catch{blocked=true;}
+expect(blocked,'cliente não consulta relatórios globais');
+blocked=false;
+try{await as(U1, `select public.relatorio_cliente('${o2}')`);}catch{blocked=true;}
+expect(blocked,'relatório do cliente não aceita outra organização');
+expect((await as(U1, `select public.relatorio_cliente('${o1}','${e1}') r`)).rows[0].r.processos===1,'relatório calcula totais reais com filtro de empresa');
+await db.exec(`insert into public.platform_admins(user_id) values('${U2}')`);
+await as(U2, `select public.admin_arquivar_aviso('${av}')`);
+expect((await as(U1, `select id from public.plataforma_avisos`)).rows.length===1,'aviso arquivado desaparece do painel do cliente');
+await as(U2, `select public.admin_atualizar_org('${o1}', 'profissional', current_date, true, 'Teste de atendimento', null)`);
+expect(!!(await as(U1, `select public.abrir_chamado('${o1}', 'Solicito reativação', 'Preciso regularizar o acesso', 'suporte') id`)).rows[0].id,'cliente suspenso mantém canal de suporte');
+blocked=false;
+try{await as(U1, `select public.relatorio_cliente('${o1}')`);}catch{blocked=true;}
+expect(blocked,'suspensão continua bloqueando relatórios operacionais');
+await as(U2, `select public.admin_atualizar_org('${o1}', 'profissional', current_date, false, null, null)`);
+expect((await as(U2, `select public.admin_relatorio_operacao() r`)).rows[0].r.clientes.length===2,'master recebe consolidado real dos clientes');
+blocked=false;
+try{await as(U1, `select public.admin_salvar_plano('especial','Especial',99900,999000,1,1,1,true)`);}catch{blocked=true;}
+expect(blocked,'cliente não cria nem altera planos');
+await as(U2, `select public.admin_salvar_plano('especial','Especial',99900,999000,1,1,1,true)`);
+await as(U2, `select public.admin_atualizar_org('${o1}', 'especial', current_date, false, null, null)`);
+expect((await as(U1, `select public.plano_cliente('${o1}') r`)).rows[0].r.plano.id==='especial','novo plano pode ser vinculado ao cliente');
+await as(U2, `select public.admin_aplicar_limites(true)`);
+blocked=false;
+try{await as(U1, `insert into public.empresas(org_id,cnpj,razao_social) values('${o1}','11111111000191','Empresa excedente')`);}catch{blocked=true;}
+expect(blocked,'banco bloqueia nova empresa acima do limite');
+blocked=false;
+try{await as(U1, `insert into public.processos(org_id,empresa_id,objeto) values('${o1}','${e1}','Processo excedente')`);}catch{blocked=true;}
+expect(blocked,'banco bloqueia novo processo acima do limite');
+blocked=false;
+try{await as(U1, `insert into public.memberships(org_id,user_id,papel) values('${o1}','${U2}','membro')`);}catch{blocked=true;}
+expect(blocked,'banco bloqueia novo usuário acima do limite');
+expect((await as(U1, `select id from public.empresas`)).rows.length===1,'ativar limites preserva empresas existentes');
+await as(U2, `select public.admin_salvar_plano('especial','Especial',99900,999000,2,2,2,false)`);
+await as(U1, `insert into public.empresas(org_id,cnpj,razao_social) values('${o1}','11111111000191','Segunda empresa')`);
+expect((await as(U1, `select public.plano_cliente('${o1}') r`)).rows[0].r.empresas===2,'limite ampliado permite uso real e conta os registros');
+await db.exec(`set role anon; select set_config('request.jwt.sub','',false);`);
+try{expect((await db.query(`select id from public.plataforma_planos`)).rows.length===3,'catálogo público oculta trial, cancelado e plano desativado');}finally{await db.exec('reset role;');}
+await as(U2, `select public.admin_aplicar_limites(false)`);
+await as(U1, `insert into public.empresas(org_id,cnpj,razao_social) values('${o1}','22222222000191','Terceira empresa')`);
+expect((await as(U1, `select id from public.empresas`)).rows.length===3,'desativação da política não limita novos cadastros');
+
+// Cobranças SaaS: clientes não criam nem confirmam pagamentos.
+blocked=false;
+try { await as(U1, `select public.admin_criar_cobranca('${o1}', 'Acesso mensal', 19700, current_date+5, 'stripe')`); } catch {blocked=true;}
+expect(blocked, 'cliente não cria cobranças da plataforma');
+const cb=(await as(U2, `select public.admin_criar_cobranca('${o1}', 'Acesso mensal', 19700, current_date+5, 'stripe') id`)).rows[0].id;
+expect((await as(U1, `select * from public.plataforma_cobrancas`)).rows.length===1, 'dono vê a cobrança da própria organização');
+await db.exec(`delete from public.memberships where org_id='${o1}' and user_id='${U2}'`);
+await db.exec(`delete from public.platform_admins where user_id='${U2}'`);
+expect((await as(U2, `select * from public.plataforma_cobrancas`)).rows.length===0, 'outro cliente não vê a cobrança');
+await as(U1, `update public.plataforma_cobrancas set status='paga' where id='${cb}'`);
+expect((await db.query(`select status from public.plataforma_cobrancas where id='${cb}'`)).rows[0].status==='rascunho', 'cliente não confirma pagamento pela API do banco');
+await db.exec(`insert into public.platform_admins(user_id) values('${U2}')`);
+blocked=false;
+try {await as(U2, `select public.admin_criar_cobranca('${o1}', 'Valor negativo', -100, current_date+5, 'stripe')`);}catch{blocked=true;}
+expect(blocked,'banco rejeita cobrança com valor negativo');
+// O histórico financeiro preserva a organização por FK até resolver a retenção.
+blocked=false;
+try {await as(U1, `delete from public.organizations where id='${o1}'`);}catch{blocked=true;}
+expect(blocked,'organização com cobrança não é excluída em cascata');
+await db.exec(`delete from public.plataforma_cobrancas where id='${cb}'`);
+
 // delete em cascata da org
 await as(U1, `delete from public.organizations where id = '${o1}'`);
 expect((await db.query(`select count(*)::int c from public.processos`)).rows[0].c === 0, 'excluir organização remove dados em cascata');

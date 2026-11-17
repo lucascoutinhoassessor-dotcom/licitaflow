@@ -1,5 +1,9 @@
 import {
   Bot,
+  Headphones,
+  Bell,
+  BarChart3,
+  CreditCard,
   Building2,
   CalendarClock,
   FileCheck2,
@@ -72,5 +76,10 @@ export const NAV_PRINCIPAL: ItemNav[] = [
 export const NAV_CONTA: ItemNav[] = [
   { rota: '/app/empresas', rotulo: 'Empresas', icone: Building2 },
   { rota: '/app/equipe', rotulo: 'Equipe', icone: Users },
+  { rota: '/cobrancas', rotulo: 'Cobranças do LicitaFlow', icone: Wallet },
+  { rota: '/app/plano', rotulo: 'Meu plano e uso', icone: CreditCard },
+  { rota: '/app/avisos', rotulo: 'Avisos', icone: Bell },
+  { rota: '/app/relatorios', rotulo: 'Relatórios', icone: BarChart3 },
+  { rota: '/suporte', rotulo: 'Suporte e sugestões', icone: Headphones },
   { rota: '/app/configuracoes', rotulo: 'Configurações', icone: Settings },
 ]

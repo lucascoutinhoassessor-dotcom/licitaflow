@@ -1,5 +1,6 @@
 import { InstalarApp } from '@/components/InstalarApp'
 import { useEffect, useState, type ReactNode } from 'react'
+import { useCatalogoPlanos } from '@/hooks/useCatalogoPlanos'
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { lerConteudo } from '@/lib/conteudoSite'
@@ -238,6 +239,12 @@ function BotaoPrincipal({ children, className }: { children: ReactNode; classNam
 
 function Precos() {
   const [anual, setAnual] = useState(true)
+  const catalogo = useCatalogoPlanos(true)
+  const planos = catalogo.data ? catalogo.data.filter(p=>!['trial','cancelado'].includes(p.id)).map(p=>({
+    id:p.id,nome:p.nome,mensal:p.mensal_centavos/100,anual:p.anual_centavos/1200,
+    publico:'Gestão de licitações para sua organização',destaque:p.id==='profissional',
+    itens:[`${p.limite_empresas ?? 'Ilimitado'} empresa(s)`,`${p.limite_usuarios ?? 'Ilimitado'} usuário(s)`,`${p.limite_processos ?? 'Ilimitado'} processo(s) cadastrado(s)`,'Consulta de oportunidades no PNCP','Prazos, documentos e contratos','Suporte no painel'],
+  })) : PLANOS
   return (
     <Secao id="planos">
       <Titulo selo="Planos" titulo="Um plano para cada momento" texto={`Comece com ${DIAS_TESTE} dias grátis em qualquer plano. Sem cartão, sem fidelidade.`} />
@@ -250,13 +257,13 @@ function Precos() {
             <button key={String(v)} onClick={() => setAnual(v as boolean)} className={cn('relative z-10 rounded-full px-5 py-2 transition-colors', anual === v ? 'text-slate-950' : 'text-slate-300')}>
               {anual === v && <motion.span layoutId="toggle-preco" className="absolute inset-0 -z-10 rounded-full bg-white" transition={{ type: 'spring', bounce: 0.2, duration: 0.5 }} />}
               {t as string}
-              {v && <span className={cn('ml-2 text-xs font-semibold', anual ? 'text-emerald-600' : 'text-emerald-300')}>-2 meses</span>}
+              {v && <span className={cn('ml-2 text-xs font-semibold', anual ? 'text-emerald-600' : 'text-emerald-300')}>Pagamento anual</span>}
             </button>
           ))}
         </div>
       </Revelar>
       <div className="grid gap-6 lg:grid-cols-3">
-        {PLANOS.map((p, i) => (
+        {planos.map((p, i) => (
           <Revelar key={p.id} atraso={i * 0.1}>
             <motion.div
               whileHover={{ y: -6 }}
@@ -284,7 +291,7 @@ function Precos() {
                     transition={{ duration: 0.2 }}
                     className="text-5xl font-semibold tracking-tight text-white tabular-nums"
                   >
-                    {anual ? p.anual : p.mensal}
+                    {(anual ? p.anual : p.mensal).toLocaleString('pt-BR',{maximumFractionDigits:2})}
                   </motion.span>
                 </AnimatePresence>
                 <span className="mb-1.5 text-sm text-slate-400">/mês</span>
