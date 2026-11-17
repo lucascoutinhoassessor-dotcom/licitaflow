@@ -1,0 +1,11 @@
+{
+  "registros": 50001,
+  "mediana_ms": 26.17,
+  "p95_ms": 29.01,
+  "teste": "Postgres local em WebAssembly; não mede rede de produção",
+  "execucoes": 31,
+  "pagina_tamanho": 20,
+  "resultados_para_microcomputador": 501,
+  "ambiente": "PGlite/PostgreSQL em WebAssembly, conjunto sintético local",
+  "escopo": "Consulta autenticada de palavra-chave e paginação; sem rede de produção e sem teste concorrente de mil usuários"
+}

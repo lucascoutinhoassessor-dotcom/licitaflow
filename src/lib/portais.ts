@@ -30,7 +30,7 @@ export function portalCompra(c: CompraPNCP) {
   const origem = urlOrigem(c), host = origem ? new URL(origem).hostname : ''
   // URL do edital tem precedência sobre o nome do publicador, que pode atender vários portais.
   return PORTAIS.find(p => p[2].some(d => host === d || host.endsWith(`.${d}`)))
-    ?? PORTAIS.find(p => p[3].some(n => normalizar(c.usuarioNome ?? '').includes(n)))
+    ?? PORTAIS.flatMap(p=>p[3].map(n=>({p,n}))).sort((a,b)=>b.n.length-a.n.length).find(({n})=>normalizar(c.usuarioNome??'').includes(n))?.p
     ?? PORTAIS[PORTAIS.length - 1]
 }
 

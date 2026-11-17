@@ -276,6 +276,14 @@ try {await as(U1, `delete from public.organizations where id='${o1}'`);}catch{bl
 expect(blocked,'organização com cobrança não é excluída em cascata');
 await db.exec(`delete from public.plataforma_cobrancas where id='${cb}'`);
 
+// O novo índice público não permite que clientes operem o coletor.
+blocked=false;
+try {await as(U1, `select public.admin_catalogo_oportunidades(false)`);}catch{blocked=true;}
+expect(blocked,'cliente comum não pausa a coleta de oportunidades');
+const cat=(await as(U2, `select public.admin_catalogo_oportunidades(false) r`)).rows[0].r;
+expect(cat.ativo===false,'master consulta e pausa o coletor com autorização no banco');
+expect((await db.query(`select count(*) n from public.admin_audit where acao='coleta.alterar'`)).rows[0].n>0,'controle do coletor registra auditoria administrativa');
+
 // delete em cascata da org
 await as(U1, `delete from public.organizations where id = '${o1}'`);
 expect((await db.query(`select count(*)::int c from public.processos`)).rows[0].c === 0, 'excluir organização remove dados em cascata');

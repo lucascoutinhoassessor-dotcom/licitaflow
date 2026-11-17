@@ -3,10 +3,10 @@ import { MODALIDADES, filtrosExtras, type FiltrosOportunidades as Filtros } from
 import { PORTAIS } from '@/lib/portais'
 import type { CompraPNCP } from '@/lib/pncp'
 
-export default function FiltrosOportunidades({ f, mudar, compras }: { f: Filtros; mudar: (f: Filtros) => void; compras: CompraPNCP[] }) {
+export default function FiltrosOportunidades({ f, mudar, compras, orgaos: opcoes }: { f: Filtros; mudar: (f: Filtros) => void; compras: CompraPNCP[]; orgaos?: {cnpj:string;razaoSocial:string}[] }) {
   const set = (k: keyof Filtros, value: string | boolean | string[]) => mudar({...f,[k]:value})
   const marcar = (k: 'portais' | 'modalidades', id: string) => set(k,f[k].includes(id)?f[k].filter(x=>x!==id):[...f[k],id])
-  const orgaos=[...new Map(compras.map(c=>[c.orgaoEntidade.cnpj,c.orgaoEntidade])).values()].sort((a,b)=>a.razaoSocial.localeCompare(b.razaoSocial))
+  const orgaos=opcoes??[...new Map(compras.map(c=>[c.orgaoEntidade.cnpj,c.orgaoEntidade])).values()].sort((a,b)=>a.razaoSocial.localeCompare(b.razaoSocial))
   const checkbox = (k: 'naoDivulgado' | 'exclusivo' | 'excluirSrp', texto: string) => <label className="flex items-start gap-2 text-sm"><input type="checkbox" className="mt-1 accent-primary" checked={f[k]} onChange={e=>set(k,e.target.checked)} />{texto}</label>
   return <div className="col-span-full space-y-3">
     <details className="rounded-lg border p-3"><summary className="cursor-pointer font-medium">Portais de compras</summary>
@@ -29,7 +29,7 @@ export default function FiltrosOportunidades({ f, mudar, compras }: { f: Filtros
       <p className="mt-2 text-xs text-muted-foreground">Faixas monetárias consideram somente valores positivos divulgados. Valor ausente ou zerado não comprova sigilo. Filtros de item consultam o detalhamento e podem levar mais tempo.</p>
     </details>
     <details className="rounded-lg border p-3"><summary className="cursor-pointer font-medium">Outros filtros</summary><div className="mt-3 flex flex-wrap gap-5">{checkbox('exclusivo','Com item exclusivo para ME/EPP')}{checkbox('excluirSrp','Excluir registro de preços')}</div><p className="mt-2 text-xs text-muted-foreground">ME/EPP e faixa unitária devem corresponder ao mesmo item. O benefício não comprova exclusividade de todos os itens do edital.</p></details>
-    <p className="text-xs text-muted-foreground">Os filtros são aplicados em todas as páginas da consulta. Você pode acompanhar os resultados enquanto a pesquisa avança.</p>
+    <p className="text-xs text-muted-foreground">Os filtros são aplicados na base pesquisável antes da paginação dos resultados.</p>
     <Button type="button" variante="contorno" tamanho="sm" onClick={()=>mudar({...f,...filtrosExtras,busca:f.busca,orgao:''})}>Limpar filtros adicionais</Button>
   </div>
 }

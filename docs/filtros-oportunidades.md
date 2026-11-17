@@ -1,3 +1,5 @@
+> A busca descrita nas seções de varredura abaixo foi substituída pela arquitetura de índice persistente em [busca-indexada.md](busca-indexada.md). A nova proposta exige atualização do banco e ativação da coleta antes de publicar o frontend. Não considerar a descrição anterior como arquitetura atual da proposta.
+
 # Busca e filtros de oportunidades
 
 A interface usa a identidade do LicitaFlow e referências de fluxo enviadas pelo usuário. Inclui seleção dos 19 portais da referência e Outros portais, seis modalidades, UF, período de publicação, palavras-chave, órgão dos registros carregados, faixas de valor total e unitário, quantidade máxima de itens, registros sem valor divulgado, item exclusivo ME/EPP e exclusão de registro de preços.

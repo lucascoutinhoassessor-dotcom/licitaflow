@@ -3,14 +3,14 @@ import { useQuery } from '@tanstack/react-query'
 import * as Dialog from '@radix-ui/react-dialog'
 import { X, Package, ExternalLink } from 'lucide-react'
 import { Button, Input, Select, Carregando } from '@/components/ui'
-import { consultarItens } from '@/lib/filtrosOportunidades'
+import { itensDoEdital } from '@/lib/itensIndice'
 import { agruparItens, identificacaoGrupo, valorItem } from '@/lib/itensEdital'
 import { normalizar, urlOrigem } from '@/lib/portais'
 import { linkCompra, type CompraPNCP } from '@/lib/pncp'
 
 export default function ItensEdital({ compra }: {compra:CompraPNCP}) {
   const [aberto,setAberto]=useState(false),[busca,setBusca]=useState(''),[por,setPor]=useState<'item'|'grupo'|'lote'>('item')
-  const q=useQuery({queryKey:['itens-edital',compra.numeroControlePNCP],enabled:aberto,queryFn:({signal})=>consultarItens(compra,signal),staleTime:300_000,retry:1})
+  const q=useQuery({queryKey:['itens-edital',compra.numeroControlePNCP],enabled:aberto,queryFn:({signal})=>itensDoEdital(compra,signal),staleTime:300_000,retry:1})
   const lista=(q.data??[]).filter(i=>normalizar(`${i.numeroItem} ${i.descricao??''}`).includes(normalizar(busca.trim())))
   const grupos=por==='item'?new Map([['Itens',lista]]):agruparItens(lista,por)
   const temGrupos=por!=='item' && (q.data??[]).some(i=>identificacaoGrupo(i,por))
