@@ -3,7 +3,7 @@ import {readFileSync} from 'node:fs'
 import {performance} from 'node:perf_hooks'
 const db=new PGlite()
 await db.exec(`create role anon nologin;create role authenticated nologin;create role service_role nologin bypassrls;create schema auth;create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.sub',true),'')::uuid$$;grant usage on schema auth,public to authenticated,anon;`)
-for(const f of ['20261117035403_indice_oportunidades.sql','20261117035735_coleta_oportunidades.sql'])await db.exec(readFileSync('supabase/migrations/'+f,'utf8'))
+for(const f of ['20261117035403_indice_oportunidades.sql','20261117035735_coleta_oportunidades.sql','20261119000010_enxugar_catalogo.sql'])await db.exec(readFileSync('supabase/migrations/'+f,'utf8'))
 let asserts=0
 function ok(v,m){if(!v)throw Error(m);asserts++;console.log('PASS',m)}
 const uid='11111111-1111-1111-1111-111111111111'
@@ -21,8 +21,11 @@ const itens=[{numeroItem:1,descricao:'Computador de bordo',quantidade:1,orcament
 await db.query('select licitaflow_coleta.registrar_itens($1,$2::jsonb,1,false)',[c.numeroControlePNCP,JSON.stringify(itens)])
 ok((await como('authenticated','select * from public.oportunidades_itens_indice')).rows.length===0,'página incompleta de itens permanece oculta')
 await db.query('select licitaflow_coleta.registrar_itens($1,\'[]\'::jsonb,2,true)',[c.numeroControlePNCP])
-const registrados=(await como('authenticated','select item,valor_unitario from public.oportunidades_itens_indice where numero=1')).rows[0]
-ok(registrados.item.valorUnitarioEstimado===null&&registrados.item.valorTotal===null&&registrados.valor_unitario===null,'preços sigilosos são removidos na gravação')
+const registrados=(await como('authenticated','select valor_unitario,valor_total from public.oportunidades_itens_indice where numero=1')).rows[0]
+const jsonItens=(await como('authenticated','select public.itens_oportunidade_indexados($1) r',[c.numeroControlePNCP])).rows[0].r
+ok(registrados.valor_unitario===null&&registrados.valor_total===null&&jsonItens[0].valorUnitarioEstimado===null&&jsonItens[0].valorTotal===null,'preços sigilosos são removidos na gravação')
+ok(jsonItens.length===2&&jsonItens[1].descricao==='Monitor para sala'&&Number(jsonItens[1].valorUnitarioEstimado)===500,'itens são devolvidos no mesmo formato para a tela')
+ok((await db.query('select busca_itens is not null v from public.oportunidades_indice where controle=$1',[c.numeroControlePNCP])).rows[0].v,'edital guarda um vetor único de busca dos itens')
 ok((await buscar({busca:'monitor'})).totalRegistros===1,'busca também encontra palavras em itens indexados')
 ok((await buscar({busca:'microcomputador',exclusivo:true,itemMinimo:'400'})).totalRegistros===0,'benefício e valor precisam corresponder ao mesmo item')
 ok((await buscar({busca:'microcomputador',itemMinimo:'400',itemMaximo:'600'})).totalRegistros===1,'filtro unitário indexado retorna o edital')
@@ -58,6 +61,15 @@ await db.query("insert into net._http_response(id,status_code,headers,content) v
 await db.query('select licitaflow_coleta.tick()')
 ok((await db.query("select pausa_ate>now()+interval '59 minutes' p from licitaflow_coleta.estado")).rows[0].p,'coletor respeita Retry-After de uma hora sem truncar')
 ok((await buscar({busca:'microcomputador'})).totalRegistros===1,'pesquisa continua disponível durante pausa da fonte')
+// Limpeza: itens de editais encerrados há mais de 2 dias saem do catálogo; o edital fica.
+const velho={...c,numeroControlePNCP:'12345678000190-1-000099/2026',objetoCompra:'Aquisição de cadeiras',dataEncerramentoProposta:'2020-01-01T10:00:00'}
+await db.query('select licitaflow_coleta.registrar_compra($1::jsonb)',[JSON.stringify(velho)])
+ok((await db.query("select count(*)::int n from licitaflow_coleta.jobs where tipo='itens' and controle=$1",[velho.numeroControlePNCP])).rows[0].n===0,'editais encerrados não entram na fila de itens')
+await db.query('select licitaflow_coleta.registrar_itens($1,$2::jsonb,1,true)',[velho.numeroControlePNCP,JSON.stringify([{numeroItem:1,descricao:'Cadeira giratória',quantidade:2}])])
+const limpeza=(await db.query('select licitaflow_coleta.limpar_catalogo() r')).rows[0].r
+ok(Number(limpeza.itens_removidos)===1,'limpeza remove itens de editais encerrados')
+ok((await db.query('select itens_completos from public.oportunidades_indice where controle=$1',[velho.numeroControlePNCP])).rows[0].itens_completos===false,'edital encerrado continua no catálogo sem itens')
+ok((await buscar({busca:'microcomputador'})).totalRegistros===1,'limpeza não afeta editais abertos')
 console.log('Preparando 50 mil editais de teste...')
 await db.exec(`insert into public.oportunidades_indice(controle,objeto,complemento,orgao_cnpj,orgao_nome,uf,modalidade,portal_id,publicacao,encerramento,situacao,valor,srp,compra)
 select 'benchmark-'||n,case when n%100=0 then 'Aquisição de microcomputadores para educação' else 'Aquisição de material de escritório e papelaria '||n end,'','12345678000190','Órgão público',case when n%3=0 then 'SP' else 'RJ' end,6,'comprasnet',now()-(n||' seconds')::interval,'2099-12-31',1,10000,false,jsonb_build_object('numeroControlePNCP','benchmark-'||n,'objetoCompra','Aquisição de bens públicos') from generate_series(1,50000) n;analyze public.oportunidades_indice;analyze public.oportunidades_itens_indice;`)
