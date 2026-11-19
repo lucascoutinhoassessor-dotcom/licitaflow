@@ -1,0 +1,60 @@
+// Ensaia o roteiro de produção supabase/deploy/20261119_enxugar_catalogo_producao.sql
+// sobre o esquema anterior (sem a migration 20261119000010), com pg_cron simulado.
+import { PGlite } from '@electric-sql/pglite'
+import { readFileSync } from 'node:fs'
+
+const db = new PGlite()
+let n = 0
+const ok = (v, m) => { if (!v) throw new Error(m); n++; console.log('PASS', m) }
+
+await db.exec(`create role anon nologin;create role authenticated nologin;create role service_role nologin bypassrls;create schema auth;
+create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.sub',true),'')::uuid$$;
+grant usage on schema auth,public to authenticated,anon;
+create schema cron;
+create table cron.job(jobid bigserial primary key, jobname text unique, schedule text, command text, active boolean default true);
+create function cron.schedule(n text, s text, c text) returns bigint language sql as $$insert into cron.job(jobname,schedule,command) values(n,s,c) on conflict(jobname) do update set schedule=excluded.schedule,command=excluded.command returning jobid$$;
+create function cron.unschedule(id bigint) returns boolean language sql as $$delete from cron.job where jobid=id returning true$$;`)
+for (const f of ['20261117035403_indice_oportunidades.sql', '20261117035735_coleta_oportunidades.sql']) await db.exec(readFileSync('supabase/migrations/' + f, 'utf8'))
+
+// Dados no formato antigo: um edital aberto com 2 itens e um encerrado com 1 item.
+const compra = (id, enc) => ({ numeroControlePNCP: id, numeroCompra: '1', anoCompra: 2026, sequencialCompra: 1, objetoCompra: 'Aquisição de equipamentos', orgaoEntidade: { cnpj: '12345678000190', razaoSocial: 'Prefeitura' }, unidadeOrgao: { ufSigla: 'SP', municipioNome: 'São Paulo' }, modalidadeId: 6, modalidadeNome: 'Pregão eletrônico', dataPublicacaoPncp: '2026-11-16T12:00:00', dataEncerramentoProposta: enc, srp: false, valorTotalEstimado: 1000, dataAtualizacaoGlobal: '2026-11-17T10:00:00' })
+const aberto = compra('12345678000190-1-000001/2026', '2099-12-31T10:00:00')
+const fechado = compra('12345678000190-1-000002/2026', '2020-01-01T10:00:00')
+for (const c of [aberto, fechado]) await db.query('select licitaflow_coleta.registrar_compra($1::jsonb)', [JSON.stringify(c)])
+await db.query('select licitaflow_coleta.registrar_itens($1,$2::jsonb,1,true)', [aberto.numeroControlePNCP, JSON.stringify([
+  { numeroItem: 1, descricao: 'Notebook i5 16GB', quantidade: 20, unidadeMedida: 'UN', valorUnitarioEstimado: 4000, valorTotal: 80000, tipoBeneficio: 4, tipoBeneficioNome: 'Sem benefício', numeroLote: '1' },
+  { numeroItem: 2, descricao: 'Mouse óptico', quantidade: 20, orcamentoSigiloso: true, valorUnitarioEstimado: 30, valorTotal: 600 },
+])])
+await db.query('select licitaflow_coleta.registrar_itens($1,$2::jsonb,1,true)', [fechado.numeroControlePNCP, JSON.stringify([{ numeroItem: 1, descricao: 'Cadeira', quantidade: 2 }])])
+ok((await db.query('select count(*)::int n from public.oportunidades_itens_indice')).rows[0].n === 3, 'base antiga preparada com 3 itens')
+
+// ETAPA 1: roteiro de produção.
+await db.exec(readFileSync('supabase/deploy/20261119_enxugar_catalogo_producao.sql', 'utf8'))
+ok((await db.query("select count(*)::int n from cron.job where jobname='licitaflow-migrar-itens'")).rows[0].n === 1, 'migração pesada fica agendada no pg_cron')
+ok((await db.query("select count(*)::int n from cron.job where jobname='licitaflow-limpeza-catalogo'")).rows[0].n === 1, 'limpeza horária agendada')
+
+// ETAPA 2: o pg_cron executa a migração.
+await db.query('select licitaflow_coleta.migrar_itens_compactos()')
+const st = (await db.query('select * from licitaflow_coleta.migracao_enxugar')).rows[0]
+ok(st.status === 'concluida', 'migração concluída (' + (st.erro ?? 'sem erro') + ')')
+ok((await db.query("select count(*)::int n from cron.job where jobname='licitaflow-migrar-itens'")).rows[0].n === 0, 'agendamento da migração se remove sozinho')
+ok(!(await db.query("select 1 from information_schema.columns where table_name='oportunidades_itens_indice' and column_name='item'")).rows.length, 'coluna JSON duplicada removida')
+ok((await db.query('select count(*)::int n from public.oportunidades_itens_indice')).rows[0].n === 2, 'itens do edital encerrado descartados, abertos mantidos')
+await db.query('select licitaflow_coleta.migrar_itens_compactos()')
+ok((await db.query('select status from licitaflow_coleta.migracao_enxugar')).rows[0].status === 'concluida', 'rodar de novo é seguro')
+
+const uid = '11111111-1111-1111-1111-111111111111'
+const como = async (sql, p = []) => { await db.exec(`set role authenticated;select set_config('request.jwt.sub','${uid}',false)`); try { return await db.query(sql, p) } finally { await db.exec('reset role') } }
+const itens = (await como('select public.itens_oportunidade_indexados($1) r', [aberto.numeroControlePNCP])).rows[0].r
+ok(itens.length === 2 && itens[0].descricao === 'Notebook i5 16GB' && Number(itens[0].quantidade) === 20 && itens[0].unidadeMedida === 'UN' && itens[0].numeroLote === '1', 'itens voltam no mesmo formato da tela')
+ok(itens[1].valorUnitarioEstimado === null && itens[1].valorTotal === null && itens[1].orcamentoSigiloso === true, 'sigilo preservado')
+const busca = async (termo) => (await como('select public.buscar_oportunidades($1::jsonb,1,20) r', [JSON.stringify({ situacao: 'abertas', busca: termo })])).rows[0].r
+ok((await busca('notebook')).totalRegistros === 1, 'busca encontra palavra que só existe nos itens')
+ok((await busca('mouse')).totalRegistros === 1, 'busca encontra item sigiloso pela descrição')
+ok((await busca('cadeira')).totalRegistros === 0, 'edital encerrado não aparece entre os abertos')
+
+// Coletor depois da migração grava no formato novo.
+await db.query('select licitaflow_coleta.registrar_itens($1,$2::jsonb,1,true)', [aberto.numeroControlePNCP, JSON.stringify([{ numeroItem: 1, descricao: 'Impressora laser', quantidade: 3 }])])
+ok((await busca('impressora')).totalRegistros === 1 && (await busca('notebook')).totalRegistros === 0, 'nova coleta atualiza o vetor de busca do edital')
+console.log('Ensaio do roteiro de produção aprovado:', n)
+await db.close()

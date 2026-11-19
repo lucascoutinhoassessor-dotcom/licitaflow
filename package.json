@@ -8,7 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "vitest run && node scripts/test-db.mjs supabase/migrations && npm run test:indice",
+    "test": "vitest run && node scripts/test-db.mjs supabase/migrations && npm run test:indice && node scripts/test-deploy-enxugar.mjs",
     "test:watch": "vitest",
     "test:indice": "node scripts/test-indice-oportunidades.mjs"
   },
