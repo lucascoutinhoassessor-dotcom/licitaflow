@@ -15,6 +15,7 @@ await db.query('select licitaflow_coleta.registrar_compra($1::jsonb)',[JSON.stri
 await db.query("delete from licitaflow_coleta.jobs where tipo='itens' and controle=$1",[cred.numeroControlePNCP])
 await db.query("insert into licitaflow_coleta.jobs(tipo,ciclo,controle,concluido,concluida_em) values('itens',$1||'/recoleta-20261119',$1,true,now())",[cred.numeroControlePNCP])
 await db.exec(readFileSync('supabase/migrations/20261119000011_ampliar_modalidades.sql','utf8'))
+await db.exec(readFileSync('supabase/migrations/20261120000012_itens_removidos.sql','utf8'))
 await db.query('select licitaflow_coleta.registrar_compra($1::jsonb)',[JSON.stringify(c)])
 const buscar=async f=>(await como('authenticated','select public.buscar_oportunidades($1::jsonb,1,20) r',[JSON.stringify({situacao:'abertas',...f})])).rows[0].r
 ok((await buscar({busca:'microcomputador'})).totalRegistros===1,'stemming e prefixo encontram microcomputadores')
@@ -89,6 +90,19 @@ await db.query("insert into net._http_response(id,status_code,headers,content) v
 await db.query('select licitaflow_coleta.tick()')
 ok((await db.query('select itens_completos from public.oportunidades_indice where controle=$1',[cred.numeroControlePNCP])).rows[0].itens_completos,'coletor grava itens de job de recoleta')
 ok((await buscar({busca:'hidroterapia'})).totalRegistros===1,'itens recoletados entram na busca')
+// Editais retirados do PNCP (404) e falhas repetidas não travam a fila de itens.
+const sumido={...c,numeroControlePNCP:'12345678000190-1-000088/2026',objetoCompra:'Edital retirado da fonte'}
+await db.query('select licitaflow_coleta.registrar_compra($1::jsonb)',[JSON.stringify(sumido)])
+const r404=(await db.query("select net.http_get('https://pncp.gov.br/itens') id")).rows[0].id
+await db.query("update licitaflow_coleta.jobs set request_id=$1,agendada_em=now() where tipo='itens' and controle=$2",[r404,sumido.numeroControlePNCP])
+await db.query("insert into net._http_response(id,status_code,headers,content) values($1,404,'{}','{\"message\":\"Contratação não cadastrada.\"}')",[r404])
+await db.query('select licitaflow_coleta.tick()')
+ok((await db.query("select concluido from licitaflow_coleta.jobs where tipo='itens' and controle=$1",[sumido.numeroControlePNCP])).rows[0].concluido,'404 em itens encerra o job sem novas tentativas')
+const r500=(await db.query("select net.http_get('https://pncp.gov.br/itens') id")).rows[0].id
+await db.query("update licitaflow_coleta.jobs set request_id=$1,agendada_em=now(),tentativas=12,concluido=false where tipo='itens' and controle=$2",[r500,sumido.numeroControlePNCP])
+await db.query("insert into net._http_response(id,status_code,headers,content) values($1,500,'{}','')",[r500])
+await db.query('select licitaflow_coleta.tick()')
+ok((await db.query("select concluido from licitaflow_coleta.jobs where tipo='itens' and controle=$1",[sumido.numeroControlePNCP])).rows[0].concluido,'job de itens para de tentar após 12 falhas')
 console.log('Preparando 50 mil editais de teste...')
 await db.exec(`insert into public.oportunidades_indice(controle,objeto,complemento,orgao_cnpj,orgao_nome,uf,modalidade,portal_id,publicacao,encerramento,situacao,valor,srp,compra)
 select 'benchmark-'||n,case when n%100=0 then 'Aquisição de microcomputadores para educação' else 'Aquisição de material de escritório e papelaria '||n end,'','12345678000190','Órgão público',case when n%3=0 then 'SP' else 'RJ' end,6,'comprasnet',now()-(n||' seconds')::interval,'2099-12-31',1,10000,false,jsonb_build_object('numeroControlePNCP','benchmark-'||n,'objetoCompra','Aquisição de bens públicos') from generate_series(1,50000) n;analyze public.oportunidades_indice;analyze public.oportunidades_itens_indice;`)
