@@ -17,8 +17,11 @@ export default function AnaliseEmpresas() {
   const lista = q.data?.data ?? [], status = q.data?.status, totalPaginas = Math.max(1, q.data?.totalPaginas ?? 1)
   function pesquisar(e: FormEvent) {
     e.preventDefault()
+    const nova = { termo: termo.trim(), uf }
+    // Mesma pesquisa na primeira página: busca de novo em vez de mostrar o resultado guardado.
+    if (consulta && pagina === 1 && consulta.termo === nova.termo && consulta.uf === nova.uf) { void q.refetch(); return }
     setPagina(1)
-    setConsulta({ termo: termo.trim(), uf })
+    setConsulta(nova)
   }
   return <>
     <CabecalhoPagina titulo="Análise de empresas" descricao="Veja quanto cada empresa já vendeu para o governo, segundo os contratos publicados no PNCP." />
