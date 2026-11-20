@@ -1,0 +1,34 @@
+import { supabase } from './supabase'
+
+export interface ItemCatalogo { tipo: 'M' | 'S'; codigo: number; nome: string; classe: string }
+export interface EstatisticaUnidade { unidade: string; n: number; minimo: number; maximo: number; media: number; mediana: number }
+export interface CompraPreco {
+  data: string | null; preco: number; quantidade: number | null; unidade: string; descricao: string
+  fornecedor: string | null; cnpj: string | null; marca: string | null; orgao: string | null; uasg: string | null
+  uf: string | null; municipio: string | null; modalidade: number | null; idCompra: string
+}
+export interface HistoricoPrecos {
+  tipo: 'M' | 'S'; codigo: number; incompleto: boolean; total: number
+  unidades: EstatisticaUnidade[]; marcas: { marca: string; n: number }[]; compras: CompraPreco[]
+}
+
+export async function buscarCatalogo(termo: string, tipo: '' | 'M' | 'S', signal?: AbortSignal): Promise<{ data: ItemCatalogo[]; catalogo: { itens: number } }> {
+  const p = supabase.rpc('buscar_catalogo', { p_termo: termo, p_tipo: tipo })
+  const { data, error } = await (signal ? p.abortSignal(signal) : p)
+  if (error) {
+    if (['PGRST202', 'PGRST205', '42883'].includes(error.code)) throw new Error('O catálogo de preços está sendo preparado. Tente novamente em instantes.')
+    throw new Error('Não foi possível pesquisar o catálogo. Tente novamente.')
+  }
+  return data
+}
+
+export async function historicoPrecos(item: Pick<ItemCatalogo, 'tipo' | 'codigo'>, filtros: { uf: string; de: string; ate: string }, signal?: AbortSignal): Promise<HistoricoPrecos> {
+  const { data } = await supabase.auth.getSession()
+  if (!data.session) throw new Error('Entre na sua conta para consultar preços.')
+  const qs = new URLSearchParams({ tipo: item.tipo, codigo: String(item.codigo) })
+  for (const [k, v] of Object.entries(filtros)) if (v) qs.set(k, v)
+  const r = await fetch(`/api/precos?${qs}`, { headers: { Authorization: `Bearer ${data.session.access_token}` }, signal })
+  const corpo = await r.json().catch(() => null)
+  if (!r.ok) throw new Error(corpo?.error ?? 'Não foi possível consultar os preços agora.')
+  return corpo as HistoricoPrecos
+}

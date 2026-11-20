@@ -17,6 +17,7 @@ import {
   Briefcase,
   LineChart,
   SearchCheck,
+  Tag,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -102,6 +103,12 @@ export const GRUPOS_NAV: GrupoNav[] = [
         rotulo: 'Análise de empresas',
         icone: SearchCheck,
         descricao: 'Por CNPJ: contratos ganhos, valores, órgãos e estados onde cada empresa vende para o governo.',
+      },
+      {
+        rota: '/app/historico-precos',
+        rotulo: 'Histórico de preços',
+        icone: Tag,
+        descricao: 'Preços homologados nas compras públicas, com marca, fornecedor e órgão.',
       },
       { rota: '/app/relatorios', rotulo: 'Relatórios', icone: BarChart3 },
     ],

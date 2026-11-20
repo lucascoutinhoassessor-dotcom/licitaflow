@@ -2,14 +2,14 @@ import path from 'path'
 import react from '@vitejs/plugin-react'
 import { defineConfig, loadEnv, type Plugin } from 'vite'
 
-/** Em desenvolvimento, atende /api/resultados com a mesma função usada na Vercel. */
+/** Em desenvolvimento, atende /api/resultados e /api/precos com as mesmas funções usadas na Vercel. */
 function apiLocal(): Plugin {
   return {
     name: 'licitaflow-api-local',
     configureServer(server) {
       Object.assign(process.env, loadEnv('development', process.cwd(), ''))
-      server.middlewares.use('/api/resultados', async (req, res) => {
-        const mod = await server.ssrLoadModule('/server/resultados.js')
+      for (const nome of ['resultados', 'precos']) server.middlewares.use(`/api/${nome}`, async (req, res) => {
+        const mod = await server.ssrLoadModule(`/server/${nome}.js`)
         const url = new URL(req.url ?? '', 'http://localhost')
         const resposta = {
           setHeader: (k: string, v: string) => res.setHeader(k, v),
