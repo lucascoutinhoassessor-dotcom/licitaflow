@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useRef, useState, type ReactNode 
 import { useQueryClient } from '@tanstack/react-query'
 import type { Session, User } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
+import { sessaoSalva } from '@/lib/sessao'
 
 interface AuthCtx {
   session: Session | null
@@ -45,7 +46,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (evento === 'USER_UPDATED' || evento === 'SIGNED_OUT') setRecuperandoSenha(false)
     })
     supabase.auth.getSession().then(({ data }) => { if (!eventoRecebido) aplicar(data.session) }).catch(() => { if (!eventoRecebido) aplicar(null) })
-    return () => { ativo = false; data.subscription.unsubscribe() }
+    // Se o servidor de login demorar (renovação de sessão lenta), não deixa a tela presa em "Carregando":
+    // segue com a sessão salva neste aparelho; o evento do Supabase atualiza tudo quando chegar.
+    const limite = setTimeout(() => { if (ativo && !eventoRecebido) aplicar(sessaoSalva()) }, 6000)
+    return () => { ativo = false; clearTimeout(limite); data.subscription.unsubscribe() }
   }, [qc])
 
   const sair = async () => {
