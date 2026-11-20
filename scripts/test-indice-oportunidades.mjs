@@ -130,6 +130,20 @@ ok((await buscar({busca:'microcomputador',aberturaDe:'2099-12-01',aberturaAte:'2
 ok((await buscar({busca:'microcomputador',aberturaDe:'2026-11-20',aberturaAte:'2026-12-04'})).totalRegistros===0,'período de abertura exclui sessões fora do intervalo')
 ok((await buscar({busca:'microcomputador',aberturaDe:'',aberturaAte:''})).totalRegistros===1,'datas vazias não limitam a abertura')
 let periodoInvalido=false;try{await buscar({aberturaDe:'2026-12-10',aberturaAte:'2026-12-01'})}catch{periodoInvalido=true}ok(periodoInvalido,'período de abertura invertido é recusado')
+// Coletas mais leves (migration 20261120000017): itens só dos próximos 30 dias e descrição curta.
+await db.exec(readFileSync('supabase/migrations/20261120000017_coletas_mais_leves.sql','utf8'))
+const emDias=d=>new Date(Date.now()+d*86_400_000).toISOString().slice(0,19)
+const perto={...c,numeroControlePNCP:'12345678000190-1-000501/2026',objetoCompra:'Aquisição de toner',dataEncerramentoProposta:emDias(10)}
+const longe={...c,numeroControlePNCP:'12345678000190-1-000502/2026',objetoCompra:'Aquisição de grampeador',dataEncerramentoProposta:emDias(90)}
+for(const x of [perto,longe])await db.query('select licitaflow_coleta.registrar_compra($1::jsonb)',[JSON.stringify(x)])
+const filaDe=async id=>(await db.query("select count(*)::int n from licitaflow_coleta.jobs where tipo='itens' and not concluido and controle=$1",[id])).rows[0].n
+ok(await filaDe(perto.numeroControlePNCP)===1,'edital que abre em 10 dias entra na fila de itens')
+ok(await filaDe(longe.numeroControlePNCP)===0,'edital que abre em 90 dias espera a data se aproximar')
+await db.query("insert into licitaflow_coleta.jobs(tipo,ciclo,controle) values('itens',$1||'/recoleta-x',$1)",[longe.numeroControlePNCP])
+await db.query('select licitaflow_coleta.limpar_catalogo()')
+ok(await filaDe(longe.numeroControlePNCP)===0,'limpeza tira da fila os itens de editais distantes')
+await db.query('select licitaflow_coleta.registrar_itens($1,$2::jsonb,1,true)',[perto.numeroControlePNCP,JSON.stringify([{numeroItem:1,descricao:'Toner '+'x'.repeat(600)}])])
+ok((await db.query('select length(descricao) n from public.oportunidades_itens_indice where controle=$1',[perto.numeroControlePNCP])).rows[0].n===240,'descrição do item guardada com até 240 caracteres')
 console.log('Preparando 50 mil editais de teste...')
 await db.exec(`insert into public.oportunidades_indice(controle,objeto,complemento,orgao_cnpj,orgao_nome,uf,modalidade,portal_id,publicacao,encerramento,situacao,valor,srp,compra)
 select 'benchmark-'||n,case when n%100=0 then 'Aquisição de microcomputadores para educação' else 'Aquisição de material de escritório e papelaria '||n end,'','12345678000190','Órgão público',case when n%3=0 then 'SP' else 'RJ' end,6,'comprasnet',now()-(n||' seconds')::interval,'2099-12-31',1,10000,false,jsonb_build_object('numeroControlePNCP','benchmark-'||n,'objetoCompra','Aquisição de bens públicos') from generate_series(1,50000) n;analyze public.oportunidades_indice;analyze public.oportunidades_itens_indice;`)

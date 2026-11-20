@@ -11,7 +11,7 @@ import { useOrg } from '@/providers/OrgProvider'
 import { useLista, useSalvar } from '@/hooks/useDados'
 import { dadosProcesso, linkCompra, type CompraPNCP } from '@/lib/pncp'
 import { itensDoEdital } from '@/lib/itensIndice'
-import { nomeModoDisputa } from '@/lib/filtrosOportunidades'
+import { consultarItens, nomeModoDisputa } from '@/lib/filtrosOportunidades'
 import { portalCompra, urlOrigem } from '@/lib/portais'
 import { formatarDataHora, formatarMoeda, prazoRelativo } from '@/lib/format'
 import type { Processo } from '@/types/db'
@@ -22,6 +22,11 @@ async function buscarCompra(cnpj: string, ano: string, seq: string, signal?: Abo
   const c = await r.json()
   if (!c?.numeroControlePNCP || !c?.orgaoEntidade?.cnpj) throw new Error('A fonte retornou o edital em formato inesperado.')
   return c as CompraPNCP
+}
+
+/** Itens com a descrição completa direto do PNCP; se a fonte falhar, usa a cópia resumida da base. */
+async function itensCompletos(compra: CompraPNCP, signal?: AbortSignal) {
+  try { return await consultarItens(compra, signal) } catch (e) { if (signal?.aborted) throw e; return itensDoEdital(compra, signal) }
 }
 
 export default function OportunidadeDetalhe() {
@@ -36,7 +41,7 @@ export default function OportunidadeDetalhe() {
   const compraEstado = estado?.compra && estado.compra.orgaoEntidade.cnpj === cnpj && String(estado.compra.anoCompra) === ano && String(estado.compra.sequencialCompra) === seq ? estado.compra : undefined
   const q = useQuery({ queryKey: ['oportunidade', cnpj, ano, seq], enabled: valida && !compraEstado, queryFn: ({ signal }) => buscarCompra(cnpj, ano, seq, signal), staleTime: 300_000, retry: 1 })
   const compra = compraEstado ?? q.data
-  const itens = useQuery({ queryKey: ['itens-edital', compra?.numeroControlePNCP], enabled: !!compra, queryFn: ({ signal }) => itensDoEdital(compra!, signal), staleTime: 300_000, retry: 1 })
+  const itens = useQuery({ queryKey: ['itens-edital', compra?.numeroControlePNCP], enabled: !!compra, queryFn: ({ signal }) => itensCompletos(compra!, signal), staleTime: 300_000, retry: 1 })
   const processos = useLista<Processo>('processos', { porEmpresa: false })
   const { salvar } = useSalvar('processos', ['processo_eventos', 'prazos'])
   // "Ver itens" na lista abre a página já na seção de itens.

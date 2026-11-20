@@ -34,6 +34,7 @@ create table licitaflow_coleta.catalogo_carga (
   erro text,
   tentativas integer not null default 0
 );
+alter table licitaflow_coleta.catalogo_carga enable row level security;
 insert into licitaflow_coleta.catalogo_carga(tipo) values ('M'), ('S') on conflict do nothing;
 
 create or replace function licitaflow_coleta.registrar_catalogo(p_tipo char, p_lista jsonb) returns integer
