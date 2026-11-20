@@ -19,9 +19,17 @@ export interface CompraPNCP {
   dataPublicacaoPncp: string | null
   dataAberturaProposta: string | null
   dataEncerramentoProposta: string | null
+  /** Preenchidos pelo catálogo indexado quando conhecidos. */
+  modoDisputaId?: number
+  materialOuServico?: 'M' | 'S' | 'MS'
 }
 
 export interface FiltrosPNCP { inicio: string; fim: string; modalidade: string; uf: string; situacao?: 'abertas' | 'publicacoes' }
+
+/** Endereço interno (no LicitaFlow) da página de um edital. */
+export function rotaOportunidade(c: Pick<CompraPNCP, 'orgaoEntidade' | 'anoCompra' | 'sequencialCompra'>) {
+  return `/app/oportunidades/${c.orgaoEntidade.cnpj}/${c.anoCompra}/${c.sequencialCompra}`
+}
 
 export function linkCompra(c: CompraPNCP) {
   return `https://pncp.gov.br/app/editais/${encodeURIComponent(c.orgaoEntidade.cnpj)}/${c.anoCompra}/${c.sequencialCompra}`

@@ -4,23 +4,37 @@ import { PORTAIS } from './portais'
 // Códigos de modalidade do PNCP (Lei 14.133). Todas são coletadas pelo catálogo.
 export const MODALIDADES = [['6','Pregão eletrônico'],['8','Dispensa'],['4','Concorrência eletrônica'],['5','Concorrência presencial'],['7','Pregão presencial'],['9','Inexigibilidade'],
   ['12','Credenciamento'],['1','Leilão eletrônico'],['13','Leilão presencial'],['2','Diálogo competitivo'],['3','Concurso'],['10','Manifestação de interesse'],['11','Pré-qualificação']] as const
+/** Modos de disputa do PNCP. */
+export const MODOS_DISPUTA = [['1','Aberto'],['2','Fechado'],['3','Aberto-fechado'],['6','Fechado-aberto'],['4','Dispensa com disputa'],['5','Não se aplica']] as const
+export const TIPOS_ITEM = [['','Materiais e serviços'],['M','Somente materiais'],['S','Somente serviços']] as const
+export function nomeModoDisputa(id?: number) { return MODOS_DISPUTA.find(m=>m[0]===String(id))?.[1] }
 export interface FiltrosOportunidades extends FiltrosPNCP {
   modalidades: string[]; portais: string[]; busca: string; orgao: string
   minimo: string; maximo: string; itemMinimo: string; itemMaximo: string
   maxItens: string; naoDivulgado: boolean; exclusivo: boolean; excluirSrp: boolean
+  /** Termos que não podem aparecer no objeto, separados por ";". */
+  excluir: string
+  tipoItem: '' | 'M' | 'S'
+  /** Vazio = todos os modos. */
+  modosDisputa: string[]
+  /** Período de abertura (sessão / fim das propostas), AAAA-MM-DD; vazio = sem limite. */
+  aberturaDe: string; aberturaAte: string
 }
-export const filtrosExtras = { modalidades: MODALIDADES.map(m=>m[0]) as string[], portais: PORTAIS.map(p => p[0]) as string[], busca: '', orgao: '', minimo: '', maximo: '', itemMinimo: '', itemMaximo: '', maxItens: '', naoDivulgado: false, exclusivo: false, excluirSrp: false }
+export const filtrosExtras = { modalidades: MODALIDADES.map(m=>m[0]) as string[], portais: PORTAIS.map(p => p[0]) as string[], busca: '', orgao: '', minimo: '', maximo: '', itemMinimo: '', itemMaximo: '', maxItens: '', naoDivulgado: false, exclusivo: false, excluirSrp: false, excluir: '', tipoItem: '' as '' | 'M' | 'S', modosDisputa: [] as string[], aberturaDe: '', aberturaAte: '' }
 export interface ItemCompra {
   numeroItem: number; descricao?: string; quantidade?: number; unidadeMedida?: string
   valorUnitarioEstimado: number | null; valorTotal?: number | null; orcamentoSigiloso?: boolean
   tipoBeneficio?: number; tipoBeneficioNome?: string; criterioJulgamentoNome?: string; situacaoCompraItemNome?: string
   numeroGrupo?: string | number; numeroLote?: string | number; grupo?: string | number; lote?: string | number
+  materialOuServico?: string; materialOuServicoNome?: string
 }
 export function validarFiltros(f: FiltrosOportunidades) {
   if (!f.modalidades.length || !f.portais.length) throw new Error('Selecione ao menos um portal e uma modalidade.')
   for (const [min,max] of [[f.minimo,f.maximo],[f.itemMinimo,f.itemMaximo]]) {
     if ([min,max].some(x => x !== '' && (!Number.isFinite(Number(x)) || Number(x)<0)) || (min !== '' && max !== '' && Number(min)>Number(max))) throw new Error('Informe intervalos de valores válidos.')
   }
+  if (f.aberturaDe && f.aberturaAte && f.aberturaDe > f.aberturaAte) throw new Error('A data inicial de abertura deve ser anterior à final.')
+  if (f.busca.length > 300 || f.excluir.length > 300) throw new Error('Use no máximo 300 caracteres nos termos da pesquisa.')
   if (f.maxItens !== '' && (!Number.isInteger(Number(f.maxItens)) || Number(f.maxItens)<1)) throw new Error('A quantidade máxima de itens deve ser um inteiro positivo.')
 }
 export async function consultarItens(c: CompraPNCP, signal?: AbortSignal): Promise<ItemCompra[]> {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { cnpjValido, diasAte, formatarCnpj } from './format'
+import { cnpjValido, diasAte, formatarCnpj, prazoRelativo } from './format'
 
 describe('CNPJ', () => {
   it('valida dígitos verificadores', () => {
@@ -22,5 +22,16 @@ describe('diasAte', () => {
     expect(diasAte('2026-11-13', hoje)).toBe(0)
     expect(diasAte('2026-11-16', hoje)).toBe(3)
     expect(diasAte('2026-11-10', hoje)).toBe(-3)
+  })
+})
+
+describe('prazo relativo', () => {
+  it('conta dias pelo calendário, não por 24 horas', () => {
+    const agora = new Date(2026, 10, 20, 9, 0)
+    expect(prazoRelativo(new Date(2026, 10, 20, 23, 59).toISOString(), agora)).toBe('hoje')
+    expect(prazoRelativo(new Date(2026, 10, 21, 8, 0).toISOString(), agora)).toBe('amanhã')
+    expect(prazoRelativo(new Date(2026, 11, 2, 10, 0).toISOString(), agora)).toBe('em 12 dias')
+    expect(prazoRelativo(new Date(2026, 10, 19).toISOString(), agora)).toBe('encerrado')
+    expect(prazoRelativo(null, agora)).toBe('')
   })
 })

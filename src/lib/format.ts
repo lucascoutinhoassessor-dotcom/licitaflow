@@ -50,3 +50,14 @@ export function diasAte(iso: string, hoje = new Date()): number {
   const b = Date.UTC(hoje.getFullYear(), hoje.getMonth(), hoje.getDate())
   return Math.round((a - b) / 86_400_000)
 }
+
+/** "hoje", "amanhã", "em 12 dias" pelo calendário local; "encerrado" se já passou; vazio sem data. */
+export function prazoRelativo(data: string | null | undefined, agora = new Date()) {
+  if (!data) return ''
+  const alvo = new Date(data)
+  if (Number.isNaN(alvo.getTime())) return ''
+  if (alvo.getTime() < agora.getTime()) return 'encerrado'
+  const dia = (d: Date) => Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())
+  const dias = Math.round((dia(alvo) - dia(agora)) / 86_400_000)
+  return dias === 0 ? 'hoje' : dias === 1 ? 'amanhã' : `em ${dias} dias`
+}

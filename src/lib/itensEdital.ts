@@ -18,3 +18,12 @@ export function valorItem(item: ItemCompra, total=false) {
   const valor=total?item.valorTotal:item.valorUnitarioEstimado
   return typeof valor==='number' && Number.isFinite(valor) && valor>0 ? formatarMoeda(valor) : 'Não divulgado'
 }
+
+/** Resumo curto do item: título até o primeiro ":" ou 80 caracteres. */
+export function tituloItem(descricao?: string) {
+  const d = (descricao ?? '').trim()
+  if (!d) return 'Item sem descrição'
+  const corte = d.indexOf(':')
+  const base = corte > 3 && corte < 80 ? d.slice(0, corte) : d
+  return base.length > 80 ? `${base.slice(0, 77)}…` : base
+}

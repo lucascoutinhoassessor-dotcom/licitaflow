@@ -1,5 +1,5 @@
 import {describe,expect,it} from 'vitest'
-import {agruparItens,identificacaoGrupo,valorItem} from './itensEdital'
+import {agruparItens,identificacaoGrupo,valorItem, tituloItem } from './itensEdital'
 describe('itens, grupos, lotes e sigilo',()=>{
  it('mantém o item consultável mas nunca exibe seus valores sigilosos',()=>{
   const item={numeroItem:1,descricao:'Microcomputador',valorUnitarioEstimado:9999,valorTotal:99999,orcamentoSigiloso:true}
@@ -12,4 +12,12 @@ describe('itens, grupos, lotes e sigilo',()=>{
   expect(identificacaoGrupo(itens[2],'grupo')).toBeNull()
   expect(agruparItens(itens,'grupo').get('Sem agrupamento informado')).toHaveLength(1)
  })
+})
+
+describe('título curto do item', () => {
+  it('usa o trecho antes de ":" e limita o tamanho', () => {
+    expect(tituloItem('Cartão Controle Acesso material: pvc, comprimento 8,55')).toBe('Cartão Controle Acesso material')
+    expect(tituloItem('')).toBe('Item sem descrição')
+    expect(tituloItem('x'.repeat(120)).length).toBe(78)
+  })
 })

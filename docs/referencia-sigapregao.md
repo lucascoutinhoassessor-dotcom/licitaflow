@@ -40,13 +40,13 @@ Legenda: ✅ temos · 🟡 temos parcialmente · ❌ não temos · ⛔ fora do e
 | Item | O que faz | LicitaFlow |
 |---|---|---|
 | Encontrar | Busca com palavras-chave, período de abertura, 20 resultados por página, "10.000+" | ✅ busca indexada no PNCP (13 modalidades) |
-| Pesquisa avançada | Palavras separadas por `;`, **excluir** termos, tipo de item (material/serviço), modo de disputa, UFs, portais, modalidades, órgão, valor da compra e do item, sigilosos, ME/EPP, excluir SRP | 🟡 temos quase todos; faltam **excluir termos**, **tipo material/serviço** e **modo de disputa** |
+| Pesquisa avançada | Palavras separadas por `;`, **excluir** termos, tipo de item (material/serviço), modo de disputa, UFs, portais, modalidades, órgão, valor da compra e do item, sigilosos, ME/EPP, excluir SRP | ✅ desde 20/11/2026: vários termos com ";", excluir termos, material/serviço, modo de disputa e período de abertura (padrão: próximos 14 dias) |
 | Meus jornais | Salva a pesquisa avançada e manda as oportunidades todo dia | ❌ (alta prioridade: busca salva + alerta diário) |
 | Órgãos | 63 mil órgãos: esfera, município, CNPJ, UASGs, portal, licitações nos últimos 12 meses, nota de pagamento | ❌ |
 | Encontrar por Nº | Busca direta pelo número do processo | 🟡 a busca já procura o número |
 | Itens desertos | Itens que ficaram sem vencedor em um portal | ❌ |
 | Cartão do resultado | Título "Modalidade Nº – Órgão / UF" em azul; objeto; etiquetas de categoria; data com "em X dias"; fonte; modalidade | ✅ refeito neste estudo |
-| Detalhe do edital | Valor, SRP, abertura, modo de disputa, botões Acessar / Arquivos / "Converse com o edital", nota de pagamento, itens com quantidade e valor, assistente "adicionar aos negócios" em 3 passos (oportunidade → itens → nome e empresa), histórico de compras parecidas com vencedor e valor homologado | 🟡 temos itens e importação; faltam arquivos, histórico de preços e escolha de itens |
+| Detalhe do edital | Valor, SRP, abertura, modo de disputa, botões Acessar / Arquivos / "Converse com o edital", nota de pagamento, itens com quantidade e valor, assistente "adicionar aos negócios" em 3 passos (oportunidade → itens → nome e empresa), histórico de compras parecidas com vencedor e valor homologado | 🟡 página do edital com itens que abrem e fecham, agrupados por lote/grupo (20/11/2026); faltam histórico de preços e escolha de itens |
 
 ### Negócios
 | Item | O que faz | LicitaFlow |
@@ -84,7 +84,6 @@ Carrossel de novidades · boas-vindas com duas ações · indicadores (negócios
 ## 4. Próximos passos sugeridos (em ordem de valor)
 
 1. **Meus jornais**: busca salva e alerta diário por e-mail. Usa o índice que já existe e quase não ocupa espaço.
-2. **Pesquisa avançada completa**: excluir termos, material/serviço e modo de disputa.
 3. **Agenda em calendário** e **checklist por processo** com modelos de tarefas.
 4. **Histórico de compras / vencedores por item**: resultados de itens do PNCP. É preciso medir o espaço antes, por causa do limite de 500 MB.
 5. **Órgãos** com nota de pagamento, depois de estudar a fonte de pagamentos.

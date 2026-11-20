@@ -1,5 +1,5 @@
 import { Button, Campo, Input, Select } from '@/components/ui'
-import { MODALIDADES, filtrosExtras, type FiltrosOportunidades as Filtros } from '@/lib/filtrosOportunidades'
+import { MODALIDADES, MODOS_DISPUTA, TIPOS_ITEM, filtrosExtras, type FiltrosOportunidades as Filtros } from '@/lib/filtrosOportunidades'
 import { PORTAIS } from '@/lib/portais'
 import type { CompraPNCP } from '@/lib/pncp'
 
@@ -8,7 +8,19 @@ export default function FiltrosOportunidades({ f, mudar, compras, orgaos: opcoes
   const marcar = (k: 'portais' | 'modalidades', id: string) => set(k,f[k].includes(id)?f[k].filter(x=>x!==id):[...f[k],id])
   const orgaos=opcoes??[...new Map(compras.map(c=>[c.orgaoEntidade.cnpj,c.orgaoEntidade])).values()].sort((a,b)=>a.razaoSocial.localeCompare(b.razaoSocial))
   const checkbox = (k: 'naoDivulgado' | 'exclusivo' | 'excluirSrp', texto: string) => <label className="flex items-start gap-2 text-sm"><input type="checkbox" className="mt-1 accent-primary" checked={f[k]} onChange={e=>set(k,e.target.checked)} />{texto}</label>
+  const alternarModo = (id: string) => set('modosDisputa', f.modosDisputa.includes(id) ? f.modosDisputa.filter(x=>x!==id) : [...f.modosDisputa,id])
   return <div className="col-span-full space-y-3">
+    <details open className="rounded-lg border p-3"><summary className="cursor-pointer font-medium">Palavras, tipo e modo de disputa</summary>
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <Campo rotulo="Excluir editais com estas palavras" htmlFor="oportunidade-excluir" ajuda='Separe por ";" (ex.: locação; manutenção).'><Input id="oportunidade-excluir" maxLength={300} value={f.excluir} onChange={e=>set('excluir',e.target.value)} placeholder="locação; manutenção" /></Campo>
+        <Campo rotulo="Tipo de item" htmlFor="oportunidade-tipo" ajuda="Lido dos itens do edital; editais ainda sem itens coletados ficam de fora.">
+          <Select id="oportunidade-tipo" value={f.tipoItem} onChange={e=>set('tipoItem',e.target.value)}>{TIPOS_ITEM.map(([id,nome])=><option key={id} value={id}>{nome}</option>)}</Select>
+        </Campo>
+      </div>
+      <p className="mt-3 text-sm font-medium">Modo de disputa</p>
+      <div className="mt-2 flex flex-wrap gap-2">{MODOS_DISPUTA.map(([id,nome])=><label key={id} className={`flex min-h-10 cursor-pointer items-center gap-2 rounded-full border px-3.5 py-1.5 text-sm ${f.modosDisputa.includes(id)?'border-primary bg-primary/10':''}`}><input type="checkbox" className="accent-primary" checked={f.modosDisputa.includes(id)} onChange={()=>alternarModo(id)} />{nome}</label>)}</div>
+      <p className="mt-2 text-xs text-muted-foreground">Nenhum modo marcado = todos. Na busca principal, separe termos por ";" para encontrar editais com qualquer um deles (ex.: notebook; computador).</p>
+    </details>
     <details className="rounded-lg border p-3"><summary className="cursor-pointer font-medium">Portais de compras</summary>
       <p className="mt-2 text-xs text-muted-foreground">Filtra os registros publicados nas fontes oficiais pela identificação do portal de origem. A disponibilidade depende do que cada portal publica; esta seleção não representa conexão direta com suas contas.</p>
       <div className="my-3 flex flex-wrap gap-2">{PORTAIS.map(([id,nome])=><label key={id} className={`flex min-h-10 cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm ${f.portais.includes(id)?'border-primary bg-primary/10':''}`}><input type="checkbox" className="accent-primary" checked={f.portais.includes(id)} onChange={()=>marcar('portais',id)} />{nome}</label>)}</div>
