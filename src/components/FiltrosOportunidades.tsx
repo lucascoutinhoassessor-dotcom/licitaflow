@@ -14,7 +14,7 @@ export default function FiltrosOportunidades({ f, mudar, compras, orgaos: opcoes
     <details open className="rounded-lg border p-3"><summary className="cursor-pointer font-medium">Palavras, tipo e modo de disputa</summary>
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
         <Campo rotulo="Excluir editais com estas palavras" htmlFor="oportunidade-excluir" ajuda='Separe por ";" (ex.: locação; manutenção).'><Input id="oportunidade-excluir" maxLength={300} value={f.excluir} onChange={e=>set('excluir',e.target.value)} placeholder="locação; manutenção" /></Campo>
-        <Campo rotulo="Tipo de item" htmlFor="oportunidade-tipo" ajuda="Lido dos itens do edital; editais ainda sem itens coletados ficam de fora.">
+        <Campo rotulo="Tipo de item" htmlFor="oportunidade-tipo" ajuda="Pelos itens do edital ou, enquanto os itens não chegam, pelo objeto (marcado como estimado).">
           <Select id="oportunidade-tipo" value={f.tipoItem} onChange={e=>set('tipoItem',e.target.value)}>{TIPOS_ITEM.map(([id,nome])=><option key={id} value={id}>{nome}</option>)}</Select>
         </Campo>
       </div>

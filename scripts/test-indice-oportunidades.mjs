@@ -19,6 +19,7 @@ await db.exec(readFileSync('supabase/migrations/20261120000012_itens_removidos.s
 await db.exec(readFileSync('supabase/migrations/20261120000014_pesquisa_avancada.sql','utf8'))
 await db.exec(readFileSync('supabase/migrations/20261120000015_periodo_abertura.sql','utf8'))
 await db.exec(readFileSync('supabase/migrations/20261120000018_coletor_mais_barato.sql','utf8'))
+await db.exec(readFileSync('supabase/migrations/20261120000019_tipo_pelo_objeto.sql','utf8'))
 await db.query('select licitaflow_coleta.registrar_compra($1::jsonb)',[JSON.stringify(c)])
 const buscar=async f=>(await como('authenticated','select public.buscar_oportunidades($1::jsonb,1,20) r',[JSON.stringify({situacao:'abertas',...f})])).rows[0].r
 ok((await buscar({busca:'microcomputador'})).totalRegistros===1,'stemming e prefixo encontram microcomputadores')
@@ -145,6 +146,14 @@ await db.query('select licitaflow_coleta.limpar_catalogo()')
 ok(await filaDe(longe.numeroControlePNCP)===0,'limpeza tira da fila os itens de editais distantes')
 await db.query('select licitaflow_coleta.registrar_itens($1,$2::jsonb,1,true)',[perto.numeroControlePNCP,JSON.stringify([{numeroItem:1,descricao:'Toner '+'x'.repeat(600)}])])
 ok((await db.query('select length(descricao) n from public.oportunidades_itens_indice where controle=$1',[perto.numeroControlePNCP])).rows[0].n===240,'descrição do item guardada com até 240 caracteres')
+// Tipo pelo objeto (migration 20261120000019): editais ainda sem itens também entram no filtro.
+const servLimpeza={...c,numeroControlePNCP:'12345678000190-1-000601/2026',objetoCompra:'Contratação de empresa para prestação de serviços de limpeza predial'}
+const cadeiras={...c,numeroControlePNCP:'12345678000190-1-000602/2026',objetoCompra:'Aquisição de cadeiras giratórias para limpeza visual do ambiente'}
+for(const x of [servLimpeza,cadeiras])await db.query('select licitaflow_coleta.registrar_compra($1::jsonb)',[JSON.stringify(x)])
+const rS=await buscar({busca:'limpeza',tipoItem:'S'}),rM=await buscar({busca:'limpeza',tipoItem:'M'})
+ok(rS.data.some(x=>x.numeroControlePNCP===servLimpeza.numeroControlePNCP)&&!rS.data.some(x=>x.numeroControlePNCP===cadeiras.numeroControlePNCP),'serviço identificado pelo objeto antes de coletar os itens')
+ok(rM.data.some(x=>x.numeroControlePNCP===cadeiras.numeroControlePNCP)&&!rM.data.some(x=>x.numeroControlePNCP===servLimpeza.numeroControlePNCP),'material identificado pelo objeto antes de coletar os itens')
+ok(rS.data.find(x=>x.numeroControlePNCP===servLimpeza.numeroControlePNCP).tipoEstimado===true,'resultado avisa quando o tipo é estimado pelo objeto')
 console.log('Preparando 50 mil editais de teste...')
 await db.exec(`insert into public.oportunidades_indice(controle,objeto,complemento,orgao_cnpj,orgao_nome,uf,modalidade,portal_id,publicacao,encerramento,situacao,valor,srp,compra)
 select 'benchmark-'||n,case when n%100=0 then 'Aquisição de microcomputadores para educação' else 'Aquisição de material de escritório e papelaria '||n end,'','12345678000190','Órgão público',case when n%3=0 then 'SP' else 'RJ' end,6,'comprasnet',now()-(n||' seconds')::interval,'2099-12-31',1,10000,false,jsonb_build_object('numeroControlePNCP','benchmark-'||n,'objetoCompra','Aquisição de bens públicos') from generate_series(1,50000) n;analyze public.oportunidades_indice;analyze public.oportunidades_itens_indice;`)

@@ -22,6 +22,8 @@ export interface CompraPNCP {
   /** Preenchidos pelo catálogo indexado quando conhecidos. */
   modoDisputaId?: number
   materialOuServico?: 'M' | 'S' | 'MS'
+  /** true quando o tipo foi deduzido do objeto (itens ainda não coletados). */
+  tipoEstimado?: boolean
 }
 
 export interface FiltrosPNCP { inicio: string; fim: string; modalidade: string; uf: string; situacao?: 'abertas' | 'publicacoes' }
