@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Building, ExternalLink, Search } from 'lucide-react'
+import { BarChart3, Building, ExternalLink, Search } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { Button, CabecalhoPagina, Card, Input, Select, Vazio } from '@/components/ui'
 import { linkContratosPNCP, pesquisarFornecedores } from '@/lib/fornecedores'
 import { formatarCnpj, formatarData, formatarMoeda } from '@/lib/format'
@@ -34,6 +35,7 @@ export default function AnaliseEmpresas() {
       </form>
     </Card>
     {!consulta ? <Vazio icone={Building} titulo="Conheça seus concorrentes" texto="Pesquise pelo nome ou CNPJ. Deixe em branco para ver as empresas que mais venderam." /> : <>
+      {consulta.termo.replace(/\D/g, '').length === 14 && <Card className="mb-4 flex flex-wrap items-center justify-between gap-3 p-4"><p className="text-sm">Ver vitórias, valores homologados e penalidades do CNPJ <strong>{consulta.termo}</strong> direto nas fontes oficiais.</p><Link to={`/app/analise-empresas/${consulta.termo.replace(/\D/g, '')}`} className="lf-degrade inline-flex h-9 items-center gap-1.5 rounded-full px-4 text-sm font-semibold text-white hover:brightness-110"><BarChart3 className="h-4 w-4" />Analisar este CNPJ</Link></Card>}
       <div role="status" aria-live="polite" className="mb-4 space-y-1">
         {q.isFetching ? <p className="text-sm text-muted-foreground">Pesquisando...</p>
           : q.isError ? <div role="alert" className="flex flex-wrap items-center gap-3 text-sm text-destructive"><p>{q.error.message}</p><Button tamanho="sm" variante="contorno" onClick={() => q.refetch()}>Tentar novamente</Button></div>
@@ -46,8 +48,8 @@ export default function AnaliseEmpresas() {
       {!q.isFetching && !q.isError && lista.length === 0 ? <Vazio titulo="Nenhuma empresa encontrada" texto="Confira o nome ou o CNPJ, ou tente sem filtro de UF." /> : <div className="space-y-3">{lista.map(f =>
         <Card key={f.cnpj} className="p-4">
           <div className="flex flex-wrap items-start justify-between gap-2">
-            <div className="min-w-0"><h2 className="break-words text-sm font-semibold sm:text-base">{f.nome}</h2><p className="text-xs text-muted-foreground">CNPJ {formatarCnpj(f.cnpj)}</p></div>
-            <a className="inline-flex items-center gap-1 text-sm text-primary hover:underline" href={linkContratosPNCP(f.cnpj)} target="_blank" rel="noopener noreferrer">Contratos no PNCP <ExternalLink className="h-3.5 w-3.5" /></a>
+            <div className="min-w-0"><h2 className="break-words text-sm font-semibold sm:text-base"><Link to={`/app/analise-empresas/${f.cnpj}`} className="text-sky-700 hover:underline dark:text-sky-300">{f.nome}</Link></h2><p className="text-xs text-muted-foreground">CNPJ {formatarCnpj(f.cnpj)}</p></div>
+            <div className="flex flex-wrap items-center gap-3"><Link to={`/app/analise-empresas/${f.cnpj}`} className="lf-degrade inline-flex h-8 items-center gap-1.5 rounded-full px-3.5 text-sm font-semibold text-white hover:brightness-110"><BarChart3 className="h-4 w-4" />Ver análise completa</Link><a className="inline-flex items-center gap-1 text-sm text-primary hover:underline" href={linkContratosPNCP(f.cnpj)} target="_blank" rel="noopener noreferrer">Contratos no PNCP <ExternalLink className="h-3.5 w-3.5" /></a></div>
           </div>
           <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-4">
             <div><dt className="text-xs text-muted-foreground">Contratos</dt><dd className="font-medium">{f.contratos.toLocaleString('pt-BR')}</dd></div>

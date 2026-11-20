@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 import { Badge, Button, Card, Carregando, Vazio } from '@/components/ui'
 import { SeletorEmpresa, useEmpresaPadrao } from '@/components/Situacoes'
 import ItensAcordeao from '@/components/ItensAcordeao'
+import IconePortal from '@/components/IconePortal'
 import { useOrg } from '@/providers/OrgProvider'
 import { useLista, useSalvar } from '@/hooks/useDados'
 import { dadosProcesso, linkCompra, type CompraPNCP } from '@/lib/pncp'
@@ -62,7 +63,7 @@ export default function OportunidadeDetalhe() {
       </button>
 
       <Card className="mb-5 p-5 text-center sm:p-8">
-        <p className="text-sm font-semibold text-muted-foreground">{portalCompra(compra)[1]}</p>
+        <p className="flex items-center justify-center gap-2 text-sm font-semibold text-muted-foreground"><IconePortal id={portalCompra(compra)[0]} nome={portalCompra(compra)[1]} className="h-5 w-5" />{portalCompra(compra)[1]}</p>
         <h1 className="mt-1 text-lg font-bold sm:text-2xl">{compra.modalidadeNome} Nº {compra.numeroCompra}</h1>
         <p className="mt-1 text-sm font-semibold uppercase text-muted-foreground">{compra.orgaoEntidade.razaoSocial} · {compra.unidadeOrgao.municipioNome}/{compra.unidadeOrgao.ufSigla}</p>
         <p className="mx-auto mt-4 max-w-4xl whitespace-pre-wrap break-words text-sm font-medium sm:text-base">{compra.objetoCompra}</p>

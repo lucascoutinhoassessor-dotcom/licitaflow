@@ -37,3 +37,23 @@ export function portalCompra(c: CompraPNCP) {
 export function rotuloPortal(portal: string | null | undefined) {
   return portal?.trim().toUpperCase() === 'PNCP' ? 'Fonte oficial de compras' : portal
 }
+
+/** Domínio usado para o ícone de cada portal e endereços diretos conhecidos (conferidos em 20/11/2026). */
+const ICONES: Record<string, { dominio: string; direto?: string }> = {
+  comprasnet: { dominio: 'www.gov.br' }, pcp: { dominio: 'portaldecompraspublicas.com.br' }, 'licitacoes-e': { dominio: 'www.licitacoes-e.com.br' },
+  caixa: { dominio: 'www.caixa.gov.br' }, banrisul: { dominio: 'www.banrisul.com.br' }, rs: { dominio: 'www.compras.rs.gov.br' },
+  bahia: { dominio: 'www.comprasnet.ba.gov.br' }, amazonas: { dominio: 'www.e-compras.am.gov.br', direto: 'https://www.e-compras.am.gov.br/favicon.ico' },
+  goias: { dominio: 'www.comprasnet.go.gov.br', direto: 'https://www.comprasnet.go.gov.br/favicon.ico' }, rj: { dominio: 'compras.rj.gov.br' },
+  recife: { dominio: 'www.recife.pe.gov.br' }, licitanet: { dominio: 'licitanet.com.br' }, bll: { dominio: 'bllcompras.com' },
+  elic: { dominio: 'www.portaldecompras.sc.gov.br' }, procergs: { dominio: 'www.procergs.rs.gov.br' }, mg: { dominio: 'www.compras.mg.gov.br' },
+  banpara: { dominio: 'www.banpara.b.br' }, pe: { dominio: 'www.pe.gov.br' }, bnc: { dominio: 'bnccompras.com' }, outros: { dominio: 'pncp.gov.br' },
+}
+/** Endereços do ícone do portal, do mais confiável ao reserva. */
+export function iconesPortal(id: string) {
+  const i = ICONES[id] ?? ICONES.outros
+  return [
+    `https://www.google.com/s2/favicons?domain=${i.dominio}&sz=64`,
+    ...(i.direto ? [i.direto] : []),
+    `https://icons.duckduckgo.com/ip3/${i.dominio.replace(/^www\./, '')}.ico`,
+  ]
+}

@@ -24,6 +24,7 @@ const Configuracoes = lazy(() => import('@/pages/app/Configuracoes'))
 const Oportunidades = lazy(() => import('@/pages/app/Oportunidades'))
 const OportunidadeDetalhe = lazy(() => import('@/pages/app/OportunidadeDetalhe'))
 const AnaliseEmpresas = lazy(() => import('@/pages/app/AnaliseEmpresas'))
+const AnaliseEmpresaDetalhe = lazy(() => import('@/pages/app/AnaliseEmpresaDetalhe'))
 const EmBreve = lazy(() => import('@/pages/app/EmBreve'))
 const Processos = lazy(() => import('@/pages/app/processos/Processos'))
 const ProcessoDetalhe = lazy(() => import('@/pages/app/processos/ProcessoDetalhe'))
@@ -121,6 +122,7 @@ export default function App() {
             <Route path="oportunidades" element={<Oportunidades />} />
             <Route path="oportunidades/:cnpj/:ano/:seq" element={<OportunidadeDetalhe />} />
             <Route path="analise-empresas" element={<AnaliseEmpresas />} />
+            <Route path="analise-empresas/:cnpj" element={<AnaliseEmpresaDetalhe />} />
             <Route path="processos" element={<Processos />} />
             <Route path="processos/:id" element={<ProcessoDetalhe />} />
             <Route path="prazos" element={<Prazos />} />

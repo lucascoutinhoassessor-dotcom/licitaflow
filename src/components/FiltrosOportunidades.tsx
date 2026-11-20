@@ -1,6 +1,7 @@
 import { Button, Campo, Input, Select } from '@/components/ui'
 import { MODALIDADES, MODOS_DISPUTA, TIPOS_ITEM, filtrosExtras, type FiltrosOportunidades as Filtros } from '@/lib/filtrosOportunidades'
 import { PORTAIS } from '@/lib/portais'
+import IconePortal from '@/components/IconePortal'
 import type { CompraPNCP } from '@/lib/pncp'
 
 export default function FiltrosOportunidades({ f, mudar, compras, orgaos: opcoes }: { f: Filtros; mudar: (f: Filtros) => void; compras: CompraPNCP[]; orgaos?: {cnpj:string;razaoSocial:string}[] }) {
@@ -23,7 +24,7 @@ export default function FiltrosOportunidades({ f, mudar, compras, orgaos: opcoes
     </details>
     <details className="rounded-lg border p-3"><summary className="cursor-pointer font-medium">Portais de compras</summary>
       <p className="mt-2 text-xs text-muted-foreground">Filtra os registros publicados nas fontes oficiais pela identificação do portal de origem. A disponibilidade depende do que cada portal publica; esta seleção não representa conexão direta com suas contas.</p>
-      <div className="my-3 flex flex-wrap gap-2">{PORTAIS.map(([id,nome])=><label key={id} className={`flex min-h-10 cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm ${f.portais.includes(id)?'border-primary bg-primary/10':''}`}><input type="checkbox" className="accent-primary" checked={f.portais.includes(id)} onChange={()=>marcar('portais',id)} />{nome}</label>)}</div>
+      <div className="my-3 flex flex-wrap gap-2">{PORTAIS.map(([id,nome])=><label key={id} className={`flex min-h-10 cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm ${f.portais.includes(id)?'border-primary bg-primary/10':''}`}><input type="checkbox" className="accent-primary" checked={f.portais.includes(id)} onChange={()=>marcar('portais',id)} /><IconePortal id={id} nome={nome} />{nome}</label>)}</div>
       <div className="flex flex-wrap gap-4 text-sm"><button type="button" className="text-primary underline" onClick={()=>set('portais',PORTAIS.map(p=>p[0]))}>Marcar todos os portais</button><button type="button" className="text-primary underline" onClick={()=>set('portais',[])}>Desmarcar todos os portais</button></div>
     </details>
     <details className="rounded-lg border p-3"><summary className="cursor-pointer font-medium">Modalidades</summary>

@@ -1,9 +1,29 @@
 import path from 'path'
 import react from '@vitejs/plugin-react'
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv, type Plugin } from 'vite'
+
+/** Em desenvolvimento, atende /api/resultados com a mesma função usada na Vercel. */
+function apiLocal(): Plugin {
+  return {
+    name: 'licitaflow-api-local',
+    configureServer(server) {
+      Object.assign(process.env, loadEnv('development', process.cwd(), ''))
+      server.middlewares.use('/api/resultados', async (req, res) => {
+        const mod = await server.ssrLoadModule('/server/resultados.js')
+        const url = new URL(req.url ?? '', 'http://localhost')
+        const resposta = {
+          setHeader: (k: string, v: string) => res.setHeader(k, v),
+          status(c: number) { res.statusCode = c; return resposta },
+          json(o: unknown) { res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(o)) },
+        }
+        await mod.default({ method: req.method, headers: req.headers, query: Object.fromEntries(url.searchParams) }, resposta)
+      })
+    },
+  }
+}
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), apiLocal()],
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
