@@ -84,7 +84,7 @@ export function InstalacaoProvider({ children }: { children: ReactNode }) {
 
   return <CtxInstalacao.Provider value={{ ocultar, instalando, ajuda, instalar }}>
     {children}
-    {mostrarAviso && <section ref={aviso} aria-label="Instalação do LicitaFlow" className="fixed inset-x-3 bottom-[max(.75rem,env(safe-area-inset-bottom))] z-30 mx-auto max-w-lg rounded-xl border border-slate-600 bg-slate-900 p-4 text-white shadow-2xl">
+    {mostrarAviso && <section ref={aviso} aria-label="Instalação do LicitaFlow" className="fixed inset-x-3 bottom-[calc(var(--barra-inferior,0px)+max(.75rem,env(safe-area-inset-bottom)))] z-30 mx-auto max-w-lg rounded-xl border border-slate-600 bg-slate-900 p-4 text-white shadow-2xl">
       <div className="flex items-start gap-3">
         <img src="/icons/app-192.png" alt="" className="h-10 w-10 shrink-0 rounded-lg"/>
         <div className="min-w-0 flex-1"><h2 className="text-sm font-semibold">Use o LicitaFlow como aplicativo</h2><p className="mt-1 text-xs leading-relaxed text-slate-300">Abra pelo ícone da tela inicial. Se ainda não estiver instalado, instale para usar sem a barra de endereço.</p></div>

@@ -115,3 +115,8 @@
 #root #topo > footer {
   padding-bottom: calc(3rem + var(--instalacao-espaco, 0px));
 }
+
+/* Celular: avisos fixos no rodapé ficam acima da barra inferior do app. */
+@media (max-width: 1023px) {
+  html:has([data-barra-inferior]) { --barra-inferior: 4rem; }
+}

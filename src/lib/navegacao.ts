@@ -14,6 +14,9 @@ import {
   Settings,
   Users,
   Wallet,
+  Briefcase,
+  LineChart,
+  SearchCheck,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -26,60 +29,105 @@ export interface ItemNav {
   descricao?: string
 }
 
-export const NAV_PRINCIPAL: ItemNav[] = [
-  { rota: '/app', rotulo: 'Painel', icone: LayoutDashboard },
+export interface GrupoNav {
+  id: string
+  rotulo: string
+  icone: LucideIcon
+  itens: ItemNav[]
+}
+
+const PAINEL: ItemNav = { rota: '/app', rotulo: 'Painel', icone: LayoutDashboard }
+
+export const IA: ItemNav = {
+  rota: '/app/agentes',
+  rotulo: 'Agentes de IA',
+  icone: Bot,
+  fase: 'F2–F5',
+  descricao: 'Radar, Leitor de editais, Cotador, Jurídico, Sentinela e Termômetro de Pagamento trabalhando por você todos os dias.',
+}
+
+/** Menus agrupados da barra superior (computador) e da barra inferior (celular). */
+export const GRUPOS_NAV: GrupoNav[] = [
   {
-    rota: '/app/oportunidades',
+    id: 'oportunidades',
     rotulo: 'Oportunidades',
     icone: Radar,
-    descricao: 'Busca de oportunidades nos portais de compras com filtros e importação para Processos.',
+    itens: [
+      {
+        rota: '/app/oportunidades',
+        rotulo: 'Encontrar oportunidades',
+        icone: Radar,
+        descricao: 'Busca de oportunidades nos portais de compras com filtros e importação para Processos.',
+      },
+    ],
   },
   {
-    rota: '/app/processos',
-    rotulo: 'Processos',
-    icone: Gavel,
-    descricao: 'Funil e kanban dos processos: captação, análise, proposta, disputa, habilitação, recurso e resultado, com itens, preços-limite e linha do tempo.',
+    id: 'negocios',
+    rotulo: 'Negócios',
+    icone: Briefcase,
+    itens: [
+      {
+        rota: '/app/processos',
+        rotulo: 'Processos',
+        icone: Gavel,
+        descricao: 'Funil e kanban dos processos: captação, análise, proposta, disputa, habilitação, recurso e resultado, com itens, preços-limite e linha do tempo.',
+      },
+      {
+        rota: '/app/prazos',
+        rotulo: 'Agenda e prazos',
+        icone: CalendarClock,
+        descricao: 'Calendário de sessões, impugnações, esclarecimentos, recursos, entregas e vigências, com alertas por e-mail e WhatsApp.',
+      },
+      {
+        rota: '/app/contratos',
+        rotulo: 'Contratos',
+        icone: FileSignature,
+        descricao: 'Contratos e atas de registro de preço, empenhos, entregas, saldos e vigências do pós-pregão.',
+      },
+      {
+        rota: '/app/financeiro',
+        rotulo: 'Financeiro',
+        icone: Wallet,
+        descricao: 'Faturamento, notas fiscais, recebimentos e prazo médio de pagamento por órgão.',
+      },
+    ],
   },
   {
-    rota: '/app/prazos',
-    rotulo: 'Prazos',
-    icone: CalendarClock,
-    descricao: 'Calendário de sessões, impugnações, esclarecimentos, recursos, entregas e vigências, com alertas por e-mail e WhatsApp.',
+    id: 'analise',
+    rotulo: 'Análise',
+    icone: LineChart,
+    itens: [
+      {
+        rota: '/app/analise-empresas',
+        rotulo: 'Análise de empresas',
+        icone: SearchCheck,
+        descricao: 'Por CNPJ: contratos ganhos, valores, órgãos e estados onde cada empresa vende para o governo.',
+      },
+      { rota: '/app/relatorios', rotulo: 'Relatórios', icone: BarChart3 },
+    ],
   },
+]
+
+/** Menu do usuário (canto superior direito) e "Mais" no celular. */
+export const NAV_CONTA: ItemNav[] = [
   {
     rota: '/app/documentos',
     rotulo: 'Documentos',
     icone: FileCheck2,
     descricao: 'Certidões e documentos de habilitação com controle de validade e aviso antes de vencer.',
   },
-  {
-    rota: '/app/contratos',
-    rotulo: 'Contratos',
-    icone: FileSignature,
-    descricao: 'Contratos e atas de registro de preço, empenhos, entregas, saldos e vigências do pós-pregão.',
-  },
-  {
-    rota: '/app/financeiro',
-    rotulo: 'Financeiro',
-    icone: Wallet,
-    descricao: 'Faturamento, notas fiscais, recebimentos e prazo médio de pagamento por órgão.',
-  },
-  {
-    rota: '/app/agentes',
-    rotulo: 'Agentes de IA',
-    icone: Bot,
-    fase: 'F2–F5',
-    descricao: 'Radar, Leitor de editais, Cotador, Jurídico, Sentinela e Termômetro de Pagamento trabalhando por você todos os dias.',
-  },
-]
-
-export const NAV_CONTA: ItemNav[] = [
-  { rota: '/app/empresas', rotulo: 'Empresas', icone: Building2 },
+  { rota: '/app/empresas', rotulo: 'Minhas empresas', icone: Building2 },
   { rota: '/app/equipe', rotulo: 'Equipe', icone: Users },
-  { rota: '/cobrancas', rotulo: 'Cobranças do LicitaFlow', icone: Wallet },
   { rota: '/app/plano', rotulo: 'Meu plano e uso', icone: CreditCard },
+  { rota: '/cobrancas', rotulo: 'Cobranças do LicitaFlow', icone: Wallet },
   { rota: '/app/avisos', rotulo: 'Avisos', icone: Bell },
-  { rota: '/app/relatorios', rotulo: 'Relatórios', icone: BarChart3 },
   { rota: '/suporte', rotulo: 'Suporte e sugestões', icone: Headphones },
   { rota: '/app/configuracoes', rotulo: 'Configurações', icone: Settings },
 ]
+
+/** Lista plana de todos os módulos (usada pela página "em breve"). */
+export const NAV_PRINCIPAL: ItemNav[] = [PAINEL, ...GRUPOS_NAV.flatMap((g) => g.itens), IA, ...NAV_CONTA]
+
+export function rotaAtiva(rota: string, pathname: string) {
+  return rota === '/app' ? pathname === '/app' || pathname === '/app/' : pathname === rota || pathname.startsWith(rota + '/')
+}

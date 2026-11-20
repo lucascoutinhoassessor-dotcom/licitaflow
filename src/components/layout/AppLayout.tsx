@@ -1,31 +1,13 @@
-import { type ReactNode } from 'react'
-import { NavLink, useNavigate } from 'react-router-dom'
-import { Building, ChevronsUpDown, LogOut, Moon, Sun } from 'lucide-react'
+import { useEffect, useState, type ReactNode } from 'react'
+import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
+import * as Menu from '@radix-ui/react-dropdown-menu'
+import * as Dialog from '@radix-ui/react-dialog'
+import { Bell, Building, Check, ChevronDown, ChevronsUpDown, CircleHelp, LayoutDashboard, LogOut, Menu as IconeMais, Moon, Sun, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { NAV_CONTA, NAV_PRINCIPAL, type ItemNav } from '@/lib/navegacao'
+import { GRUPOS_NAV, IA, NAV_CONTA, rotaAtiva, type GrupoNav, type ItemNav } from '@/lib/navegacao'
+import { Logo } from '@/components/ui'
 import { useAuth } from '@/providers/AuthProvider'
 import { useOrg } from '@/providers/OrgProvider'
-import { MenuLateral } from './MenuLateral'
-
-function ItemMenu({ item }: { item: ItemNav }) {
-  const Icone = item.icone
-  return (
-    <NavLink
-      to={item.rota}
-      end={item.rota === '/app'}
-      className={({ isActive }) =>
-        cn(
-          'flex items-center gap-3 rounded-md px-3 py-3 text-sm transition-colors',
-          isActive ? 'bg-sidebar-accent text-sidebar-foreground font-medium' : 'text-sidebar-muted hover:bg-sidebar-accent/60 hover:text-sidebar-foreground',
-        )
-      }
-    >
-      <Icone className="h-4 w-4 shrink-0" />
-      <span className="flex-1 truncate">{item.rotulo}</span>
-      {item.fase && <span className="rounded bg-sidebar-accent px-1.5 py-0.5 text-[10px] font-medium text-sidebar-muted">em breve</span>}
-    </NavLink>
-  )
-}
 
 function alternarTema() {
   const escuro = document.documentElement.classList.toggle('dark')
@@ -36,95 +18,244 @@ function alternarTema() {
   }
 }
 
-export function AppLayout({ children }: { children: ReactNode }) {
-  const { user, sair } = useAuth()
-  const { org, organizacoes, trocarOrg, empresas, empresa, trocarEmpresa } = useOrg()
-  const navigate = useNavigate()
+const cartaoMenu = 'z-50 min-w-[15rem] rounded-xl border border-white/10 bg-sidebar p-1.5 text-sidebar-foreground shadow-2xl'
+const itemMenu = 'flex min-h-11 cursor-pointer select-none items-center gap-3 rounded-lg px-3 text-sm text-sidebar-foreground/90 outline-none data-[highlighted]:bg-white/10 data-[highlighted]:text-white'
 
-  const menu = <>
-        {organizacoes.length > 1 && (
-          <div className="border-b border-sidebar-border p-3">
-            <label className="mb-1 block text-[11px] uppercase tracking-wide text-sidebar-muted">Organização</label>
-            <div className="relative">
-              <select
-                value={org?.id}
-                onChange={(e) => trocarOrg(e.target.value)}
-                className="w-full appearance-none rounded-md bg-sidebar-accent px-3 py-2 pr-8 text-sm text-sidebar-foreground"
-              >
-                {organizacoes.map((o) => (
-                  <option key={o.id} value={o.id}>
-                    {o.nome}
-                  </option>
-                ))}
-              </select>
-              <ChevronsUpDown className="pointer-events-none absolute right-2 top-2.5 h-4 w-4 text-sidebar-muted" />
+function EmBreve() {
+  return <span className="ml-auto rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-medium text-sidebar-muted">em breve</span>
+}
+
+function ItemDoMenu({ item }: { item: ItemNav }) {
+  const Icone = item.icone
+  return (
+    <Menu.Item asChild>
+      <Link to={item.rota} className={itemMenu}>
+        <Icone className="h-4 w-4 shrink-0 text-sidebar-muted" />
+        <span className="truncate">{item.rotulo}</span>
+        {item.fase && <EmBreve />}
+      </Link>
+    </Menu.Item>
+  )
+}
+
+/** Menu suspenso de um grupo na barra superior (computador). */
+function GrupoSuspenso({ grupo }: { grupo: GrupoNav }) {
+  const { pathname } = useLocation()
+  const ativo = grupo.itens.some((i) => rotaAtiva(i.rota, pathname))
+  return (
+    <Menu.Root modal={false}>
+      <Menu.Trigger
+        className={cn(
+          'group inline-flex h-10 items-center gap-1.5 rounded-lg px-3 text-sm font-medium outline-none transition-colors hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-white/40 data-[state=open]:bg-white/10',
+          ativo ? 'text-white' : 'text-sidebar-foreground/85',
+        )}
+      >
+        {grupo.rotulo}
+        <ChevronDown className="h-4 w-4 opacity-70 transition-transform group-data-[state=open]:rotate-180" />
+        {ativo && <span className="sr-only">(seção atual)</span>}
+      </Menu.Trigger>
+      <Menu.Portal>
+        <Menu.Content align="center" sideOffset={10} className={cartaoMenu}>
+          {grupo.itens.map((i) => <ItemDoMenu key={i.rota} item={i} />)}
+        </Menu.Content>
+      </Menu.Portal>
+    </Menu.Root>
+  )
+}
+
+function iniciais(email?: string | null) {
+  return (email ?? '?').trim().charAt(0).toUpperCase()
+}
+
+/** Menu do usuário: conta, organização, tema e sair. */
+function MenuUsuario() {
+  const { user, sair } = useAuth()
+  const { org, organizacoes, trocarOrg } = useOrg()
+  const navigate = useNavigate()
+  return (
+    <Menu.Root modal={false}>
+      <Menu.Trigger className="inline-flex h-10 items-center gap-2 rounded-lg px-1.5 text-sm font-medium text-sidebar-foreground outline-none hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-white/40 data-[state=open]:bg-white/10 sm:px-2" aria-label="Menu da conta">
+        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-accent text-sm font-semibold text-accent-foreground">{iniciais(user?.email)}</span>
+        <span className="hidden max-w-[10rem] truncate lg:inline">{org?.nome ?? 'Minha conta'}</span>
+        <ChevronDown className="hidden h-4 w-4 opacity-70 lg:block" />
+      </Menu.Trigger>
+      <Menu.Portal>
+        <Menu.Content align="end" sideOffset={10} className={cn(cartaoMenu, 'max-h-[calc(100dvh-5rem)] w-72 overflow-y-auto')}>
+          <div className="px-3 py-2">
+            <p className="truncate text-sm font-medium text-white">{org?.nome}</p>
+            <p className="truncate text-xs text-sidebar-muted">{user?.email}</p>
+          </div>
+          {organizacoes.length > 1 && <>
+            <Menu.Separator className="my-1 h-px bg-white/10" />
+            <Menu.Label className="px-3 pb-1 pt-2 text-[11px] uppercase tracking-wide text-sidebar-muted">Trocar organização</Menu.Label>
+            {organizacoes.map((o) => (
+              <Menu.Item key={o.id} className={itemMenu} onSelect={() => trocarOrg(o.id)}>
+                <Check className={cn('h-4 w-4 shrink-0', o.id === org?.id ? 'text-accent' : 'invisible')} />
+                <span className="truncate">{o.nome}</span>
+              </Menu.Item>
+            ))}
+          </>}
+          <Menu.Separator className="my-1 h-px bg-white/10" />
+          {NAV_CONTA.map((i) => <ItemDoMenu key={i.rota} item={i} />)}
+          <Menu.Separator className="my-1 h-px bg-white/10" />
+          <Menu.Item className={itemMenu} onSelect={(e) => { e.preventDefault(); alternarTema() }}>
+            <Sun className="hidden h-4 w-4 text-sidebar-muted dark:block" />
+            <Moon className="h-4 w-4 text-sidebar-muted dark:hidden" />
+            <span className="dark:hidden">Tema escuro</span>
+            <span className="hidden dark:inline">Tema claro</span>
+          </Menu.Item>
+          <Menu.Item className={itemMenu} onSelect={async () => { await sair(); navigate('/entrar') }}>
+            <LogOut className="h-4 w-4 text-sidebar-muted" />
+            Sair
+          </Menu.Item>
+        </Menu.Content>
+      </Menu.Portal>
+    </Menu.Root>
+  )
+}
+
+const botaoIcone = 'inline-flex h-10 w-10 items-center justify-center rounded-lg text-sidebar-foreground/85 outline-none hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-white/40'
+
+/** Gaveta de baixo para cima com os itens de um grupo (celular). */
+function Gaveta({ titulo, aberto, aoMudar, itens, extra }: { titulo: string; aberto: boolean; aoMudar: (v: boolean) => void; itens: ItemNav[]; extra?: ReactNode }) {
+  const { pathname } = useLocation()
+  return (
+    <Dialog.Root open={aberto} onOpenChange={aoMudar}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm lg:hidden" />
+        <Dialog.Content aria-describedby={undefined} className="fixed inset-x-0 bottom-0 z-50 max-h-[85dvh] overflow-y-auto rounded-t-2xl border-t border-white/10 bg-sidebar px-3 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-2 text-sidebar-foreground shadow-2xl focus:outline-none lg:hidden">
+          <div className="mx-auto mb-2 h-1.5 w-10 rounded-full bg-white/20" aria-hidden />
+          <div className="mb-1 flex items-center justify-between px-2">
+            <Dialog.Title className="text-base font-semibold text-white">{titulo}</Dialog.Title>
+            <Dialog.Close className={botaoIcone} aria-label="Fechar"><X className="h-5 w-5" /></Dialog.Close>
+          </div>
+          <nav aria-label={titulo} className="space-y-1">
+            {itens.map((i) => {
+              const Icone = i.icone
+              const ativo = rotaAtiva(i.rota, pathname)
+              return (
+                <Link key={i.rota} to={i.rota} onClick={() => aoMudar(false)} aria-current={ativo ? 'page' : undefined}
+                  className={cn('flex min-h-12 items-center gap-3 rounded-xl px-3 text-[15px]', ativo ? 'bg-white/10 font-medium text-white' : 'text-sidebar-foreground/90 active:bg-white/10')}>
+                  <Icone className="h-5 w-5 shrink-0 text-sidebar-muted" />
+                  <span className="truncate">{i.rotulo}</span>
+                  {i.fase && <EmBreve />}
+                </Link>
+              )
+            })}
+          </nav>
+          {extra}
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
+  )
+}
+
+/** Barra inferior fixa no celular: Painel, Oportunidades, Negócios, Análise e Mais. */
+function BarraInferior() {
+  const { pathname, search } = useLocation()
+  const { sair } = useAuth()
+  const navigate = useNavigate()
+  const [aberta, setAberta] = useState<string | null>(null)
+  useEffect(() => setAberta(null), [pathname, search])
+  const mais: ItemNav[] = [IA, ...NAV_CONTA]
+  const botao = (ativo: boolean) => cn('flex min-w-0 flex-1 flex-col items-center justify-center gap-1 text-[10px] font-medium tracking-tight outline-none focus-visible:bg-white/10', ativo ? 'text-white' : 'text-sidebar-muted')
+  const marca = (ativo: boolean) => cn('flex h-7 w-12 items-center justify-center rounded-full transition-colors', ativo && 'bg-white/15')
+  return (
+    <>
+      <nav aria-label="Menu principal" data-barra-inferior className="fixed inset-x-0 bottom-0 z-40 flex h-[calc(4rem+env(safe-area-inset-bottom))] border-t border-white/10 bg-sidebar pb-[env(safe-area-inset-bottom)] lg:hidden">
+        <NavLink to="/app" end className={({ isActive }) => botao(isActive)}>
+          {({ isActive }) => <><span className={marca(isActive)}><LayoutDashboard className="h-5 w-5" /></span>Painel</>}
+        </NavLink>
+        {GRUPOS_NAV.map((g) => {
+          const ativo = g.itens.some((i) => rotaAtiva(i.rota, pathname))
+          const Icone = g.icone
+          const conteudo = <><span className={marca(ativo)}><Icone className="h-5 w-5" /></span><span className="max-w-full truncate">{g.rotulo}</span></>
+          return g.itens.length === 1
+            ? <Link key={g.id} to={g.itens[0].rota} className={botao(ativo)} aria-current={ativo ? 'page' : undefined}>{conteudo}</Link>
+            : <button key={g.id} type="button" className={botao(ativo)} onClick={() => setAberta(g.id)} aria-haspopup="dialog">{conteudo}</button>
+        })}
+        <button type="button" className={botao(mais.some((i) => rotaAtiva(i.rota, pathname)))} onClick={() => setAberta('mais')} aria-haspopup="dialog">
+          <span className={marca(mais.some((i) => rotaAtiva(i.rota, pathname)))}><IconeMais className="h-5 w-5" /></span>Mais
+        </button>
+      </nav>
+      {GRUPOS_NAV.filter((g) => g.itens.length > 1).map((g) => (
+        <Gaveta key={g.id} titulo={g.rotulo} itens={g.itens} aberto={aberta === g.id} aoMudar={(v) => setAberta(v ? g.id : null)} />
+      ))}
+      <Gaveta titulo="Mais" itens={mais} aberto={aberta === 'mais'} aoMudar={(v) => setAberta(v ? 'mais' : null)}
+        extra={<div className="mt-2 grid grid-cols-2 gap-2 border-t border-white/10 pt-3">
+          <button type="button" onClick={alternarTema} className="flex min-h-12 items-center justify-center gap-2 rounded-xl bg-white/5 text-sm text-sidebar-foreground/90 active:bg-white/10">
+            <Sun className="hidden h-4 w-4 dark:block" /><Moon className="h-4 w-4 dark:hidden" />
+            <span className="dark:hidden">Tema escuro</span><span className="hidden dark:inline">Tema claro</span>
+          </button>
+          <button type="button" onClick={async () => { await sair(); navigate('/entrar') }} className="flex min-h-12 items-center justify-center gap-2 rounded-xl bg-white/5 text-sm text-sidebar-foreground/90 active:bg-white/10">
+            <LogOut className="h-4 w-4" />Sair
+          </button>
+        </div>} />
+    </>
+  )
+}
+
+export function AppLayout({ children }: { children: ReactNode }) {
+  const { org, empresas, empresa, trocarEmpresa } = useOrg()
+  const { pathname } = useLocation()
+  const iaAtiva = rotaAtiva(IA.rota, pathname)
+
+  return (
+    <div className="flex h-dvh min-w-0 flex-col">
+      {/* Barra superior escura, fixa, no padrão de menus agrupados. */}
+      <header className="relative z-40 flex h-16 shrink-0 items-center gap-2 border-b border-white/10 bg-sidebar px-3 pt-[env(safe-area-inset-top)] text-sidebar-foreground sm:px-5">
+        <Link to="/app" className="shrink-0 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-white/40" aria-label="LicitaFlow – ir para o painel">
+          <Logo claro />
+        </Link>
+        <nav aria-label="Módulos do usuário" className="hidden flex-1 items-center justify-center gap-1 lg:flex">
+          <Link to={IA.rota} className={cn('mr-2 inline-flex h-9 items-center gap-2 rounded-full border px-3.5 text-sm font-semibold outline-none transition-colors hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-white/40', iaAtiva ? 'border-accent/60 bg-white/10 text-white' : 'border-white/15 text-white')}>
+            <span className="grid h-3.5 w-3.5 grid-cols-2 gap-[2px]" aria-hidden>
+              <span className="rounded-[1px] bg-sky-400" /><span className="rounded-[1px] bg-emerald-400" /><span className="rounded-[1px] bg-amber-400" /><span className="rounded-[1px] bg-rose-400" />
+            </span>
+            IA
+          </Link>
+          {GRUPOS_NAV.map((g) => <GrupoSuspenso key={g.id} grupo={g} />)}
+        </nav>
+        <div className="ml-auto flex items-center gap-1 lg:ml-0">
+          <Link to="/app/avisos" className={botaoIcone} aria-label="Avisos"><Bell className="h-5 w-5" /></Link>
+          <Link to="/suporte" className={cn(botaoIcone, 'hidden sm:inline-flex')} aria-label="Ajuda e suporte"><CircleHelp className="h-5 w-5" /></Link>
+          <MenuUsuario />
+        </div>
+      </header>
+
+      <main id="conteudo-principal" className="min-h-0 min-w-0 flex-1 overflow-y-auto pb-[calc(4rem+env(safe-area-inset-bottom))] lg:pb-0">
+        {(org?.plano === 'trial' || empresas.length > 1) && (
+          <div className="border-b bg-card">
+            <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-2 px-4 py-2 lg:px-8">
+              <div className="min-w-0 flex-1 truncate text-sm text-muted-foreground">
+                {org?.plano === 'trial' && <>Teste grátis até {new Date(`${org.trial_ate}T00:00:00`).toLocaleDateString('pt-BR')}</>}
+              </div>
+              {empresas.length > 1 && (
+                <div className="relative w-full min-w-0 sm:w-auto sm:max-w-[50%]">
+                  <Building className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <select
+                    value={empresa?.id ?? ''}
+                    onChange={(e) => trocarEmpresa(e.target.value || null)}
+                    className="h-9 w-full min-w-0 max-w-full appearance-none rounded-md border border-input bg-card pl-8 pr-8 text-sm"
+                    aria-label="Empresa"
+                  >
+                    <option value="">Todas as empresas</option>
+                    {empresas.map((e) => (
+                      <option key={e.id} value={e.id}>
+                        {e.nome_fantasia || e.razao_social}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronsUpDown className="pointer-events-none absolute right-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                </div>
+              )}
             </div>
           </div>
         )}
+        <div className="painel-conteudo mx-auto w-full min-w-0 max-w-6xl p-4 lg:p-8">{children}</div>
+      </main>
 
-        <nav aria-label="Módulos do usuário" className="min-h-0 flex-1 space-y-1 overflow-y-auto p-3">
-          {NAV_PRINCIPAL.map((i) => (
-            <ItemMenu key={i.rota} item={i} />
-          ))}
-          <div className="px-3 pb-1 pt-5 text-[11px] uppercase tracking-wide text-sidebar-muted">Conta</div>
-          {NAV_CONTA.map((i) => (
-            <ItemMenu key={i.rota} item={i} />
-          ))}
-        </nav>
-
-        <div className="shrink-0 border-t border-sidebar-border p-3">
-          <div className="truncate px-3 text-xs text-sidebar-muted">{user?.email}</div>
-          <div className="mt-2 flex gap-1">
-            <button onClick={alternarTema} className="flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2 text-sm text-sidebar-muted hover:bg-sidebar-accent" aria-label="Alternar tema">
-              <Sun className="hidden h-4 w-4 dark:block" />
-              <Moon className="h-4 w-4 dark:hidden" />
-              Tema
-            </button>
-            <button
-              onClick={async () => {
-                await sair()
-                navigate('/entrar')
-              }}
-              className="flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2 text-sm text-sidebar-muted hover:bg-sidebar-accent"
-            >
-              <LogOut className="h-4 w-4" />
-              Sair
-            </button>
-          </div>
-        </div>
-    </>
-
-  return (
-    <div className="flex h-dvh min-w-0 flex-col xl:pl-72">
-        <header className="flex min-h-16 shrink-0 flex-wrap items-center gap-2 border-b bg-card px-3 py-2 sm:gap-3 sm:px-4">
-          <MenuLateral titulo="Menu do LicitaFlow">{menu}</MenuLateral>
-          <div className="min-w-0 flex-1 truncate text-sm text-muted-foreground">
-            <span className="font-medium text-foreground">{org?.nome}</span>
-            {org?.plano === 'trial' && <span className="ml-2 hidden sm:inline">· teste grátis até {new Date(`${org.trial_ate}T00:00:00`).toLocaleDateString('pt-BR')}</span>}
-          </div>
-          {empresas.length > 1 && (
-            <div className="relative w-full min-w-0 sm:w-auto sm:max-w-[50%]">
-              <Building className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              <select
-                value={empresa?.id ?? ''}
-                onChange={(e) => trocarEmpresa(e.target.value || null)}
-                className="h-11 w-full min-w-0 max-w-full appearance-none rounded-md border border-input bg-card pl-8 pr-8 text-sm"
-                aria-label="Empresa"
-              >
-                <option value="">Todas as empresas</option>
-                {empresas.map((e) => (
-                  <option key={e.id} value={e.id}>
-                    {e.nome_fantasia || e.razao_social}
-                  </option>
-                ))}
-              </select>
-              <ChevronsUpDown className="pointer-events-none absolute right-2 top-2.5 h-4 w-4 text-muted-foreground" />
-            </div>
-          )}
-        </header>
-        <main id="conteudo-principal" className="min-h-0 min-w-0 flex-1 overflow-y-auto">
-          <div className="painel-conteudo mx-auto w-full min-w-0 max-w-6xl p-4 lg:p-8">{children}</div>
-        </main>
+      <BarraInferior />
     </div>
   )
 }
