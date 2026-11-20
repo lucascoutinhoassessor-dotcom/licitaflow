@@ -18,6 +18,7 @@ await db.exec(readFileSync('supabase/migrations/20261119000011_ampliar_modalidad
 await db.exec(readFileSync('supabase/migrations/20261120000012_itens_removidos.sql','utf8'))
 await db.exec(readFileSync('supabase/migrations/20261120000014_pesquisa_avancada.sql','utf8'))
 await db.exec(readFileSync('supabase/migrations/20261120000015_periodo_abertura.sql','utf8'))
+await db.exec(readFileSync('supabase/migrations/20261120000018_coletor_mais_barato.sql','utf8'))
 await db.query('select licitaflow_coleta.registrar_compra($1::jsonb)',[JSON.stringify(c)])
 const buscar=async f=>(await como('authenticated','select public.buscar_oportunidades($1::jsonb,1,20) r',[JSON.stringify({situacao:'abertas',...f})])).rows[0].r
 ok((await buscar({busca:'microcomputador'})).totalRegistros===1,'stemming e prefixo encontram microcomputadores')
