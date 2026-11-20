@@ -180,7 +180,13 @@ grant execute on function public.buscar_oportunidades(jsonb,integer,integer) to 
 update licitaflow_coleta.jobs j set concluido=false,concluida_em=null,request_id=null,erro=null,proxima_em=now()
  from public.oportunidades_indice o
  where j.tipo='itens' and j.controle=o.controle and left(j.ciclo,length(j.controle)+10)=j.controle||'/recoleta-'
-   and j.concluido and not o.itens_completos and o.encerramento>=now();
+   and j.concluido and not o.itens_completos and o.encerramento>=now()
+   and not exists(select 1 from licitaflow_coleta.jobs v where v.tipo='itens' and v.controle=j.controle and not v.concluido);
+-- Sem coleta dupla: recoleta pendente sai da fila quando o edital já tem um job normal de itens pendente.
+delete from licitaflow_coleta.jobs r
+ where r.tipo='itens' and left(r.ciclo,length(r.controle)+10)=r.controle||'/recoleta-' and not r.concluido and r.request_id is null
+   and exists(select 1 from licitaflow_coleta.jobs v where v.tipo='itens' and v.controle=r.controle and not v.concluido
+              and left(v.ciclo,length(v.controle)+10)<>v.controle||'/recoleta-');
 
 -- Carga das modalidades novas (o próximo ciclo diário já inclui todas).
 insert into licitaflow_coleta.jobs(tipo,ciclo,modalidade)
