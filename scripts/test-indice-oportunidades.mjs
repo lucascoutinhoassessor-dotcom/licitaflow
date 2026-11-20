@@ -9,6 +9,12 @@ function ok(v,m){if(!v)throw Error(m);asserts++;console.log('PASS',m)}
 const uid='11111111-1111-1111-1111-111111111111'
 async function como(role,sql,params=[]){await db.exec(`set role ${role};select set_config('request.jwt.sub','${role==='authenticated'?uid:''}',false)`);try{return await db.query(sql,params)}finally{await db.exec('reset role')}}
 const c={numeroControlePNCP:'12345678000190-1-000001/2026',numeroCompra:'1',anoCompra:2026,sequencialCompra:1,objetoCompra:'Aquisição de microcomputadores',informacaoComplementar:'Equipamentos para educação',orgaoEntidade:{cnpj:'12345678000190',razaoSocial:'Prefeitura de São Paulo'},unidadeOrgao:{ufSigla:'SP',municipioNome:'São Paulo'},modalidadeId:6,modalidadeNome:'Pregão eletrônico',dataPublicacaoPncp:'2026-11-16T12:00:00',dataEncerramentoProposta:'2099-12-31T10:00:00',srp:false,valorTotalEstimado:10000,usuarioNome:'Compras.gov.br',dataAtualizacaoGlobal:'2026-11-17T10:00:00'}
+// Estado de produção em 19/11: recoleta de itens enfileirada com ciclo controle/recoleta-20261119, concluída sem gravar.
+const cred={...c,numeroControlePNCP:'12345678000190-1-000077/2026',objetoCompra:'Credenciamento de clínicas de fisioterapia',informacaoComplementar:'',modalidadeId:12,modalidadeNome:'Credenciamento'}
+await db.query('select licitaflow_coleta.registrar_compra($1::jsonb)',[JSON.stringify(cred)])
+await db.query("delete from licitaflow_coleta.jobs where tipo='itens' and controle=$1",[cred.numeroControlePNCP])
+await db.query("insert into licitaflow_coleta.jobs(tipo,ciclo,controle,concluido,concluida_em) values('itens',$1||'/recoleta-20261119',$1,true,now())",[cred.numeroControlePNCP])
+await db.exec(readFileSync('supabase/migrations/20261119000011_ampliar_modalidades.sql','utf8'))
 await db.query('select licitaflow_coleta.registrar_compra($1::jsonb)',[JSON.stringify(c)])
 const buscar=async f=>(await como('authenticated','select public.buscar_oportunidades($1::jsonb,1,20) r',[JSON.stringify({situacao:'abertas',...f})])).rows[0].r
 ok((await buscar({busca:'microcomputador'})).totalRegistros===1,'stemming e prefixo encontram microcomputadores')
@@ -70,6 +76,19 @@ const limpeza=(await db.query('select licitaflow_coleta.limpar_catalogo() r')).r
 ok(Number(limpeza.itens_removidos)===1,'limpeza remove itens de editais encerrados')
 ok((await db.query('select itens_completos from public.oportunidades_indice where controle=$1',[velho.numeroControlePNCP])).rows[0].itens_completos===false,'edital encerrado continua no catálogo sem itens')
 ok((await buscar({busca:'microcomputador'})).totalRegistros===1,'limpeza não afeta editais abertos')
+// Ampliação de modalidades e correção da recoleta (migration 20261119000011).
+ok((await db.query("select not concluido v from licitaflow_coleta.jobs where tipo='itens' and controle=$1",[cred.numeroControlePNCP])).rows[0].v,'recoleta concluída sem itens volta para a fila')
+ok((await db.query("select array_agg(modalidade order by modalidade)::text v from licitaflow_coleta.jobs where tipo='abertas' and ciclo='abertas/ampliacao-20261119' and pagina=1")).rows[0].v==='{1,2,3,10,11,12,13}','carga das modalidades novas enfileirada')
+ok((await db.query('select licitaflow_coleta.modalidades()::text v')).rows[0].v==='{1,2,3,4,5,6,7,8,9,10,11,12,13}','próximos ciclos diários cobrem as 13 modalidades')
+ok((await buscar({busca:'fisioterapia'})).totalRegistros===1,'pesquisa sem filtro de modalidade inclui credenciamento')
+ok((await buscar({busca:'fisioterapia',modalidades:['6','8']})).totalRegistros===0,'filtro de modalidade continua valendo')
+await db.query("update licitaflow_coleta.estado set pausa_ate=now()-interval '1 second' where id")
+const rid=(await db.query("select net.http_get('https://pncp.gov.br/itens') id")).rows[0].id
+await db.query("update licitaflow_coleta.jobs set request_id=$1,agendada_em=now() where tipo='itens' and controle=$2",[rid,cred.numeroControlePNCP])
+await db.query("insert into net._http_response(id,status_code,headers,content) values($1,200,'{}',$2)",[rid,JSON.stringify([{numeroItem:1,descricao:'Sessão de hidroterapia',quantidade:100}])])
+await db.query('select licitaflow_coleta.tick()')
+ok((await db.query('select itens_completos from public.oportunidades_indice where controle=$1',[cred.numeroControlePNCP])).rows[0].itens_completos,'coletor grava itens de job de recoleta')
+ok((await buscar({busca:'hidroterapia'})).totalRegistros===1,'itens recoletados entram na busca')
 console.log('Preparando 50 mil editais de teste...')
 await db.exec(`insert into public.oportunidades_indice(controle,objeto,complemento,orgao_cnpj,orgao_nome,uf,modalidade,portal_id,publicacao,encerramento,situacao,valor,srp,compra)
 select 'benchmark-'||n,case when n%100=0 then 'Aquisição de microcomputadores para educação' else 'Aquisição de material de escritório e papelaria '||n end,'','12345678000190','Órgão público',case when n%3=0 then 'SP' else 'RJ' end,6,'comprasnet',now()-(n||' seconds')::interval,'2099-12-31',1,10000,false,jsonb_build_object('numeroControlePNCP','benchmark-'||n,'objetoCompra','Aquisição de bens públicos') from generate_series(1,50000) n;analyze public.oportunidades_indice;analyze public.oportunidades_itens_indice;`)

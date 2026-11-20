@@ -1,7 +1,9 @@
 import { type CompraPNCP, type FiltrosPNCP } from './pncp'
 import { PORTAIS } from './portais'
 
-export const MODALIDADES = [['6','Pregão eletrônico'],['8','Dispensa'],['4','Concorrência eletrônica'],['5','Concorrência presencial'],['7','Pregão presencial'],['9','Inexigibilidade']] as const
+// Códigos de modalidade do PNCP (Lei 14.133). Todas são coletadas pelo catálogo.
+export const MODALIDADES = [['6','Pregão eletrônico'],['8','Dispensa'],['4','Concorrência eletrônica'],['5','Concorrência presencial'],['7','Pregão presencial'],['9','Inexigibilidade'],
+  ['12','Credenciamento'],['1','Leilão eletrônico'],['13','Leilão presencial'],['2','Diálogo competitivo'],['3','Concurso'],['10','Manifestação de interesse'],['11','Pré-qualificação']] as const
 export interface FiltrosOportunidades extends FiltrosPNCP {
   modalidades: string[]; portais: string[]; busca: string; orgao: string
   minimo: string; maximo: string; itemMinimo: string; itemMaximo: string

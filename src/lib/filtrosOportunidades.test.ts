@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { consultarItens, filtrosExtras, validarFiltros, type FiltrosOportunidades } from './filtrosOportunidades'
+import { consultarItens, filtrosExtras, MODALIDADES, validarFiltros, type FiltrosOportunidades } from './filtrosOportunidades'
 import { portalCompra, urlOrigem, PORTAIS } from './portais'
 import type { CompraPNCP } from './pncp'
 const f: FiltrosOportunidades={...filtrosExtras,modalidades:['6','8'],busca:'computadores',inicio:'2026-11-09',fim:'2026-11-16',uf:'',modalidade:'6'}
@@ -12,6 +12,11 @@ describe('filtros de oportunidades',()=>{
    expect(urlOrigem({...c,linkSistemaOrigem:'javascript:alert(1)'})).toBeNull()
  })
 
+
+ it('oferece e marca por padrão todas as 13 modalidades do PNCP',()=>{
+   expect(MODALIDADES.map(m=>Number(m[0])).sort((a,b)=>a-b)).toEqual([1,2,3,4,5,6,7,8,9,10,11,12,13])
+   expect(filtrosExtras.modalidades).toHaveLength(13)
+ })
 
  it('rejeita seleção vazia e intervalos inválidos',()=>{
    expect(()=>validarFiltros({...f,modalidades:[]})).toThrow('Selecione')
