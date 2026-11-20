@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { ArrowRight, CalendarClock, CheckCircle2, Circle, FileCheck2, Gavel, Radar } from 'lucide-react'
+import { ArrowRight, ArrowUpRight, Briefcase, CalendarClock, CheckCircle2, Circle, FileCheck2, Gavel, Radar, Search } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/providers/AuthProvider'
@@ -8,9 +8,14 @@ import { useLista } from '@/hooks/useDados'
 import { COR_ETAPA, ETAPAS, ETAPAS_ATIVAS, situacaoPrazo, situacaoValidade } from '@/lib/dominio'
 import { formatarDataHora, formatarMoeda } from '@/lib/format'
 import { cn } from '@/lib/utils'
-import { Badge, CabecalhoPagina, Card } from '@/components/ui'
+import { Badge, Card } from '@/components/ui'
 import { BadgePrazo, BadgeValidade } from '@/components/Situacoes'
 import type { Contrato, Documento, Prazo, Processo } from '@/types/db'
+
+function saudacao() {
+  const h = new Date().getHours()
+  return h < 12 ? 'Bom dia · bem-vindo de volta' : h < 18 ? 'Boa tarde · bem-vindo de volta' : 'Boa noite · bem-vindo de volta'
+}
 
 export default function Painel() {
   const { user } = useAuth()
@@ -46,25 +51,47 @@ export default function Painel() {
   const pendentes = passos.filter((p) => !p.feito).length
 
   const kpis = [
-    { rotulo: 'Processos em andamento', valor: ativos.length, sub: emDisputa ? `${formatarMoeda(emDisputa)} em jogo` : undefined, link: '/app/processos', icone: Gavel },
-    { rotulo: 'Prazos nos próximos 7 dias', valor: proximos.length, sub: proximos.some((p) => situacaoPrazo(p.data_hora, false) === 'atrasado') ? 'há prazos atrasados' : undefined, alerta: proximos.some((p) => situacaoPrazo(p.data_hora, false) === 'atrasado'), link: '/app/prazos', icone: CalendarClock },
-    { rotulo: 'Documentos para renovar', valor: atencaoDocs.length, sub: atencaoDocs.length ? 'vencidos ou vencendo' : 'tudo em dia', alerta: atencaoDocs.some((d) => situacaoValidade(d.validade) === 'vencido'), link: '/app/documentos', icone: FileCheck2 },
-    { rotulo: 'Taxa de vitória', valor: finalizados ? `${Math.round((ganhos / finalizados) * 100)}%` : '—', sub: `${ganhos} ganho(s) · ${contratos.data?.length ?? 0} contrato(s) ativo(s)`, link: '/app/contratos', icone: CheckCircle2 },
+    { rotulo: 'Processos em andamento', valor: ativos.length, sub: emDisputa ? `${formatarMoeda(emDisputa)} em jogo` : undefined, link: '/app/processos', icone: Gavel, cor: 'from-emerald-500/25 to-teal-400/10 text-emerald-400 ring-emerald-500/30' },
+    { rotulo: 'Prazos nos próximos 7 dias', valor: proximos.length, sub: proximos.some((p) => situacaoPrazo(p.data_hora, false) === 'atrasado') ? 'há prazos atrasados' : undefined, alerta: proximos.some((p) => situacaoPrazo(p.data_hora, false) === 'atrasado'), link: '/app/prazos', icone: CalendarClock, cor: 'from-sky-500/25 to-blue-500/10 text-sky-400 ring-sky-500/30' },
+    { rotulo: 'Documentos para renovar', valor: atencaoDocs.length, sub: atencaoDocs.length ? 'vencidos ou vencendo' : 'tudo em dia', alerta: atencaoDocs.some((d) => situacaoValidade(d.validade) === 'vencido'), link: '/app/documentos', icone: FileCheck2, cor: 'from-amber-500/25 to-yellow-300/10 text-amber-400 ring-amber-500/30' },
+    { rotulo: 'Taxa de vitória', valor: finalizados ? `${Math.round((ganhos / finalizados) * 100)}%` : '—', sub: `${ganhos} ganho(s) · ${contratos.data?.length ?? 0} contrato(s) ativo(s)`, link: '/app/contratos', icone: CheckCircle2, cor: 'from-violet-500/25 to-fuchsia-400/10 text-violet-400 ring-violet-500/30' },
   ]
 
   return (
     <>
-      <CabecalhoPagina titulo={`Olá${nome ? `, ${nome}` : ''}!`} descricao={empresa ? `Visão de ${empresa.nome_fantasia || empresa.razao_social}` : 'Visão geral da organização'} />
+      {/* Boas-vindas com as duas ações principais. */}
+      <section className="lf-hero mb-6 flex flex-col gap-5 rounded-3xl p-6 text-slate-200 sm:p-8 lg:flex-row lg:items-center lg:justify-between">
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-emerald-500">{saudacao()}</p>
+          <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-100 sm:text-4xl">
+            Olá{nome ? <>, <span className="text-emerald-400">{nome}</span></> : ''}
+          </h1>
+          <p className="mt-2 text-sm text-slate-400">{empresa ? `Panorama de ${empresa.nome_fantasia || empresa.razao_social}` : 'Aqui está um panorama dos seus resultados.'}</p>
+        </div>
+        <div className="flex flex-wrap gap-3">
+          <Link to="/app/oportunidades" className="lf-degrade inline-flex h-11 items-center gap-2 rounded-full border border-emerald-400/40 px-6 text-sm font-semibold text-white shadow-[0_18px_36px_-20px_rgba(16,185,129,0.7)] transition hover:brightness-110">
+            <Search className="h-4 w-4" /> Pesquisar oportunidades
+          </Link>
+          <Link to="/app/processos" className="inline-flex h-11 items-center gap-2 rounded-full border border-slate-700/70 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 px-6 text-sm font-semibold text-white transition hover:border-slate-500">
+            <Briefcase className="h-4 w-4" /> Abrir meus processos
+          </Link>
+        </div>
+      </section>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         {kpis.map((k) => (
           <Link key={k.rotulo} to={k.link}>
-            <Card className="h-full p-5 transition hover:border-primary/40">
-              <div className="flex items-center justify-between text-sm text-muted-foreground">
-                {k.rotulo}
-                <k.icone className="h-4 w-4" />
+            <Card className="group h-full p-4 transition hover:-translate-y-0.5 hover:border-primary/50 sm:p-5">
+              <div className="flex items-start justify-between">
+                <span className={cn('flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br ring-1', k.cor)}>
+                  <k.icone className="h-5 w-5" />
+                </span>
+                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-muted-foreground transition group-hover:text-foreground">
+                  <ArrowUpRight className="h-4 w-4" />
+                </span>
               </div>
-              <div className={cn('mt-2 text-3xl font-semibold tabular-nums', k.alerta && 'text-destructive')}>{k.valor}</div>
+              <div className={cn('mt-4 text-3xl font-bold tabular-nums text-sky-500 dark:text-sky-300', k.alerta && 'text-destructive dark:text-rose-400')}>{k.valor}</div>
+              <div className="mt-1 text-sm font-medium">{k.rotulo}</div>
               {k.sub && <div className="mt-1 text-xs text-muted-foreground">{k.sub}</div>}
             </Card>
           </Link>

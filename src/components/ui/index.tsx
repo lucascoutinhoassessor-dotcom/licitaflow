@@ -7,15 +7,15 @@ type Variante = 'primario' | 'secundario' | 'fantasma' | 'perigo' | 'contorno'
 type Tamanho = 'sm' | 'md' | 'lg' | 'icone'
 
 const variantes: Record<Variante, string> = {
-  primario: 'bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm',
-  secundario: 'bg-secondary text-secondary-foreground hover:bg-secondary/80',
+  primario: 'lf-degrade border border-emerald-400/40 text-white font-semibold shadow-[0_18px_36px_-20px_rgba(16,185,129,0.65)] hover:brightness-110',
+  secundario: 'border border-border bg-secondary text-secondary-foreground font-semibold hover:bg-secondary/80 dark:bg-gradient-to-br dark:from-slate-900 dark:via-slate-800 dark:to-slate-900',
   fantasma: 'hover:bg-muted text-foreground',
-  perigo: 'bg-destructive text-destructive-foreground hover:bg-destructive/90',
-  contorno: 'border border-input bg-card hover:bg-muted text-foreground',
+  perigo: 'bg-destructive text-destructive-foreground font-semibold hover:bg-destructive/90',
+  contorno: 'border border-input bg-card hover:bg-muted text-foreground font-semibold',
 }
 const tamanhos: Record<Tamanho, string> = {
-  sm: 'h-8 px-3 text-sm',
-  md: 'h-10 px-4 text-sm',
+  sm: 'h-8 px-3.5 text-sm',
+  md: 'h-10 px-5 text-sm',
   lg: 'h-11 px-6 text-base',
   icone: 'h-9 w-9',
 }
@@ -32,7 +32,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       ref={ref}
       disabled={disabled || carregando}
       className={cn(
-        'inline-flex items-center justify-center gap-2 rounded-md font-medium transition-colors',
+        'inline-flex items-center justify-center gap-2 rounded-full font-medium transition-all',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
         'disabled:pointer-events-none disabled:opacity-50',
         variantes[variante],
@@ -52,7 +52,7 @@ export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputE
   <input
     ref={ref}
     className={cn(
-      'flex h-10 w-full rounded-md border border-input bg-card px-3 py-2 text-sm',
+      'flex h-10 w-full rounded-xl border border-input bg-card px-3 py-2 text-sm',
       'placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
       'disabled:cursor-not-allowed disabled:opacity-50',
       className,
@@ -66,7 +66,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSel
   <select
     ref={ref}
     className={cn(
-      'flex h-10 w-full rounded-md border border-input bg-card px-3 py-2 text-sm',
+      'flex h-10 w-full rounded-xl border border-input bg-card px-3 py-2 text-sm',
       'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50',
       className,
     )}
@@ -79,7 +79,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, React.TextareaHTMLAttrib
   <textarea
     ref={ref}
     className={cn(
-      'flex min-h-[80px] w-full rounded-md border border-input bg-card px-3 py-2 text-sm',
+      'flex min-h-[80px] w-full rounded-xl border border-input bg-card px-3 py-2 text-sm',
       'placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50',
       className,
     )}
@@ -90,10 +90,10 @@ Textarea.displayName = 'Textarea'
 
 export function Vazio({ icone: Icone, titulo, texto, acao }: { icone?: React.ComponentType<{ className?: string }>; titulo: string; texto?: string; acao?: ReactNode }) {
   return (
-    <div className="flex flex-col items-center justify-center rounded-lg border border-dashed px-6 py-14 text-center">
+    <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed px-6 py-14 text-center">
       {Icone && (
-        <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-          <Icone className="h-6 w-6 text-primary" />
+        <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-500/15 ring-1 ring-emerald-500/30">
+          <Icone className="h-6 w-6 text-emerald-500 dark:text-emerald-400" />
         </div>
       )}
       <div className="font-medium">{titulo}</div>
@@ -105,7 +105,7 @@ export function Vazio({ icone: Icone, titulo, texto, acao }: { icone?: React.Com
 
 export function Abas<T extends string>({ abas, atual, aoTrocar }: { abas: { id: T; rotulo: string; contagem?: number }[]; atual: T; aoTrocar: (id: T) => void }) {
   return (
-    <div className="mb-5 flex gap-1 overflow-x-auto border-b [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" role="tablist">
+    <div className="mb-5 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" role="tablist">
       {abas.map((a) => (
         <button
           key={a.id}
@@ -113,12 +113,12 @@ export function Abas<T extends string>({ abas, atual, aoTrocar }: { abas: { id: 
           aria-selected={atual === a.id}
           onClick={() => aoTrocar(a.id)}
           className={cn(
-            '-mb-px flex shrink-0 items-center gap-2 border-b-2 px-3 py-2 text-sm transition-colors',
-            atual === a.id ? 'border-primary font-medium text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground',
+            'flex h-9 shrink-0 items-center gap-2 rounded-full border px-4 text-sm font-medium transition-colors',
+            atual === a.id ? 'border-primary bg-primary text-primary-foreground shadow-[0_10px_24px_-14px_hsl(var(--primary))]' : 'border-border bg-card text-muted-foreground hover:text-foreground',
           )}
         >
           {a.rotulo}
-          {a.contagem != null && <span className="rounded-full bg-muted px-1.5 text-xs tabular-nums">{a.contagem}</span>}
+          {a.contagem != null && <span className={cn('rounded-full px-1.5 text-xs tabular-nums', atual === a.id ? 'bg-white/20' : 'bg-muted')}>{a.contagem}</span>}
         </button>
       ))}
     </div>
@@ -138,18 +138,18 @@ export function Campo({ rotulo, erro, ajuda, htmlFor, children }: { rotulo: stri
 }
 
 export function Card({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn('rounded-lg border bg-card text-card-foreground shadow-sm', className)} {...props} />
+  return <div className={cn('lf-cartao rounded-2xl border bg-card text-card-foreground shadow-sm', className)} {...props} />
 }
 
 export function Badge({ className, cor = 'neutro', ...props }: HTMLAttributes<HTMLSpanElement> & { cor?: 'neutro' | 'azul' | 'verde' | 'amarelo' | 'vermelho' }) {
   const cores = {
-    neutro: 'bg-muted text-muted-foreground',
-    azul: 'bg-primary/10 text-primary',
-    verde: 'bg-success/10 text-success',
-    amarelo: 'bg-warning/15 text-warning',
-    vermelho: 'bg-destructive/10 text-destructive',
+    neutro: 'border-border bg-muted text-muted-foreground',
+    azul: 'border-sky-600/50 bg-sky-500/10 text-sky-700 dark:text-sky-300',
+    verde: 'border-emerald-600/50 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
+    amarelo: 'border-amber-500/50 bg-amber-500/10 text-amber-700 dark:text-amber-300',
+    vermelho: 'border-rose-500/50 bg-rose-500/10 text-rose-700 dark:text-rose-300',
   }
-  return <span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium', cores[cor], className)} {...props} />
+  return <span className={cn('inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold', cores[cor], className)} {...props} />
 }
 
 export function Aviso({ tipo = 'erro', children }: { tipo?: 'erro' | 'sucesso' | 'info'; children: ReactNode }) {
@@ -174,7 +174,7 @@ export function CabecalhoPagina({ titulo, descricao, acoes }: { titulo: string; 
   return (
     <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
       <div className="min-w-0">
-        <h1 className="text-2xl font-semibold tracking-tight">{titulo}</h1>
+        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{titulo}</h1>
         {descricao && <p className="mt-1 text-sm text-muted-foreground">{descricao}</p>}
       </div>
       {acoes && <div className="flex flex-wrap gap-2">{acoes}</div>}

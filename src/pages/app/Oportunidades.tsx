@@ -1,9 +1,9 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useNavigate } from 'react-router-dom'
-import { Radar, Search, SlidersHorizontal, ChevronDown } from 'lucide-react'
+import { CalendarClock, Radar, Search, SlidersHorizontal, ChevronDown } from 'lucide-react'
 import { toast } from 'sonner'
-import { Button, CabecalhoPagina, Campo, Card, Input, Select, Vazio } from '@/components/ui'
+import { Badge, Button, CabecalhoPagina, Campo, Card, Input, Select, Vazio } from '@/components/ui'
 import { SeletorEmpresa, useEmpresaPadrao } from '@/components/Situacoes'
 import { useOrg } from '@/providers/OrgProvider'
 import { useLista, useSalvar } from '@/hooks/useDados'
@@ -19,6 +19,14 @@ import type { Processo } from '@/types/db'
 function dataLocal(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
 }
+/** "em 12 dias", "hoje", "amanhã" (vazio quando já passou ou não há data). */
+function prazoRelativo(data: string | null) {
+  if (!data) return ''
+  const dias = Math.ceil((new Date(data).getTime() - Date.now()) / 86_400_000)
+  if (!Number.isFinite(dias) || dias < 0) return ''
+  return dias === 0 ? 'hoje' : dias === 1 ? 'amanhã' : `em ${dias} dias`
+}
+
 export default function Oportunidades() {
   const { podeEditar }=useOrg(),padrao=useEmpresaPadrao()
   const [empresaId,setEmpresaId]=useState(padrao)
@@ -74,11 +82,12 @@ export default function Oportunidades() {
       {!q.isFetching&&!q.isError&&lista.length===0?<Vazio titulo="Nenhuma oportunidade encontrada" texto={catalogo&&!catalogo.carga_inicial_concluida?"A carga inicial continua em segundo plano. A quantidade disponível ainda pode aumentar.":"Experimente outro termo ou amplie a UF, as modalidades e o período."} />:<div className="space-y-3">{visiveis.map(c=>{
         const existente=processos.data?.find(p=>p.empresa_id===empresaId&&p.pncp_controle===c.numeroControlePNCP)
         return <Card key={c.numeroControlePNCP} className="p-4">
-          <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground"><span>{c.modalidadeNome} · {c.numeroCompra}</span><span>{c.unidadeOrgao.municipioNome}/{c.unidadeOrgao.ufSigla}</span>{c.srp===true&&<span className="rounded bg-primary/10 px-2 py-0.5 text-primary">SRP</span>}</div>
-          <h2 className="line-clamp-2 break-words text-sm font-semibold sm:text-base">{c.objetoCompra}</h2>
-          <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">{c.orgaoEntidade.razaoSocial} · {portalCompra(c)[1]}</p>
-          <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm"><span>Propostas até {formatarData(c.dataEncerramentoProposta)}</span><span className="text-muted-foreground">{c.valorTotalEstimado?formatarMoeda(c.valorTotalEstimado):'Valor não divulgado'}</span></div>
-          <div className="mt-3 flex flex-wrap items-center gap-3"><ItensEdital compra={c} />{existente?<Link className="text-sm text-primary hover:underline" to={`/app/processos/${existente.id}`}>Abrir processo</Link>:podeEditar&&<Button tamanho="sm" variante="fantasma" disabled={processos.isLoading||processos.isError||salvar.isPending} onClick={()=>importar(c)}>Importar</Button>}</div>
+          <h2 className="line-clamp-2 break-words text-sm font-semibold text-sky-700 dark:text-sky-300 sm:text-base">{c.modalidadeNome} Nº {c.numeroCompra} – {c.orgaoEntidade.razaoSocial} / {c.unidadeOrgao.ufSigla}</h2>
+          <p className="mt-1 line-clamp-2 break-words text-sm text-muted-foreground">{c.objetoCompra}</p>
+          <div className="mt-2.5 flex flex-wrap items-center gap-2"><Badge cor="verde">{c.modalidadeNome}</Badge>{c.srp===true&&<Badge cor="azul">Registro de preço</Badge>}<Badge>{c.valorTotalEstimado?formatarMoeda(c.valorTotalEstimado):'Valor não divulgado'}</Badge></div>
+          <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm"><span className="flex items-center gap-1.5 font-semibold"><CalendarClock className="h-4 w-4 text-muted-foreground" />Propostas até {formatarData(c.dataEncerramentoProposta)}</span>{prazoRelativo(c.dataEncerramentoProposta)&&<span className="text-xs text-muted-foreground">{prazoRelativo(c.dataEncerramentoProposta)}</span>}</div>
+          <div className="mt-2 flex flex-wrap gap-2"><Badge>Fonte: {portalCompra(c)[1]}</Badge><Badge>{c.unidadeOrgao.municipioNome}/{c.unidadeOrgao.ufSigla}</Badge></div>
+          <div className="mt-3 flex flex-wrap items-center gap-3"><ItensEdital compra={c} />{existente?<Link className="text-sm text-primary hover:underline" to={`/app/processos/${existente.id}`}>Abrir processo</Link>:podeEditar&&<Button tamanho="sm" disabled={processos.isLoading||processos.isError||salvar.isPending} onClick={()=>importar(c)}>Adicionar aos processos</Button>}</div>
         </Card>
       })}</div>}
       {processos.isError&&<p role="alert" className="mt-3 text-sm text-destructive">Não foi possível verificar os processos já importados. <button className="underline" onClick={()=>processos.refetch()}>Tentar novamente</button></p>}

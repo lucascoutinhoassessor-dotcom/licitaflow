@@ -34,32 +34,33 @@
   }
 
   .dark {
-    --background: 222 47% 7%;
-    --foreground: 210 40% 96%;
-    --card: 222 40% 10%;
-    --card-foreground: 210 40% 96%;
-    --primary: 217 91% 60%;
-    --primary-foreground: 222 47% 8%;
-    --secondary: 222 30% 16%;
-    --secondary-foreground: 210 40% 96%;
-    --accent: 160 70% 42%;
-    --accent-foreground: 222 47% 8%;
-    --muted: 222 30% 15%;
-    --muted-foreground: 215 20% 65%;
-    --destructive: 0 72% 58%;
+    /* Azul-marinho profundo com contraste alto (referência de mercado, 20/11/2026). */
+    --background: 226 40% 7%;
+    --foreground: 214 32% 91%;
+    --card: 223 53% 8%;
+    --card-foreground: 214 32% 91%;
+    --primary: 213 94% 62%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 222 38% 15%;
+    --secondary-foreground: 214 32% 91%;
+    --accent: 158 64% 52%;
+    --accent-foreground: 226 40% 7%;
+    --muted: 222 38% 13%;
+    --muted-foreground: 215 22% 70%;
+    --destructive: 350 89% 62%;
     --destructive-foreground: 0 0% 100%;
-    --success: 152 60% 45%;
-    --success-foreground: 222 47% 8%;
+    --success: 158 64% 52%;
+    --success-foreground: 226 40% 7%;
     --warning: 38 92% 55%;
-    --warning-foreground: 222 47% 8%;
-    --border: 222 30% 18%;
-    --input: 222 30% 22%;
-    --ring: 217 91% 60%;
-    --sidebar: 222 47% 5%;
+    --warning-foreground: 226 40% 7%;
+    --border: 218 52% 19%;
+    --input: 218 45% 22%;
+    --ring: 158 64% 52%;
+    --sidebar: 224 47% 7%;
     --sidebar-foreground: 210 40% 96%;
-    --sidebar-muted: 215 20% 60%;
-    --sidebar-accent: 222 35% 14%;
-    --sidebar-border: 222 30% 12%;
+    --sidebar-muted: 215 22% 66%;
+    --sidebar-accent: 222 38% 15%;
+    --sidebar-border: 218 52% 16%;
   }
 
   /* Console master: paleta própria (grafite + âmbar), independente do tema do app */
@@ -98,6 +99,33 @@
 }
 
 @layer components {
+  /* Fundo com leve degradê no tema escuro. */
+  .dark body {
+    background-image: linear-gradient(180deg, hsl(226 24% 9%), hsl(224 50% 14%));
+  }
+  /* Cartões: degradê marinho, borda azul sutil e brilho. */
+  .dark .lf-cartao {
+    background-image: linear-gradient(180deg, rgba(10, 17, 33, 0.94), rgba(7, 12, 24, 0.92));
+    border-color: rgba(59, 130, 246, 0.2);
+    box-shadow: 0 28px 66px -34px rgba(8, 47, 73, 0.55);
+  }
+  /* Destaque principal: verde-esmeralda para azul-céu. */
+  .lf-degrade {
+    background-image: linear-gradient(135deg, #10b981, #0ea5e9);
+  }
+  .lf-texto-degrade {
+    background-image: linear-gradient(135deg, #34d399, #38bdf8);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  /* Cartão de boas-vindas. */
+  .lf-hero {
+    background-image: linear-gradient(155deg, #0b1526 0%, #050b16 52%, #111c33 100%);
+    border: 1px solid rgba(59, 130, 246, 0.24);
+    box-shadow: 0 34px 80px -44px rgba(12, 74, 110, 0.5);
+  }
+
   .painel-conteudo {
     overflow-wrap: anywhere;
   }
