@@ -1,5 +1,5 @@
-// Ensaia o roteiro de produção supabase/deploy/20261119_enxugar_catalogo_producao.sql
-// sobre o esquema anterior (sem a migration 20261119000010), com pg_cron simulado.
+// Ensaia o roteiro de produção supabase/deploy/20261119_enxugar_catalogo_producao.sql (caminho realmente usado:
+// apagar os itens, recriar a tabela compacta vazia e recoletar) sobre o esquema anterior, com pg_cron simulado.
 import { PGlite } from '@electric-sql/pglite'
 import { readFileSync } from 'node:fs'
 
@@ -13,7 +13,9 @@ grant usage on schema auth,public to authenticated,anon;
 create schema cron;
 create table cron.job(jobid bigserial primary key, jobname text unique, schedule text, command text, active boolean default true);
 create function cron.schedule(n text, s text, c text) returns bigint language sql as $$insert into cron.job(jobname,schedule,command) values(n,s,c) on conflict(jobname) do update set schedule=excluded.schedule,command=excluded.command returning jobid$$;
-create function cron.unschedule(id bigint) returns boolean language sql as $$delete from cron.job where jobid=id returning true$$;`)
+create function cron.unschedule(id bigint) returns boolean language sql as $$delete from cron.job where jobid=id returning true$$;
+create function cron.alter_job(job_id bigint, active boolean) returns void language sql as $$update cron.job set active=alter_job.active where jobid=job_id$$;
+select cron.schedule('licitaflow-coleta-oportunidades','10 seconds','select licitaflow_coleta.tick()');`)
 for (const f of ['20261117035403_indice_oportunidades.sql', '20261117035735_coleta_oportunidades.sql']) await db.exec(readFileSync('supabase/migrations/' + f, 'utf8'))
 
 // Dados no formato antigo: um edital aberto com 2 itens e um encerrado com 1 item.
@@ -29,32 +31,38 @@ await db.query('select licitaflow_coleta.registrar_itens($1,$2::jsonb,1,true)', 
 ok((await db.query('select count(*)::int n from public.oportunidades_itens_indice')).rows[0].n === 3, 'base antiga preparada com 3 itens')
 
 // ETAPA 1: roteiro de produção.
-await db.exec(readFileSync('supabase/deploy/20261119_enxugar_catalogo_producao.sql', 'utf8'))
-ok((await db.query("select count(*)::int n from cron.job where jobname='licitaflow-migrar-itens'")).rows[0].n === 1, 'migração pesada fica agendada no pg_cron')
-ok((await db.query("select count(*)::int n from cron.job where jobname='licitaflow-limpeza-catalogo'")).rows[0].n === 1, 'limpeza horária agendada')
 
-// ETAPA 2: o pg_cron executa a migração.
-await db.query('select licitaflow_coleta.migrar_itens_compactos()')
-const st = (await db.query('select * from licitaflow_coleta.migracao_enxugar')).rows[0]
-ok(st.status === 'concluida', 'migração concluída (' + (st.erro ?? 'sem erro') + ')')
-ok((await db.query("select count(*)::int n from cron.job where jobname='licitaflow-migrar-itens'")).rows[0].n === 0, 'agendamento da migração se remove sozinho')
+// Roteiro de produção: blocos 1-4, 6 e 7 vêm do arquivo; o bloco 5 são as funções da migration canônica.
+const migracao = readFileSync('supabase/migrations/20261119000010_enxugar_catalogo.sql', 'utf8')
+const deploy = readFileSync('supabase/deploy/20261119_enxugar_catalogo_producao.sql', 'utf8')
+const [antes5, depois5] = deploy.split('-- ============ BLOCO 5')
+await db.exec(antes5)
+ok((await db.query("select active from cron.job where jobname='licitaflow-coleta-oportunidades'")).rows[0].active === false, 'coletor pausado durante a troca da tabela')
+const vetor = migracao.slice(migracao.indexOf('create function licitaflow_coleta.vetor_itens'), migracao.indexOf('-- ============ 2.'))
+await db.exec(vetor + migracao.slice(migracao.indexOf('create or replace function licitaflow_coleta.registrar_itens')))
+await db.exec('-- ' + depois5)
+ok((await db.query("select active from cron.job where jobname='licitaflow-coleta-oportunidades'")).rows[0].active === true, 'coletor religado no fim')
+ok((await db.query("select count(*)::int n from cron.job where jobname='licitaflow-limpeza-catalogo'")).rows[0].n === 1, 'limpeza horária agendada')
 ok(!(await db.query("select 1 from information_schema.columns where table_name='oportunidades_itens_indice' and column_name='item'")).rows.length, 'coluna JSON duplicada removida')
-ok((await db.query('select count(*)::int n from public.oportunidades_itens_indice')).rows[0].n === 2, 'itens do edital encerrado descartados, abertos mantidos')
-await db.query('select licitaflow_coleta.migrar_itens_compactos()')
-ok((await db.query('select status from licitaflow_coleta.migracao_enxugar')).rows[0].status === 'concluida', 'rodar de novo é seguro')
+ok((await db.query('select count(*)::int n from public.oportunidades_itens_indice')).rows[0].n === 0, 'tabela de itens recriada vazia')
+ok((await db.query('select count(*)::int n from public.oportunidades_indice where itens_completos or busca_itens is not null')).rows[0].n === 0, 'editais deixam de anunciar itens até a recoleta')
+const fila = (await db.query("select controle from licitaflow_coleta.jobs where tipo='itens' and ciclo like '%/recoleta-20261119'")).rows.map(r => r.controle)
+ok(fila.length === 1 && fila[0] === aberto.numeroControlePNCP, 'recoleta enfileirada só para o edital aberto')
 
 const uid = '11111111-1111-1111-1111-111111111111'
 const como = async (sql, p = []) => { await db.exec(`set role authenticated;select set_config('request.jwt.sub','${uid}',false)`); try { return await db.query(sql, p) } finally { await db.exec('reset role') } }
-const itens = (await como('select public.itens_oportunidade_indexados($1) r', [aberto.numeroControlePNCP])).rows[0].r
-ok(itens.length === 2 && itens[0].descricao === 'Notebook i5 16GB' && Number(itens[0].quantidade) === 20 && itens[0].unidadeMedida === 'UN' && itens[0].numeroLote === '1', 'itens voltam no mesmo formato da tela')
-ok(itens[1].valorUnitarioEstimado === null && itens[1].valorTotal === null && itens[1].orcamentoSigiloso === true, 'sigilo preservado')
+ok((await como('select public.itens_oportunidade_indexados($1) r', [aberto.numeroControlePNCP])).rows[0].r === null, 'tela mostra itens como pendentes até a recoleta')
 const busca = async (termo) => (await como('select public.buscar_oportunidades($1::jsonb,1,20) r', [JSON.stringify({ situacao: 'abertas', busca: termo })])).rows[0].r
-ok((await busca('notebook')).totalRegistros === 1, 'busca encontra palavra que só existe nos itens')
-ok((await busca('mouse')).totalRegistros === 1, 'busca encontra item sigiloso pela descrição')
-ok((await busca('cadeira')).totalRegistros === 0, 'edital encerrado não aparece entre os abertos')
+ok((await busca('equipamentos')).totalRegistros === 1, 'busca pelo objeto continua funcionando')
 
-// Coletor depois da migração grava no formato novo.
-await db.query('select licitaflow_coleta.registrar_itens($1,$2::jsonb,1,true)', [aberto.numeroControlePNCP, JSON.stringify([{ numeroItem: 1, descricao: 'Impressora laser', quantidade: 3 }])])
-ok((await busca('impressora')).totalRegistros === 1 && (await busca('notebook')).totalRegistros === 0, 'nova coleta atualiza o vetor de busca do edital')
+// Coletor depois da troca grava no formato novo.
+await db.query('select licitaflow_coleta.registrar_itens($1,$2::jsonb,1,true)', [aberto.numeroControlePNCP, JSON.stringify([
+  { numeroItem: 1, descricao: 'Impressora laser', quantidade: 3, unidadeMedida: 'UN', numeroLote: '1' },
+  { numeroItem: 2, descricao: 'Mouse óptico', quantidade: 20, orcamentoSigiloso: true, valorUnitarioEstimado: 30, valorTotal: 600 },
+])])
+const itens = (await como('select public.itens_oportunidade_indexados($1) r', [aberto.numeroControlePNCP])).rows[0].r
+ok(itens.length === 2 && itens[0].descricao === 'Impressora laser' && Number(itens[0].quantidade) === 3 && itens[0].unidadeMedida === 'UN' && itens[0].numeroLote === '1', 'itens voltam no mesmo formato da tela')
+ok(itens[1].valorUnitarioEstimado === null && itens[1].valorTotal === null && itens[1].orcamentoSigiloso === true, 'sigilo preservado')
+ok((await busca('impressora')).totalRegistros === 1 && (await busca('mouse')).totalRegistros === 1, 'nova coleta alimenta o vetor de busca do edital')
 console.log('Ensaio do roteiro de produção aprovado:', n)
 await db.close()
