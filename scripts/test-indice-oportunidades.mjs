@@ -161,6 +161,14 @@ await db.query('select licitaflow_coleta.registrar_compra($1::jsonb)',[JSON.stri
 ok((await buscar({busca:'tablets'})).totalRegistros===1,'sem a opção, aberturas no domingo aparecem')
 ok((await buscar({busca:'tablets',diasUteis:true})).totalRegistros===0&&(await buscar({busca:'microcomputador',diasUteis:true})).totalRegistros===1,'opção de dias úteis tira aberturas no domingo')
 ok((await db.query("select public.oportunidades_dia_util('2026-11-20 13:00+00') v")).rows[0].v===false,'feriado nacional de 20/11 não é dia útil')
+// Itens enxutos (migration 20261121000021): só o que a busca usa.
+await db.exec(readFileSync('supabase/migrations/20261121000021_itens_enxutos.sql','utf8'))
+const colunas=(await db.query("select string_agg(column_name,',' order by column_name) c from information_schema.columns where table_schema='public' and table_name='oportunidades_itens_indice'")).rows[0].c
+ok(colunas==='beneficio,controle,descricao,numero,quantidade,sigiloso,unidade,valor_unitario','tabela de itens fica só com as colunas da busca')
+await db.query('select licitaflow_coleta.registrar_itens($1,$2::jsonb,1,true)',[c.numeroControlePNCP,JSON.stringify([{numeroItem:1,descricao:'Notebook '+'x'.repeat(300),quantidade:2,unidadeMedida:'UN',valorUnitarioEstimado:3000,tipoBeneficio:1},{numeroItem:2,descricao:'Mouse sigiloso',orcamentoSigiloso:true,valorUnitarioEstimado:50,quantidade:3}])])
+const enx=(await como('authenticated','select public.itens_oportunidade_indexados($1) r',[c.numeroControlePNCP])).rows[0].r
+ok(enx.length===2&&enx[0].descricao.length===160&&Number(enx[0].valorTotal)===6000&&enx[1].valorUnitarioEstimado===null&&enx[1].valorTotal===null,'itens enxutos: descrição curta, total calculado e sigilo preservado')
+ok((await buscar({busca:'notebook',exclusivo:true,itemMinimo:'2000'})).totalRegistros===1,'filtros por item continuam funcionando sem o índice extra')
 console.log('Preparando 50 mil editais de teste...')
 await db.exec(`insert into public.oportunidades_indice(controle,objeto,complemento,orgao_cnpj,orgao_nome,uf,modalidade,portal_id,publicacao,encerramento,situacao,valor,srp,compra)
 select 'benchmark-'||n,case when n%100=0 then 'Aquisição de microcomputadores para educação' else 'Aquisição de material de escritório e papelaria '||n end,'','12345678000190','Órgão público',case when n%3=0 then 'SP' else 'RJ' end,6,'comprasnet',now()-(n||' seconds')::interval,'2099-12-31',1,10000,false,jsonb_build_object('numeroControlePNCP','benchmark-'||n,'objetoCompra','Aquisição de bens públicos') from generate_series(1,50000) n;analyze public.oportunidades_indice;analyze public.oportunidades_itens_indice;`)
