@@ -3,6 +3,8 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { ArrowLeft, Award, Building2, CalendarRange, ExternalLink, FileText, MapPin, ShieldAlert, ShieldCheck, Tag, Target, Trophy, XCircle } from 'lucide-react'
 import BotaoInverterOrdem from '@/components/BotaoInverterOrdem'
+import { ListaOcorrencias } from '@/components/OcorrenciasAta'
+import { atasDaEmpresa } from '@/lib/atas'
 import { Badge, Button, Card, Carregando, Input, Vazio } from '@/components/ui'
 import { analisarEmpresa, rotaPorControle } from '@/lib/analiseEmpresa'
 import { linkContratosPNCP } from '@/lib/fornecedores'
@@ -109,16 +111,40 @@ export default function AnaliseEmpresaDetalhe() {
             {!a.fortes?.length ? <p className="text-sm text-muted-foreground">Ainda sem itens detalhados para identificar.</p> : <ul className="space-y-2 text-sm">
               {a.fortes.slice(0, 6).map((f) => <li key={f.nome} className="flex justify-between gap-3"><span className="min-w-0 truncate font-medium">{f.nome}</span><span className="shrink-0 tabular-nums text-muted-foreground">{formatarMoeda(f.valor)}</span></li>)}
             </ul>}
-            <h3 className="mb-2 mt-5 flex items-center gap-2 text-sm font-semibold"><Tag className="h-4 w-4 text-sky-400" />Marcas com que venceu</h3>
-            {!a.marcas?.length ? <p className="text-sm text-muted-foreground">Marca não informada nas compras analisadas.</p> : <div className="flex flex-wrap gap-2">{a.marcas.map((m) => <Badge key={m.marca} cor="azul">{m.marca} · {m.n}</Badge>)}</div>}
-            <p className="mt-3 text-xs text-muted-foreground">Baseado nas maiores compras vencidas no período (catálogo e Painel de Preços do governo federal).</p>
+            <p className="mt-3 text-xs text-muted-foreground">Baseado nas maiores compras vencidas no período (catálogo do governo federal).</p>
           </Card>
         </div>
 
         <Card className="mb-5 p-5">
-          <h2 className="mb-2 flex items-center gap-2 font-semibold"><XCircle className="h-4 w-4 text-rose-400" />Desclassificações e motivos</h2>
-          <p className="text-sm text-muted-foreground">As propostas desclassificadas, inabilitações e seus motivos não são publicadas nos dados abertos do governo: ficam na ata de cada compra no Compras.gov.br, que exige acesso próprio. Abra uma compra abaixo e use "Ver disputa no Compras.gov" para consultar a ata.</p>
+          <h2 className="mb-3 flex items-center gap-2 font-semibold"><Tag className="h-4 w-4 text-sky-400" />Principais marcas com que venceu</h2>
+          {!a.marcas?.length ? <p className="text-sm text-muted-foreground">Marca não informada nas compras analisadas.</p> : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground">
+                    <th className="w-10 py-2 pr-2 font-semibold">#</th>
+                    <th className="py-2 pr-4 font-semibold">Marca</th>
+                    <th className="hidden w-1/3 py-2 pr-4 font-semibold sm:table-cell"><span className="sr-only">Proporção</span></th>
+                    <th className="py-2 text-right font-semibold">Itens vencidos</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {a.marcas.map((m, i) => (
+                    <tr key={m.marca}>
+                      <td className="py-2 pr-2 tabular-nums text-muted-foreground">{i + 1}</td>
+                      <td className="break-words py-2 pr-4 font-medium text-sky-700 dark:text-sky-300">{m.marca}</td>
+                      <td className="hidden py-2 pr-4 sm:table-cell"><div className="h-1.5 rounded-full bg-muted"><div className="lf-degrade h-1.5 rounded-full" style={{ width: `${(m.n / a.marcas[0].n) * 100}%` }} /></div></td>
+                      <td className="py-2 text-right font-semibold tabular-nums">{m.n.toLocaleString('pt-BR')}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <p className="mt-3 text-xs text-muted-foreground">Marcas registradas no Painel de Preços do governo federal para os itens que a empresa venceu nas maiores compras do período.</p>
         </Card>
+
+        <DesclassificacoesEmpresa cnpj={cnpj} nome={a.nome ?? ''} compras={a.compras ?? [...new Set(a.ultimos.map((u) => u.controle))]} />
 
         <Card className="p-5">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -142,5 +168,28 @@ export default function AnaliseEmpresaDetalhe() {
         </Card>
       </>}
     </>
+  )
+}
+
+/** Lê as atas (PNCP) das compras em que a empresa venceu algo e mostra onde ela foi desclassificada ou inabilitada. */
+function DesclassificacoesEmpresa({ cnpj, nome, compras }: { cnpj: string; nome: string; compras: string[] }) {
+  const lista = compras.filter((c) => /^\d{14}-1-\d+\/\d{4}$/.test(c)).slice(0, 15)
+  const q = useQuery({ queryKey: ['atas-empresa', cnpj, lista], enabled: lista.length > 0, staleTime: 3_600_000, retry: 1, queryFn: ({ signal }) => atasDaEmpresa(cnpj, nome, lista, signal) })
+  return (
+    <Card className="mb-5 p-5">
+      <h2 className="mb-2 flex items-center gap-2 font-semibold"><XCircle className="h-4 w-4 text-rose-400" />Desclassificações, inabilitações e motivos</h2>
+      {!lista.length ? <p className="text-sm text-muted-foreground">Sem compras no período para ler as atas.</p>
+        : q.isLoading ? <Carregando texto={`Lendo as atas de ${lista.length} compras no PNCP…`} />
+        : q.isError ? <p className="text-sm">{(q.error as Error).message} <button className="font-semibold text-primary underline" onClick={() => q.refetch()}>Tentar novamente</button></p>
+        : q.data && (
+          <>
+            <p className="mb-3 text-xs text-muted-foreground">{q.data.comprasConsultadas} compras consultadas · {q.data.comAta} com ata da sessão publicada no PNCP.</p>
+            {q.data.ocorrencias.length === 0
+              ? <p className="text-sm text-muted-foreground">Nenhuma desclassificação ou inabilitação desta empresa encontrada nas atas lidas.</p>
+              : <ListaOcorrencias ocorrencias={q.data.ocorrencias} mostrarCompra />}
+          </>
+        )}
+      <p className="mt-3 text-xs text-muted-foreground">Lemos as atas das compras mais recentes em que a empresa venceu algum item. Compras do governo federal (Compras.gov.br) quase nunca publicam a ata no PNCP, e lá a consulta é protegida por captcha. Por isso, a cobertura é maior em estados e municípios. Confira sempre o trecho na ata original.</p>
+    </Card>
   )
 }

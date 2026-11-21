@@ -60,7 +60,7 @@ Legenda: ✅ temos · 🟡 temos parcialmente · ❌ não temos · ⛔ fora do e
 |---|---|---|
 | Análise de mercado | Mapa do Brasil, valor comprado por mês (gráfico de barras), total contratado e seis ângulos: correspondências, catálogo, estados, órgãos, empresas, marcas | ❌ |
 | Histórico de compras | Itens de atas: descrição, situação (aceito/cancelado), abertura, quantidade, unidade, **vencedor** e **valor homologado** | ❌ (fonte: resultados de itens do PNCP) |
-| Análise de empresas | Por CNPJ e período: participações, vitórias e derrotas, valores disputados e vencidos, vitórias por modalidade, desclassificações e inabilitações, gráficos | 🟡 temos o resumo de contratos por empresa (migration 13); faltam derrotas e desclassificações |
+| Análise de empresas | Por CNPJ e período: participações, vitórias e derrotas, valores disputados e vencidos, vitórias por modalidade, desclassificações e inabilitações, gráficos | 🟡 resumo por empresa, marcas em lista e, desde 20/11/2026, desclassificações e inabilitações lidas das atas da sessão publicadas no PNCP (`server/atas.js`); faltam derrotas |
 
 ### Disputa e Jurídico
 | Item | LicitaFlow |
@@ -87,3 +87,8 @@ Carrossel de novidades · boas-vindas com duas ações · indicadores (negócios
 3. **Agenda em calendário** e **checklist por processo** com modelos de tarefas.
 4. **Histórico de compras / vencedores por item**: resultados de itens do PNCP. É preciso medir o espaço antes, por causa do limite de 500 MB.
 5. **Órgãos** com nota de pagamento, depois de estudar a fonte de pagamentos.
+
+## 5. Desclassificações e inabilitações (20/11/2026)
+
+- **Compras.gov.br (federal):** a página pública de acompanhamento (`comprasnet-fase-externa/public/v1/compras/{id}/itens/{n}/propostas`) traz as propostas e situações, mas cada chamada exige um token **hCaptcha**; sem ele a API devolve 204 vazio. Não automatizamos: seria contornar a proteção contra robôs. As compras federais quase nunca publicam a ata no PNCP.
+- **PNCP (estados e municípios):** cerca de 8% a 10% dos pregões publicam a "Ata da Sessão", o relatório de julgamento ou o termo de homologação como PDF em `/api/pncp/v1/orgaos/{cnpj}/compras/{ano}/{seq}/arquivos`. O `server/atas.js` abre até 2 desses PDFs (com `unpdf`), separa os trechos que afirmam a desclassificação, inabilitação ou recusa e tira empresa, CNPJ, itens, data e motivo. PDFs escaneados (imagem) não têm texto e ficam de fora.

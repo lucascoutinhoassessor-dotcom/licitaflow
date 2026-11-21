@@ -47,6 +47,8 @@ export function resumirResultados(resultados) {
     porUf: Object.entries(porUf).map(([uf, v]) => ({ uf, valor: Math.round(v * 100) / 100 })).sort((a, b) => b.valor - a.valor),
     principaisOrgaos: Object.values(porOrgao).sort((a, b) => b.valor - a.valor).slice(0, 10),
     porMes: Object.values(porMes).map((m) => ({ ...m, valor: Math.round(m.valor * 100) / 100 })).sort((a, b) => a.mes.localeCompare(b.mes)),
+    // Compras (edital no PNCP) em que venceu algo, das mais recentes: usadas para ler as atas.
+    compras: [...new Set(ordenados.map((r) => r.idContratacaoPNCP ?? r.numeroControlePNCPCompra).filter(Boolean))].slice(0, 40),
     ultimos: ordenados.slice(0, 50).map((r) => ({
       idCompra: String(r.idCompraItem ?? '').slice(0, 17) || null,
       controle: r.idContratacaoPNCP ?? r.numeroControlePNCPCompra, item: r.numeroItemPncp, data: r.dataResultadoPncp,
@@ -83,7 +85,7 @@ async function obterDados(caminho, params) {
  * Perfil da empresa a partir das maiores compras vencidas: o que mais vende (padrão descritivo do catálogo)
  * e com quais marcas venceu (Painel de Preços). Limitado para responder em poucos segundos.
  */
-export async function perfilEmpresa(cnpj, resultados, { maxCompras = 8, maxMarcas = 12 } = {}) {
+export async function perfilEmpresa(cnpj, resultados, { maxCompras = 12, maxMarcas = 24 } = {}) {
   const valor = (r) => { const v = Number(r.valorTotalHomologado); return Number.isFinite(v) && v > 0 && v < 1e11 ? v : 0 }
   const venceu = new Map() // idCompra -> Map(numeroItem -> valor)
   for (const r of resultados) {
@@ -120,7 +122,7 @@ export async function perfilEmpresa(cnpj, resultados, { maxCompras = 8, maxMarca
   }))
   return {
     fortes: Object.values(fortes).map((f) => ({ ...f, valor: Math.round(f.valor * 100) / 100 })).sort((a, b) => b.valor - a.valor).slice(0, 10),
-    marcas: Object.entries(marcas).map(([marca, n]) => ({ marca, n })).sort((a, b) => b.n - a.n).slice(0, 12),
+    marcas: Object.entries(marcas).map(([marca, n]) => ({ marca, n })).sort((a, b) => b.n - a.n || a.marca.localeCompare(b.marca)).slice(0, 30),
     marcaPorItem,
   }
 }

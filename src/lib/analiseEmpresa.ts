@@ -14,6 +14,7 @@ export interface AnaliseEmpresa {
   porMes: { mes: string; itens: number; valor: number }[]
   fortes: { nome: string; itens: number; valor: number }[]
   marcas: { marca: string; n: number }[]
+  compras?: string[]
 }
 
 /** Itens vencidos e sanções de uma empresa, consultados na hora nas fontes oficiais. */
