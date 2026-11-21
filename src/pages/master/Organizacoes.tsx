@@ -57,7 +57,7 @@ function statusOrg(o: OrgAdmin) {
   return <Badge cor="verde">{NOME_PLANO[o.plano] ?? o.plano}</Badge>
 }
 
-function EditarOrg({ org, aoFechar }: { org: OrgAdmin; aoFechar: () => void }) {
+export function EditarOrg({ org, aoFechar }: { org: OrgAdmin; aoFechar: () => void }) {
   const qc = useQueryClient()
   const catalogo = useCatalogoPlanos()
   const planos = catalogo.data?.length ? catalogo.data : [...new Set([...PLANOS, org.plano])].map(id => ({id,nome:NOME_PLANO[id] ?? id}))

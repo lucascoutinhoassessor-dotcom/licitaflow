@@ -1,6 +1,10 @@
+import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
+import { AlertTriangle, CheckCircle2 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { formatarMoeda } from '@/lib/format'
 import { Aviso, CabecalhoPagina, Card, Carregando } from '@/components/ui'
+import { useFinanceiro } from './Financeiro'
 
 interface Resumo {
   organizacoes: number
@@ -38,6 +42,16 @@ export default function VisaoGeral() {
     },
   })
 
+  const fin = useFinanceiro()
+  const chamados = useQuery({
+    queryKey: ['admin-chamados-abertos'],
+    queryFn: async () => {
+      const { count, error } = await supabase.from('suporte_chamados').select('id', { count: 'exact', head: true }).in('status', ['aberto', 'em_andamento'])
+      if (error) throw error
+      return count ?? 0
+    },
+  })
+
   if (q.isLoading) return <Carregando />
   if (q.error) return <Aviso>{(q.error as Error).message}</Aviso>
   const r = q.data!
@@ -56,7 +70,28 @@ export default function VisaoGeral() {
 
   return (
     <>
-      <CabecalhoPagina titulo="Visão geral da plataforma" descricao="Números de todas as contas do LicitaFlow." />
+      <CabecalhoPagina titulo="Visão geral da plataforma" descricao="Receita, clientes e o que precisa da sua atenção hoje." />
+
+      {fin.data && (
+        <div className="mb-4 grid grid-cols-2 gap-4 lg:grid-cols-4">
+          {[
+            { rotulo: 'MRR', valor: formatarMoeda(fin.data.mrr / 100), sub: `${fin.data.assinaturas.ativas} assinaturas ativas` },
+            { rotulo: 'Recebido no mês', valor: formatarMoeda(fin.data.recebido_mes / 100) },
+            { rotulo: 'Inadimplência', valor: formatarMoeda(fin.data.inadimplente / 100), sub: `${fin.data.clientes_inadimplentes} cliente(s)`, alerta: fin.data.inadimplente > 0 },
+            { rotulo: 'A receber', valor: formatarMoeda(fin.data.a_receber / 100) },
+          ].map((k) => (
+            <Link key={k.rotulo} to="/master/financeiro" className="block">
+              <Card className="h-full p-5 transition-colors hover:border-primary/50">
+                <div className="text-sm text-muted-foreground">{k.rotulo}</div>
+                <div className={`mt-2 text-2xl font-semibold tabular-nums ${k.alerta ? 'text-warning' : ''}`}>{k.valor}</div>
+                {k.sub && <div className="mt-1 text-xs text-muted-foreground">{k.sub}</div>}
+              </Card>
+            </Link>
+          ))}
+        </div>
+      )}
+
+      <Atencao r={r} fin={fin.data} chamados={chamados.data ?? 0} />
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         {kpis.map((k) => (
@@ -119,5 +154,34 @@ export default function VisaoGeral() {
         </Card>
       </div>
     </>
+  )
+}
+
+function Atencao({ r, fin, chamados }: { r: Resumo; fin?: ReturnType<typeof useFinanceiro>['data']; chamados: number }) {
+  const itens = [
+    fin && fin.clientes_inadimplentes > 0 && { texto: `${fin.clientes_inadimplentes} cliente(s) com fatura vencida (${formatarMoeda(fin.inadimplente / 100)})`, rota: '/master/assinaturas' },
+    fin && fin.suspensas_por_atraso > 0 && { texto: `${fin.suspensas_por_atraso} conta(s) suspensa(s) automaticamente por atraso`, rota: '/master/assinaturas' },
+    fin && fin.assinaturas.pendentes > 0 && { texto: `${fin.assinaturas.pendentes} assinatura(s) aguardando o 1º pagamento`, rota: '/master/assinaturas' },
+    r.trials_vencendo > 0 && { texto: `${r.trials_vencendo} teste(s) grátis vencem em até 3 dias: hora de converter`, rota: '/master/organizacoes' },
+    r.trials_vencidos > 0 && { texto: `${r.trials_vencidos} teste(s) vencido(s) sem plano`, rota: '/master/organizacoes' },
+    chamados > 0 && { texto: `${chamados} chamado(s) de suporte aberto(s)`, rota: '/master/suporte' },
+    fin?.gateway && !fin.gateway.ativo && { texto: 'Asaas desativado: clientes não conseguem contratar planos', rota: '/master/integracoes' },
+  ].filter(Boolean) as { texto: string; rota: string }[]
+  return (
+    <Card className="mb-6 p-5">
+      <h2 className="font-semibold">Precisa de atenção</h2>
+      {!itens.length && <p className="mt-3 flex items-center gap-2 text-sm text-muted-foreground"><CheckCircle2 className="h-4 w-4 text-success" />Nada pendente agora.</p>}
+      <ul className="mt-3 space-y-2">
+        {itens.map((i) => (
+          <li key={i.texto}>
+            <Link to={i.rota} className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-muted">
+              <AlertTriangle className="h-4 w-4 shrink-0 text-warning" />
+              <span className="flex-1">{i.texto}</span>
+              <span className="text-primary">Abrir →</span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </Card>
   )
 }

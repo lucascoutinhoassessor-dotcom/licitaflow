@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
-import { Menu, X } from 'lucide-react'
+import { Menu, ShieldCheck, X } from 'lucide-react'
 import { useLocation } from 'react-router-dom'
 import { cn } from '@/lib/utils'
 
@@ -16,7 +16,12 @@ export function MenuLateral({ titulo, children, console: master = false }: { tit
     return () => media.removeEventListener('change', ajustar)
   }, [])
   const estilo = master ? 'dark console border-zinc-800 bg-zinc-950 text-zinc-100' : 'border-sidebar-border bg-sidebar text-sidebar-foreground'
-  const cabecalho = <div className="flex h-16 shrink-0 items-center border-b border-inherit px-5 font-semibold">{titulo}</div>
+  const cabecalho = master
+    ? <div className="flex h-16 shrink-0 items-center gap-3 border-b border-inherit px-5">
+        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-amber-400 to-amber-600 shadow-lg shadow-amber-500/20"><ShieldCheck className="h-5 w-5 text-zinc-950" /></div>
+        <div className="leading-tight"><div className="font-semibold">LicitaFlow</div><div className="text-[11px] font-medium uppercase tracking-wider text-amber-400/80">Painel master</div></div>
+      </div>
+    : <div className="flex h-16 shrink-0 items-center border-b border-inherit px-5 font-semibold">{titulo}</div>
   return <>
     <aside aria-label={titulo} className={cn('fixed inset-y-0 left-0 z-40 hidden h-dvh w-72 flex-col border-r pb-[env(safe-area-inset-bottom)] xl:flex', estilo)}>
       {cabecalho}{children}

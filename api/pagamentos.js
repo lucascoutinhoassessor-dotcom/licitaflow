@@ -1,4 +1,9 @@
 import {configuracao,criarCheckout,consultarPagamento} from '../server/gateways.js'
+import {asaas,cifrar,corpoAssinatura,ErroAsaas,hojeSP,montarConfig} from '../server/asaas.js'
+
+const UUID=/^[0-9a-f-]{36}$/i
+// Ações que dono/administrador da organização pode pedir; o restante é exclusivo do master.
+const ACOES_CLIENTE=['assinar','trocar_plano','cancelar_assinatura']
 
 export default async function handler(req,res) {
   res.setHeader('Cache-Control','no-store')
@@ -11,31 +16,142 @@ export default async function handler(req,res) {
   if(!/^Bearer \S+$/.test(token ?? '')) return res.status(401).json({error:'Entre na sua conta'})
   const headers={apikey:anon,Authorization:token,'Content-Type':'application/json'}
   async function banco(path,options={},service=false) {
+    if(service && !env.SUPABASE_SERVICE_ROLE_KEY) { const e=new Error('Chave de serviço do Supabase ausente no servidor'); e.status=503; throw e }
     const h=service?{apikey:env.SUPABASE_SERVICE_ROLE_KEY,Authorization:`Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,'Content-Type':'application/json'}:headers
     const r=await fetch(base+path,{...options,headers:{...h,...options.headers},signal:AbortSignal.timeout(15000)})
-    if(!r.ok) { const erro=new Error('Falha ao consultar ou gravar a cobrança no banco'); erro.status=r.status; throw erro }
+    if(!r.ok) {
+      let msg='Falha ao consultar ou gravar no banco'
+      try { const j=await r.json(); if(j?.message && !service) msg=j.message } catch { /* resposta sem JSON */ }
+      const erro=new Error(msg); erro.status=r.status; throw erro
+    }
     return r.status===204?null:r.json()
   }
+  const rpc=(nome,args={},service=false)=>banco('/rest/v1/rpc/'+nome,{method:'POST',body:JSON.stringify(args)},service)
+  const sv=(path,options={})=>banco(path,options,true)
+  const patchSv=(path,dados)=>sv(path,{method:'PATCH',headers:{Prefer:'return=representation'},body:JSON.stringify(dados)})
+  async function carregarAsaas() {
+    const [linha]=await sv('/rest/v1/plataforma_gateways?select=*&id=eq.asaas')
+    return {linha,cfg:montarConfig(linha,env)}
+  }
+
   try {
-    const admin=await banco('/rest/v1/rpc/is_platform_admin',{method:'POST',body:'{}'})
-    if(admin!==true) return res.status(403).json({error:'Acesso restrito ao master'})
     const body=typeof req.body==='string'?JSON.parse(req.body):req.body ?? {}
-    const cfg=configuracao(env)
-    if(body.acao==='configuracao') return res.json({gateways:cfg})
-    if(!['checkout','verificar'].includes(body.acao) || !/^[0-9a-f-]{36}$/i.test(body.id ?? '')) return res.status(400).json({error:'Ação ou cobrança inválida'})
+    const admin=(await rpc('is_platform_admin'))===true
+    if(!admin && !ACOES_CLIENTE.includes(body.acao)) return res.status(403).json({error:'Acesso restrito ao master'})
+
+    // ------------------------------------------------------------------ Asaas pelo painel
+    if(body.acao==='asaas_salvar') {
+      const dados={updated_at:new Date().toISOString()}
+      if(typeof body.ativo==='boolean') dados.ativo=body.ativo
+      if(['sandbox','production'].includes(body.ambiente)) dados.ambiente=body.ambiente
+      const chave=String(body.api_key ?? '').trim(), tk=String(body.webhook_token ?? '').trim()
+      if(chave) { if(chave.length<20 || chave.length>500) return res.status(400).json({error:'Chave do Asaas inválida'}); dados.api_key_cifrada=cifrar(chave,env); dados.conta_nome=null; dados.testado_em=null }
+      if(tk) { if(tk.length<16 || tk.length>255) return res.status(400).json({error:'O token do webhook precisa ter entre 16 e 255 caracteres'}); dados.webhook_token_cifrado=cifrar(tk,env) }
+      const {linha}=await carregarAsaas()
+      if(dados.ativo && !dados.api_key_cifrada && !linha?.api_key_cifrada) return res.status(400).json({error:'Cadastre a chave antes de ativar'})
+      await patchSv('/rest/v1/plataforma_gateways?id=eq.asaas',dados)
+      return res.json({ok:true})
+    }
+    if(body.acao==='asaas_testar') {
+      const {cfg}=await carregarAsaas()
+      const saldo=await asaas(cfg,'/finance/balance')
+      let nome=null
+      try { const info=await asaas(cfg,'/myAccount/commercialInfo'); nome=info.companyName || info.name || null } catch { /* conta sem permissão para dados comerciais */ }
+      if(cfg.origem==='painel') await patchSv('/rest/v1/plataforma_gateways?id=eq.asaas',{conta_nome:nome,testado_em:new Date().toISOString()})
+      return res.json({ok:true,ambiente:cfg.ambiente,saldo:saldo.balance ?? null,conta:nome,origem:cfg.origem})
+    }
+
+    // ------------------------------------------------------------------ Assinaturas recorrentes
+    if(body.acao==='assinar') {
+      if(!UUID.test(body.org ?? '')) return res.status(400).json({error:'Organização inválida'})
+      const {cfg}=await carregarAsaas()
+      if(!cfg?.ativo) return res.status(503).json({error:'Pagamentos ainda não ativados pela plataforma. Fale com o atendimento.'})
+      const id=await rpc('preparar_assinatura',{p_org:body.org,p_plano:String(body.plano ?? ''),p_ciclo:String(body.ciclo ?? ''),p_forma:String(body.forma ?? 'UNDEFINED'),p_documento:String(body.documento ?? '')})
+      const [a]=await patchSv(`/rest/v1/assinaturas?id=eq.${id}&reservado_em=is.null`,{reservado_em:new Date().toISOString()})
+      if(!a) return res.status(409).json({error:'Pedido em processamento em outra sessão'})
+      let criada=null
+      try {
+        const [[org],[plano],anteriores,usuario]=await Promise.all([
+          sv(`/rest/v1/organizations?select=id,nome&id=eq.${a.org_id}`),
+          sv(`/rest/v1/plataforma_planos?select=nome&id=eq.${a.plano_id}`),
+          sv(`/rest/v1/assinaturas?select=gateway_cliente_id&org_id=eq.${a.org_id}&documento=eq.${a.documento}&gateway_cliente_id=not.is.null&limit=1`),
+          banco('/auth/v1/user'),
+        ])
+        let cliente=anteriores[0]?.gateway_cliente_id
+        if(!cliente) {
+          const c=await asaas(cfg,'/customers',{method:'POST',body:{name:org.nome,cpfCnpj:a.documento,email:usuario?.email || undefined,externalReference:a.org_id,notificationDisabled:false}})
+          cliente=c.id
+        }
+        criada=await asaas(cfg,'/subscriptions',{method:'POST',body:corpoAssinatura(a,cliente,plano?.nome ?? a.plano_id)})
+        const pagamentos=await asaas(cfg,`/subscriptions/${encodeURIComponent(criada.id)}/payments`).catch(()=>({data:[]}))
+        const primeiro=(pagamentos.data ?? []).sort((x,y)=>String(x.dueDate).localeCompare(String(y.dueDate)))[0]
+        await patchSv(`/rest/v1/assinaturas?id=eq.${a.id}`,{gateway_cliente_id:cliente,gateway_assinatura_id:criada.id,proximo_vencimento:criada.nextDueDate ?? hojeSP(),link_pagamento:primeiro?.invoiceUrl?.startsWith('https://')?primeiro.invoiceUrl:null,erro:null})
+        for(const p of pagamentos.data ?? []) await rpc('processar_pagamento_asaas',{p_evento:'SYNC',p_pagamento:p},true)
+        return res.json({id:a.id,url:primeiro?.invoiceUrl ?? null})
+      } catch(e) {
+        // Sem assinatura criada no Asaas, o pedido é descartado e pode ser refeito; com assinatura criada fica para revisão.
+        await patchSv(`/rest/v1/assinaturas?id=eq.${a.id}`,criada?{gateway_assinatura_id:criada.id,erro:String(e.message).slice(0,300)}:{status:'cancelada',cancelada_em:new Date().toISOString(),motivo_cancelamento:'Falha ao criar no gateway',erro:String(e.message).slice(0,300)}).catch(()=>{})
+        throw e
+      }
+    }
+    if(['trocar_plano','cancelar_assinatura','sincronizar'].includes(body.acao)) {
+      if(!UUID.test(body.id ?? '')) return res.status(400).json({error:'Assinatura inválida'})
+      const [a]=await sv(`/rest/v1/assinaturas?select=*&id=eq.${body.id}`)
+      if(!a) return res.status(404).json({error:'Assinatura não encontrada'})
+      if(!admin && (await rpc('pode_gerir_cobranca',{p_org:a.org_id}))!==true) return res.status(403).json({error:'Somente o dono ou um administrador da organização altera a assinatura'})
+      if(a.status==='cancelada') return res.status(409).json({error:'Assinatura já cancelada'})
+      const {cfg}=await carregarAsaas()
+      const gid=a.gateway_assinatura_id && encodeURIComponent(a.gateway_assinatura_id)
+
+      if(body.acao==='cancelar_assinatura') {
+        if(gid) await asaas(cfg,`/subscriptions/${gid}`,{method:'DELETE'}).catch(e=>{ if(e.status!==404) throw e })
+        await patchSv(`/rest/v1/assinaturas?id=eq.${a.id}`,{status:'cancelada',cancelada_em:new Date().toISOString(),motivo_cancelamento:String(body.motivo ?? (admin?'Cancelada pelo master':'Cancelada pelo cliente')).slice(0,300)})
+        return res.json({ok:true,acesso_ate:a.pago_ate})
+      }
+      if(body.acao==='trocar_plano') {
+        if(!gid) return res.status(409).json({error:'Assinatura ainda não criada no gateway'})
+        const ciclo=body.ciclo==='anual'?'anual':'mensal'
+        const [p]=await sv(`/rest/v1/plataforma_planos?select=*&id=eq.${encodeURIComponent(String(body.plano ?? ''))}`)
+        if(!p || ['trial','cancelado'].includes(p.id) || (!p.ativo && !admin)) return res.status(400).json({error:'Plano indisponível'})
+        const valor=ciclo==='anual'?p.anual_centavos:p.mensal_centavos
+        if(valor<100) return res.status(400).json({error:'Plano sem valor para cobrança'})
+        await asaas(cfg,`/subscriptions/${gid}`,{method:'PUT',body:{value:valor/100,cycle:ciclo==='anual'?'YEARLY':'MONTHLY',description:`LicitaFlow · Plano ${p.nome} (${ciclo})`,updatePendingPayments:true}})
+        await patchSv(`/rest/v1/assinaturas?id=eq.${a.id}`,{plano_id:p.id,ciclo,valor_centavos:valor})
+        if(a.status==='ativa') await patchSv(`/rest/v1/organizations?id=eq.${a.org_id}`,{plano:p.id})
+        return res.json({ok:true,valor_centavos:valor})
+      }
+      // sincronizar (somente master): reprocessa as cobranças direto do Asaas, útil se um webhook se perdeu.
+      if(!gid) return res.status(409).json({error:'Assinatura ainda não criada no gateway'})
+      const sub=await asaas(cfg,`/subscriptions/${gid}`).catch(e=>{ if(e.status===404) return {deleted:true}; throw e })
+      const pagamentos=sub.deleted?{data:[]}:await asaas(cfg,`/payments?subscription=${gid}&limit=100`)
+      for(const p of pagamentos.data ?? []) await rpc('processar_pagamento_asaas',{p_evento:'SYNC',p_pagamento:p},true)
+      if(sub.deleted || sub.status==='INACTIVE') await rpc('encerrar_assinatura_gateway',{p_gateway_id:a.gateway_assinatura_id,p_motivo:'Encerrada no Asaas (sincronização)'},true)
+      return res.json({ok:true,faturas:(pagamentos.data ?? []).length,encerrada:!!(sub.deleted || sub.status==='INACTIVE')})
+    }
+
+    // ------------------------------------------------------------------ Cobranças avulsas (master)
+    // O Asaas configurado no painel também atende os links avulsos.
+    let envPag=env
+    if(env.SUPABASE_SERVICE_ROLE_KEY) {
+      const {cfg}=await carregarAsaas().catch(()=>({cfg:null}))
+      if(cfg?.origem==='painel' && cfg.ativo) envPag={...env,ASAAS_API_KEY:cfg.apiKey,ASAAS_ENV:cfg.ambiente,PAYMENTS_ENABLED_PROVIDERS:[env.PAYMENTS_ENABLED_PROVIDERS ?? '','asaas'].join(',')}
+    }
+    const cfgPag=configuracao(envPag)
+    if(body.acao==='configuracao') return res.json({gateways:cfgPag})
+    if(!['checkout','verificar'].includes(body.acao) || !UUID.test(body.id ?? '')) return res.status(400).json({error:'Ação ou cobrança inválida'})
     const [c]=await banco('/rest/v1/plataforma_cobrancas?select=*&id=eq.'+body.id)
     if(!c) return res.status(404).json({error:'Cobrança não encontrada'})
-    const g=cfg.find(x=>x.id===c.gateway)
+    const g=cfgPag.find(x=>x.id===c.gateway)
     if(!g?.habilitado || !g.credenciais || !g.configurado) return res.status(503).json({error:'Provedor ainda não ativado. Configure as credenciais no servidor e habilite o gateway.'})
     const patch=(dados,filtro='')=>banco('/rest/v1/plataforma_cobrancas?id=eq.'+c.id+filtro,{method:'PATCH',headers:{Prefer:'return=representation'},body:JSON.stringify(dados)},true)
     if(body.acao==='checkout') {
       if(c.checkout_url) return res.json({url:c.checkout_url})
       if(c.status!=='rascunho') return res.status(409).json({error:'Esta cobrança já foi processada. Confira no provedor antes de emitir outra.'})
-      if(c.vencimento<new Date().toLocaleDateString('en-CA',{timeZone:'America/Sao_Paulo'})) return res.status(400).json({error:'Cobrança vencida. Emita uma nova cobrança.'})
+      if(c.vencimento<hojeSP()) return res.status(400).json({error:'Cobrança vencida. Emita uma nova cobrança.'})
       const reservado=await patch({status:'gerando'},'&status=eq.rascunho')
       if(!reservado?.length) return res.status(409).json({error:'Cobrança em processamento em outra sessão'})
       try {
-        const resultado=await criarCheckout(c,env)
+        const resultado=await criarCheckout(c,envPag)
         if(!resultado.gateway_id || !resultado.checkout_url?.startsWith('https://')) throw new Error('Resposta de checkout inválida')
         await patch({...resultado,status:'pendente'},'&status=eq.gerando')
         return res.json({url:resultado.checkout_url})
@@ -46,10 +162,11 @@ export default async function handler(req,res) {
     }
     if(!c.gateway_id) return res.status(409).json({error:'Gere o checkout antes de verificar'})
     if(c.status==='paga') return res.json({pago:true})
-    const pago=await consultarPagamento(c,env,{transaction_nsu:String(body.transaction_nsu ?? '').slice(0,200),slug:String(body.slug ?? '').slice(0,200)})
+    const pago=await consultarPagamento(c,envPag,{transaction_nsu:String(body.transaction_nsu ?? '').slice(0,200),slug:String(body.slug ?? '').slice(0,200)})
     await patch({verificado_em:new Date().toISOString(),...(pago?{status:'paga',confirmado_em:new Date().toISOString()}:{})})
     return res.json({pago})
   } catch(e) {
-    return res.status(e.status===401?401:502).json({error:e.message || 'Falha na integração de pagamentos'})
+    const status=e.status===401?401:e instanceof ErroAsaas?(e.status===503?503:502):e.status===400||e.status===409?400:e.status===503?503:502
+    return res.status(status).json({error:e instanceof ErroAsaas?`Asaas: ${e.message}`:(e.message || 'Falha na integração de pagamentos')})
   }
 }

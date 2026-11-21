@@ -284,6 +284,48 @@ const cat=(await as(U2, `select public.admin_catalogo_oportunidades(false) r`)).
 expect(cat.ativo===false,'master consulta e pausa o coletor com autorização no banco');
 expect((await db.query(`select count(*) n from public.admin_audit where acao='coleta.alterar'`)).rows[0].n>0,'controle do coletor registra auditoria administrativa');
 
+// Assinaturas pelo Asaas: credenciais ocultas, valor do catálogo, webhook e inadimplência.
+// "sistema" simula o servidor (service role / pg_cron): sem usuário logado.
+const sistema=async(sql)=>{await db.exec(`select set_config('request.jwt.sub','',false)`);return db.query(sql)};
+await sistema(`update public.organizations set suspensa=false, motivo_suspensao=null where id='${o1}'`);
+expect((await as(U1, `select * from public.plataforma_gateways`)).rows.length===0,'cliente não lê credenciais do gateway');
+blocked=false;try{await as(U1, `select public.admin_gateway_status()`);}catch{blocked=true;}
+expect(blocked,'cliente não consulta a configuração do Asaas');
+expect((await as(U2, `select public.admin_gateway_status() r`)).rows[0].r.tem_chave===false,'master vê só se a chave existe, nunca o valor');
+blocked=false;try{await as(U1, `select public.preparar_assinatura('${o2}','essencial','mensal','PIX','12345678909')`);}catch{blocked=true;}
+expect(blocked,'cliente não contrata plano para outra organização');
+const ass=(await as(U1, `select public.preparar_assinatura('${o1}','essencial','mensal','UNDEFINED','123.456.789-09') id`)).rows[0].id;
+const valorAss=(await db.query(`select a.valor_centavos v, p.mensal_centavos m, a.documento d from public.assinaturas a join public.plataforma_planos p on p.id=a.plano_id where a.id='${ass}'`)).rows[0];
+expect(valorAss.v===valorAss.m && valorAss.d==='12345678909','valor da assinatura vem do catálogo e documento fica só com dígitos');
+await db.exec(`delete from public.platform_admins where user_id='${U2}'`);
+expect((await as(U2, `select * from public.assinaturas`)).rows.length===0,'outro cliente não vê a assinatura');
+await db.exec(`insert into public.platform_admins(user_id) values('${U2}')`);
+await db.exec(`update public.assinaturas set gateway_assinatura_id='sub_teste' where id='${ass}'`);
+blocked=false;try{await as(U1, `select public.preparar_assinatura('${o1}','profissional','mensal','PIX','12345678909')`);}catch{blocked=true;}
+expect(blocked,'não cria segunda assinatura em vigor para a mesma organização');
+blocked=false;try{await as(U1, `select public.processar_pagamento_asaas('PAYMENT_RECEIVED','{"id":"pay_x","subscription":"sub_teste","value":197}')`);}catch{blocked=true;}
+expect(blocked,'cliente não simula pagamento do webhook');
+const pag=(id,dias,status)=>`'{"id":"${id}","subscription":"sub_teste","value":${valorAss.m/100},"netValue":190,"status":"${status}","dueDate":"'||to_char(current_date-${dias},'YYYY-MM-DD')||'"}'`;
+expect((await sistema(`select public.processar_pagamento_asaas('PAYMENT_OVERDUE',(${pag('pay_1',10,'OVERDUE')})::jsonb) r`)).rows[0].r==='em atraso','webhook de atraso marca a assinatura');
+await db.exec(`update public.plataforma_gateways set dias_tolerancia=5, bloquear_inadimplente=true`);
+expect((await sistema(`select public.rotina_cobranca() n`)).rows[0].n===1,'rotina suspende quem passou da tolerância');
+expect((await db.query(`select motivo_suspensao m from public.organizations where id='${o1}'`)).rows[0].m==='Pagamento em atraso (automático)','suspensão automática fica identificada');
+expect((await sistema(`select public.processar_pagamento_asaas('PAYMENT_RECEIVED',(${pag('pay_1',10,'RECEIVED')})::jsonb) r`)).rows[0].r==='acesso liberado','pagamento libera o acesso');
+const orgPaga=(await db.query(`select suspensa, plano from public.organizations where id='${o1}'`)).rows[0];
+expect(!orgPaga.suspensa && orgPaga.plano==='essencial','pagamento reativa a conta e aplica o plano contratado');
+expect((await db.query(`select status from public.assinaturas where id='${ass}'`)).rows[0].status==='ativa','assinatura fica ativa após o pagamento');
+await sistema(`select public.processar_pagamento_asaas('PAYMENT_OVERDUE',(${pag('pay_1',10,'OVERDUE')})::jsonb)`);
+expect((await db.query(`select status from public.assinatura_faturas where gateway_pagamento_id='pay_1'`)).rows[0].status==='paga','reenvio antigo de atraso não desfaz fatura paga');
+await sistema(`update public.organizations set suspensa=true, motivo_suspensao='Suspensão manual' where id='${o1}'`);
+await sistema(`select public.processar_pagamento_asaas('PAYMENT_CONFIRMED',(${pag('pay_2',0,'CONFIRMED')})::jsonb)`);
+expect((await db.query(`select suspensa from public.organizations where id='${o1}'`)).rows[0].suspensa===true,'pagamento não desfaz suspensão manual do master');
+expect((await as(U2, `select public.admin_financeiro() r`)).rows[0].r.mrr===valorAss.m,'painel financeiro calcula o MRR das assinaturas ativas');
+blocked=false;try{await as(U1, `select public.admin_financeiro()`);}catch{blocked=true;}
+expect(blocked,'cliente não acessa o painel financeiro da plataforma');
+expect((await as(U1, `select * from public.assinatura_faturas`)).rows.length===2,'dono acompanha as faturas mesmo suspenso');
+expect((await sistema(`select public.encerrar_assinatura_gateway('sub_teste','Excluída no Asaas') r`)).rows[0].r==='assinatura encerrada','assinatura excluída no Asaas é encerrada');
+await db.exec(`delete from public.assinatura_faturas; delete from public.assinaturas; update public.organizations set suspensa=false, motivo_suspensao=null where id='${o1}'`);
+
 // delete em cascata da org
 await as(U1, `delete from public.organizations where id = '${o1}'`);
 expect((await db.query(`select count(*)::int c from public.processos`)).rows[0].c === 0, 'excluir organização remove dados em cascata');

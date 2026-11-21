@@ -21,9 +21,15 @@ export default function MasterEntrar() {
       setEnviando(false)
       return setErro(mensagemErro(error))
     }
-    const { data: admin } = await supabase.rpc('is_platform_admin')
+    // Uma falha momentânea na checagem não deve ser lida como "sem acesso": tenta de novo antes de decidir.
+    let resposta = await supabase.rpc('is_platform_admin')
+    for (let i = 0; resposta.error && i < 2; i++) {
+      await new Promise((r) => setTimeout(r, 800 * (i + 1)))
+      resposta = await supabase.rpc('is_platform_admin')
+    }
     setEnviando(false)
-    if (admin !== true) {
+    if (resposta.error) return setErro('Login feito, mas não foi possível verificar o acesso master agora. Tente entrar de novo em instantes.')
+    if (resposta.data !== true) {
       await supabase.auth.signOut()
       return setErro('Esta conta não tem acesso ao console master.')
     }

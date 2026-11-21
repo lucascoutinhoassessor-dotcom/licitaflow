@@ -6,6 +6,14 @@ import { Aviso, Badge, Button, CabecalhoPagina, Campo, Card, Carregando, Input, 
 import { supabase, mensagemErro } from '@/lib/supabase'
 import { formatarData, formatarMoeda } from '@/lib/format'
 import { pagamentoAPI, NOMES_GATEWAY, type Cobranca } from '@/lib/pagamentos'
+import { AssinaturaPainel } from '@/components/AssinaturaPainel'
+import { useOrg } from '@/providers/OrgProvider'
+
+/** Só no app do cliente (dentro do OrgProvider): a assinatura da organização ativa. */
+function AssinaturaDaOrg() {
+  const {org}=useOrg()
+  return org ? <div className="mb-6"><AssinaturaPainel org={org.id}/></div> : null
+}
 
 export default function Cobrancas({ master=false }: {master?:boolean}) {
   const qc=useQueryClient()
@@ -42,7 +50,9 @@ export default function Cobrancas({ master=false }: {master?:boolean}) {
   const lista=q.data ?? []
   const recebido=lista.filter(c=>c.status==='paga').reduce((v,c)=>v+c.valor_centavos,0)
   const aberto=lista.filter(c=>c.status!=='paga').reduce((v,c)=>v+c.valor_centavos,0)
-  return <>{!master && <Link className="mb-4 inline-block text-sm text-primary hover:underline" to="/app">← Voltar ao painel</Link>}<CabecalhoPagina titulo={master?'Financeiro da plataforma':'Cobranças do LicitaFlow'} descricao={master?'Cobranças avulsas de serviços do LicitaFlow. Os totais consideram os 200 registros mais recentes.':'Acompanhe as cobranças da sua organização e acesse os links de pagamento.'} acoes={master && <Button onClick={()=>setNovo(true)}>Nova cobrança</Button>}/>
+  return <>{!master && <Link className="mb-4 inline-block text-sm text-primary hover:underline" to="/app">← Voltar ao painel</Link>}<CabecalhoPagina titulo={master?'Financeiro da plataforma':'Cobranças do LicitaFlow'} descricao={master?'Cobranças avulsas (fora da assinatura). Os totais consideram os 200 registros mais recentes.':'Sua assinatura, as faturas e cobranças avulsas da organização.'} acoes={master && <Button onClick={()=>setNovo(true)}>Nova cobrança</Button>}/>
+    {!master && <AssinaturaDaOrg/>}
+    {!master && <h2 className="mb-3 font-semibold">Cobranças avulsas</h2>}
     {master && <div className="mb-5 grid gap-3 sm:grid-cols-2"><Card className="p-5"><p className="text-sm text-muted-foreground">Pagamentos confirmados</p><p className="text-2xl font-semibold">{formatarMoeda(recebido/100)}</p></Card><Card className="p-5"><p className="text-sm text-muted-foreground">Em aberto / preparação</p><p className="text-2xl font-semibold">{formatarMoeda(aberto/100)}</p></Card></div>}
     {q.isLoading && <Carregando/>}{q.isError && <Aviso>Não foi possível carregar cobranças. Confira se a migração de pagamentos foi aplicada. <button className="underline" onClick={()=>q.refetch()}>Tentar novamente</button></Aviso>}
     <div className="space-y-3">{lista.map(c=><Card key={c.id} className="space-y-3 p-5"><div className="flex flex-wrap justify-between gap-2"><h2 className="font-semibold">{c.descricao}</h2><Badge cor={c.status==='paga'?'verde':'amarelo'}>{c.status}</Badge></div>{master && <p className="text-sm text-muted-foreground">{orgs.data?.find(o=>o.id===c.org_id)?.nome ?? c.org_id}</p>}<p>{formatarMoeda(c.valor_centavos/100)} · {NOMES_GATEWAY[c.gateway]} · vence {formatarData(c.vencimento)}</p><div className="flex flex-wrap items-center gap-3">
@@ -51,7 +61,7 @@ export default function Cobrancas({ master=false }: {master?:boolean}) {
       {master && c.checkout_url && c.status!=='paga' && <Button tamanho="sm" variante="contorno" disabled={!!ocupado} onClick={()=>{setRetorno({slug:'',transaction_nsu:''});setVerificar(c)}}>Conferir no provedor</Button>}
       {c.status==='revisao' && <p className="text-sm text-destructive">Confira a operação no gateway antes de emitir outra cobrança.</p>}
     </div></Card>)}</div>{!q.isLoading && !q.isError && !lista.length && <Card className="p-8 text-center text-sm text-muted-foreground">Nenhuma cobrança registrada.</Card>}
-    <p className="mt-4 text-xs text-muted-foreground">Cobranças avulsas. Pagar não altera o plano automaticamente. A gestão de assinatura recorrente será vinculada após a configuração e validação dos gateways.</p>
+    <p className="mt-4 text-xs text-muted-foreground">Cobranças avulsas não alteram o plano. Pagamentos de links Asaas são confirmados sozinhos pelo webhook; nos demais gateways, use “Conferir no provedor”.</p>
     <Modal aberto={novo} aoFechar={()=>{if(!ocupado)setNovo(false)}} titulo="Nova cobrança da plataforma"><form className="space-y-4" onSubmit={criar}>
       <Campo rotulo="Cliente" htmlFor="cb-org"><Select id="cb-org" required value={f.org} onChange={e=>setF({...f,org:e.target.value})}><option value="">Selecione</option>{orgs.data?.map(o=><option key={o.id} value={o.id}>{o.nome}</option>)}</Select></Campo>
       <Campo rotulo="Descrição" htmlFor="cb-desc"><Input id="cb-desc" required minLength={3} maxLength={200} value={f.descricao} onChange={e=>setF({...f,descricao:e.target.value})}/></Campo>

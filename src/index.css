@@ -80,7 +80,22 @@
     --border: 240 5% 17%;
     --input: 240 5% 22%;
     --ring: 38 92% 50%;
+    color-scheme: dark; /* barras de rolagem e controles nativos escuros no console */
   }
+
+  /* Rolagem discreta: fina, transparente e só aparece ao passar o mouse (menus laterais). */
+  .rolagem-discreta {
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+  }
+  .rolagem-discreta:hover,
+  .rolagem-discreta:focus-within {
+    scrollbar-color: hsl(var(--muted-foreground) / 0.35) transparent;
+  }
+  .console ::-webkit-scrollbar { width: 10px; height: 10px; }
+  .console ::-webkit-scrollbar-track { background: transparent; }
+  .console ::-webkit-scrollbar-thumb { background: hsl(var(--muted) ); border-radius: 9999px; border: 3px solid transparent; background-clip: padding-box; }
+  .console ::-webkit-scrollbar-thumb:hover { background: hsl(var(--muted-foreground) / 0.5); background-clip: padding-box; }
 
   * {
     @apply border-border;

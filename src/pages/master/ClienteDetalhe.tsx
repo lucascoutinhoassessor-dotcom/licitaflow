@@ -5,6 +5,8 @@ import { toast } from 'sonner'
 import { supabase, mensagemErro } from '@/lib/supabase'
 import { formatarMoeda, formatarDataHora } from '@/lib/format'
 import { Aviso, Badge, Button, CabecalhoPagina, Campo, Card, Carregando, Input, Modal, Select } from '@/components/ui'
+import { AssinaturaPainel } from '@/components/AssinaturaPainel'
+import { EditarOrg, type OrgAdmin } from './Organizacoes'
 
 interface Membro { id:string; nome:string|null; email:string; papel:string; ultimo_acesso:string|null }
 interface Cliente {
@@ -19,6 +21,9 @@ export default function ClienteDetalhe() {
   const [papel,setPapel]=useState('leitor')
   const [motivo,setMotivo]=useState('')
   const [salvando,setSalvando]=useState(false)
+  const [editandoConta,setEditandoConta]=useState(false)
+  const orgs=useQuery({queryKey:['admin-orgs'],queryFn:async()=>{const {data,error}=await supabase.rpc('admin_organizacoes');if(error)throw error;return data as OrgAdmin[]}})
+  const conta=orgs.data?.find(o=>o.id===id)
   const q=useQuery({queryKey:['admin-cliente',id],enabled:!!id,queryFn:async()=>{
     const {data,error}=await supabase.rpc('admin_cliente',{p_org:id})
     if(error) throw error
@@ -41,7 +46,14 @@ export default function ClienteDetalhe() {
   if(!c) return null
   return <>
     <Link className="mb-4 inline-block text-sm text-primary hover:underline" to="/master/organizacoes">← Organizações</Link>
-    <CabecalhoPagina titulo={c.nome} descricao="Ficha do cliente: empresas, equipe e uso da plataforma. Alterações de acesso são auditadas."/>
+    <CabecalhoPagina titulo={c.nome} descricao="Ficha do cliente: conta, assinatura, empresas, equipe e uso. Alterações são auditadas." acoes={conta && <Button variante="contorno" onClick={()=>setEditandoConta(true)}>Plano, teste e suspensão</Button>}/>
+    {conta && <div className="mb-5 flex flex-wrap gap-2">
+      <Badge cor={conta.suspensa?'vermelho':'verde'}>{conta.suspensa?`Suspensa${conta.motivo_suspensao?': '+conta.motivo_suspensao:''}`:'Acesso liberado'}</Badge>
+      <Badge cor="azul">Plano: {conta.plano}</Badge>
+      {conta.plano==='trial' && <Badge cor="amarelo">Teste até {new Date(conta.trial_ate+'T12:00:00').toLocaleDateString('pt-BR')}</Badge>}
+      {conta.dono_email && <Badge>Dono: {conta.dono_email}</Badge>}
+    </div>}
+    {id && <div className="mb-6"><AssinaturaPainel org={id} master/></div>}
     <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-3">{[
       ['Processos',c.processos],['Contratos',c.contratos],['Documentos',c.documentos],['Prazos pendentes',c.prazos_pendentes],['Recebido nos contratos',formatarMoeda(c.recebido)],['A receber nos contratos',formatarMoeda(c.a_receber)],
     ].map(([r,v])=><Card className="p-4" key={r}><p className="text-sm text-muted-foreground">{r}</p><p className="mt-1 text-2xl font-semibold">{v}</p></Card>)}</div>
@@ -50,6 +62,7 @@ export default function ClienteDetalhe() {
       <Card className="divide-y"><h2 className="p-4 font-semibold">Empresas ({c.empresas.length})</h2>{c.empresas.map(e=><div className="p-4" key={e.id}><p className="font-medium">{e.nome} {!e.ativa && <Badge>Inativa</Badge>}</p><p className="text-sm text-muted-foreground">{e.cnpj} · {e.uf ?? 'UF não informada'}</p></div>)}{!c.empresas.length && <p className="p-4 text-sm text-muted-foreground">Nenhuma empresa cadastrada.</p>}</Card>
       <Card className="divide-y"><h2 className="p-4 font-semibold">Equipe ({c.membros.length})</h2>{c.membros.map(m=><div className="space-y-2 p-4" key={m.id}><p className="break-all font-medium">{m.nome || m.email}</p><p className="break-all text-sm text-muted-foreground">{m.email}</p><p className="text-xs text-muted-foreground">Último acesso: {formatarDataHora(m.ultimo_acesso)}</p><div className="flex items-center justify-between gap-2"><Badge>{m.papel}</Badge>{m.papel!=='owner' && <Button tamanho="sm" variante="contorno" onClick={()=>{setMembro(m);setPapel(m.papel);setMotivo('')}}>Alterar acesso</Button>}</div></div>)}</Card>
     </div>
+    <Modal aberto={editandoConta && !!conta} aoFechar={()=>setEditandoConta(false)} titulo={conta?.nome ?? ''}>{conta && <EditarOrg org={conta} aoFechar={()=>{setEditandoConta(false);qc.invalidateQueries({queryKey:['admin-cliente',id]})}}/>}</Modal>
     <Modal aberto={!!membro} aoFechar={()=>{if(!salvando)setMembro(null)}} titulo="Alterar permissão do membro">
       <div className="space-y-4"><p className="break-all text-sm">{membro?.email}</p><Campo rotulo="Papel" htmlFor="membro-papel"><Select id="membro-papel" value={papel} onChange={e=>setPapel(e.target.value)}><option value="admin">Administrador do cliente</option><option value="membro">Membro</option><option value="leitor">Somente leitura</option></Select></Campo><Campo rotulo="Motivo da alteração" htmlFor="membro-motivo"><Input id="membro-motivo" value={motivo} onChange={e=>setMotivo(e.target.value)} minLength={5} maxLength={1000}/></Campo><Button carregando={salvando} disabled={motivo.trim().length<5} onClick={salvar}>Confirmar alteração</Button></div>
     </Modal>

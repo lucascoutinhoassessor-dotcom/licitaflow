@@ -53,6 +53,9 @@ const Cobrancas = lazy(() => import('@/pages/app/Cobrancas'))
 const Integracoes = lazy(() => import('@/pages/master/Integracoes'))
 const ConfiguracoesMaster = lazy(() => import('@/pages/master/Configuracoes'))
 const MasterAtividade = lazy(() => import('@/pages/master/Atividade'))
+const MasterFinanceiro = lazy(() => import('@/pages/master/Financeiro'))
+const MasterAssinaturas = lazy(() => import('@/pages/master/Assinaturas'))
+const MasterRanking = lazy(() => import('@/pages/master/Ranking'))
 const NaoEncontrada = lazy(() => import('@/pages/NaoEncontrada'))
 
 function ExigeLogin({ children }: { children: ReactNode }) {
@@ -81,9 +84,10 @@ function ExigeOrganizacao() {
 /** Guarda do console master: independente do app do cliente (não exige organização). */
 function ExigeMaster() {
   const { user, carregando: carregandoAuth } = useAuth()
-  const { ehAdmin, carregando } = useEhAdmin()
+  const { ehAdmin, carregando, erro, tentarDeNovo } = useEhAdmin()
   if (carregandoAuth || (user && carregando)) return <Carregando telaCheia />
   if (!user) return <Navigate to="/master/entrar" replace />
+  if (erro) return <AcessoNegadoMaster falhaVerificacao aoTentar={tentarDeNovo} />
   if (!ehAdmin) return <AcessoNegadoMaster />
   return (
     <Suspense fallback={<Carregando telaCheia />}>
@@ -152,7 +156,10 @@ export default function App() {
             <Route path="avisos" element={<Avisos master />} />
             <Route path="relatorios" element={<RelatoriosMaster />} />
             <Route path="planos" element={<Planos />} />
-            <Route path="financeiro" element={<Cobrancas master />} />
+            <Route path="financeiro" element={<MasterFinanceiro />} />
+            <Route path="assinaturas" element={<MasterAssinaturas />} />
+            <Route path="cobrancas" element={<Cobrancas master />} />
+            <Route path="ranking" element={<MasterRanking />} />
             <Route path="integracoes" element={<Integracoes />} />
             <Route path="configuracoes" element={<ConfiguracoesMaster />} />
             <Route path="atividade" element={<MasterAtividade />} />
