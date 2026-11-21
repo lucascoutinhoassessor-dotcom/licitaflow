@@ -1,6 +1,7 @@
 import { useMemo, useState, type DragEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { CalendarClock, Gavel, KanbanSquare, List, Plus, Search } from 'lucide-react'
+import { AnimatePresence, LayoutGroup, motion } from 'framer-motion'
 import { toast } from 'sonner'
 import { Badge, Button, CabecalhoPagina, Card, Carregando, Input, Modal, Select, Vazio } from '@/components/ui'
 import { BadgeEtapa } from '@/components/Situacoes'
@@ -20,13 +21,37 @@ function lerVisao(): 'kanban' | 'lista' {
   }
 }
 
-function CartaoProcesso({ p, arrastavel, nomeEmpresa }: { p: Processo; arrastavel?: boolean; nomeEmpresa?: string }) {
+// Cor de cada etapa em hex (para bordas e brilhos com transparência nas colunas do kanban).
+const HEX_ETAPA: Record<Etapa, string> = {
+  captacao: '#94a3b8',
+  analise: '#0ea5e9',
+  proposta: '#6366f1',
+  disputa: '#8b5cf6',
+  habilitacao: '#f59e0b',
+  recurso: '#f97316',
+  homologado: '#10b981',
+  perdido: '#ef4444',
+  desistencia: '#a1a1aa',
+}
+
+function CartaoProcesso({ p, cor, arrastavel, nomeEmpresa }: { p: Processo; cor: string; arrastavel?: boolean; nomeEmpresa?: string }) {
+  const [arrastando, setArrastando] = useState(false)
   return (
     <Link
       to={`/app/processos/${p.id}`}
       draggable={arrastavel}
-      onDragStart={(e) => e.dataTransfer.setData('text/processo', p.id)}
-      className="block rounded-lg border bg-card p-3 shadow-sm transition hover:border-primary/40 hover:shadow"
+      onDragStart={(e) => {
+        e.dataTransfer.setData('text/processo', p.id)
+        e.dataTransfer.effectAllowed = 'move'
+        setArrastando(true)
+      }}
+      onDragEnd={() => setArrastando(false)}
+      style={{ borderLeftColor: cor }}
+      className={cn(
+        'block rounded-lg border border-l-4 bg-card p-3 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-lg',
+        arrastavel && 'cursor-grab active:cursor-grabbing',
+        arrastando && 'rotate-2 scale-95 opacity-40',
+      )}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="text-xs text-muted-foreground">
@@ -62,6 +87,7 @@ export default function Processos() {
   const [modalidade, setModalidade] = useState('')
   const [mostrarFinais, setMostrarFinais] = useState(false)
   const [sobre, setSobre] = useState<Etapa | null>(null)
+  const [movidos, setMovidos] = useState<Record<string, Etapa>>({})
   const q = useLista<Processo>('processos', { ordem: ['data_abertura', true] })
   const { salvar } = useSalvar('processos', ['processo_eventos'])
   const mostrarEmpresa = !empresa && empresas.length > 1
@@ -86,11 +112,22 @@ export default function Processos() {
 
   const colunas = mostrarFinais ? [...ETAPAS_ATIVAS, ...ETAPAS_FINAIS] : ETAPAS_ATIVAS
 
+  // Etapa mostrada já na hora do soltar, para o cartão animar sem esperar o servidor.
+  const etapaDe = (p: Processo) => movidos[p.id] ?? p.etapa
+
   async function mover(id: string, etapa: Etapa) {
     const p = q.data?.find((x) => x.id === id)
-    if (!p || p.etapa === etapa) return
-    await salvar.mutateAsync({ id, dados: { etapa } })
-    toast.success(`Movido para ${ETAPAS[etapa]}.`)
+    if (!p || etapaDe(p) === etapa) return
+    setMovidos((m) => ({ ...m, [id]: etapa }))
+    try {
+      await salvar.mutateAsync({ id, dados: { etapa } })
+      await q.refetch() // só solta a etapa local depois que a lista já veio atualizada
+      toast.success(`Movido para ${ETAPAS[etapa]}.`)
+    } catch {
+      /* o erro já aparece no aviso do useSalvar; o cartão volta para a coluna de origem */
+    } finally {
+      setMovidos(({ [id]: _, ...resto }) => resto)
+    }
   }
 
   const soltar = (etapa: Etapa) => (e: DragEvent) => {
@@ -160,10 +197,13 @@ export default function Processos() {
           <label className="mb-3 flex items-center gap-2 text-sm text-muted-foreground">
             <input type="checkbox" checked={mostrarFinais} onChange={(e) => setMostrarFinais(e.target.checked)} /> Mostrar ganhos, perdidos e desistências
           </label>
-          <div className="rolagem-kanban -mx-4 flex gap-4 overflow-x-auto px-4 pb-4 lg:-mx-8 lg:px-8">
+          <LayoutGroup>
+          <motion.div layoutScroll className="rolagem-kanban -mx-4 flex gap-4 overflow-x-auto px-4 pb-4 lg:-mx-8 lg:px-8">
             {colunas.map((etapa) => {
-              const itens = lista.filter((p) => p.etapa === etapa)
+              const itens = lista.filter((p) => etapaDe(p) === etapa)
               const total = itens.reduce((a, p) => a + (p.valor_estimado ?? 0), 0)
+              const cor = HEX_ETAPA[etapa]
+              const ativa = sobre === etapa
               return (
                 <div
                   key={etapa}
@@ -171,27 +211,61 @@ export default function Processos() {
                     e.preventDefault()
                     setSobre(etapa)
                   }}
-                  onDragLeave={() => setSobre(null)}
+                  onDragLeave={(e) => {
+                    if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setSobre(null)
+                  }}
                   onDrop={soltar(etapa)}
-                  className={cn('flex min-h-[calc(100dvh-20rem)] w-[85vw] max-w-[22rem] shrink-0 flex-col rounded-xl bg-muted/50 p-3 transition-colors sm:w-80 xl:w-[22rem]', sobre === etapa && 'bg-primary/10 ring-2 ring-primary/40')}
+                  style={{
+                    borderColor: ativa ? cor : `${cor}40`,
+                    backgroundImage: `linear-gradient(to bottom, ${cor}${ativa ? '2e' : '17'}, ${cor}05 45%, transparent)`,
+                    boxShadow: ativa ? `0 0 0 3px ${cor}33, 0 12px 32px -12px ${cor}66` : undefined,
+                  }}
+                  className={cn(
+                    'relative flex min-h-[calc(100dvh-20rem)] w-[85vw] max-w-[22rem] shrink-0 flex-col overflow-hidden rounded-2xl border bg-muted/30 p-3 pt-4 transition-all duration-200 sm:w-80 xl:w-[22rem]',
+                    ativa && 'scale-[1.01]',
+                  )}
                 >
-                  <div className="flex items-center justify-between px-2 py-2">
+                  <span className="absolute inset-x-0 top-0 h-1" style={{ backgroundColor: cor }} />
+                  <div className="mb-1 flex items-center justify-between border-b px-1 pb-3" style={{ borderColor: `${cor}33` }}>
                     <div className="flex items-center gap-2 text-base font-semibold">
-                      <span className={cn('h-2.5 w-2.5 rounded-full', COR_ETAPA[etapa])} />
+                      <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: cor, boxShadow: `0 0 8px ${cor}` }} />
                       {ETAPAS[etapa]}
-                      <span className="rounded-full bg-background px-1.5 text-xs tabular-nums text-muted-foreground">{itens.length}</span>
+                      <span className="rounded-full px-2 text-xs tabular-nums" style={{ backgroundColor: `${cor}26`, color: cor }}>
+                        {itens.length}
+                      </span>
                     </div>
                     {total > 0 && <span className="text-[11px] tabular-nums text-muted-foreground">{formatarMoeda(total)}</span>}
                   </div>
-                  <div className="flex flex-1 flex-col gap-3">
-                    {itens.map((p) => (
-                      <CartaoProcesso key={p.id} p={p} arrastavel={podeEditar} nomeEmpresa={mostrarEmpresa ? nomeEmpresa(p.empresa_id) : undefined} />
-                    ))}
+                  <div className="flex flex-1 flex-col gap-3 pt-2">
+                    <AnimatePresence initial={false} mode="popLayout">
+                      {itens.map((p) => (
+                        <motion.div
+                          key={p.id}
+                          layout
+                          layoutId={`processo-${p.id}`}
+                          initial={{ opacity: 0, scale: 0.9 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          exit={{ opacity: 0, scale: 0.9 }}
+                          transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+                        >
+                          <CartaoProcesso p={p} cor={cor} arrastavel={podeEditar} nomeEmpresa={mostrarEmpresa ? nomeEmpresa(p.empresa_id) : undefined} />
+                        </motion.div>
+                      ))}
+                    </AnimatePresence>
+                    {itens.length === 0 && (
+                      <div
+                        className="flex flex-1 items-center justify-center rounded-xl border-2 border-dashed p-4 text-center text-xs text-muted-foreground transition-colors"
+                        style={{ borderColor: ativa ? cor : `${cor}30`, color: ativa ? cor : undefined }}
+                      >
+                        {ativa ? 'Solte aqui' : 'Nenhum processo nesta etapa'}
+                      </div>
+                    )}
                   </div>
                 </div>
               )
             })}
-          </div>
+          </motion.div>
+          </LayoutGroup>
           <p className="text-xs text-muted-foreground">Dica: arraste os cartões entre as colunas para mudar a etapa (no celular, mude pela página do processo).</p>
         </>
       ) : (
