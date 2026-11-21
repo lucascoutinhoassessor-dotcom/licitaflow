@@ -22,7 +22,8 @@ export function resumirPrecos(compras) {
       data: c.dataResultado ?? c.dataCompra ?? null, preco: Number(c.precoUnitario), quantidade: Number(c.quantidade) || null,
       unidade: (c.siglaUnidadeFornecimento ?? c.siglaUnidadeMedida ?? c.nomeUnidadeFornecimento ?? c.nomeUnidadeMedida ?? 'UN').toString().trim().toUpperCase() || 'UN',
       descricao: c.descricaoItem ?? '', fornecedor: c.nomeFornecedor ?? null, cnpj: c.niFornecedor ?? null, marca: c.marca && c.marca !== 'null' ? c.marca : null,
-      orgao: c.nomeOrgao ?? c.nomeUasg ?? null, uasg: c.codigoUasg ?? null, uf: c.estado ?? null, municipio: c.municipio ?? null, modalidade: c.modalidade ?? null, idCompra: String(c.idCompra ?? ''),
+      orgao: c.nomeOrgao ?? c.nomeUasg ?? null, unidadeCompradora: c.nomeUasg ?? null, uasg: c.codigoUasg ?? null, uf: c.estado ?? null, municipio: c.municipio ?? null, modalidade: c.modalidade ?? null, idCompra: String(c.idCompra ?? ''),
+      numeroItem: Number(c.numeroItemCompra) || null, objeto: c.objetoCompra ?? null, detalhe: c.descricaoDetalhadaItem ?? null, dataCompra: c.dataCompra ?? null,
     }))
     .filter((l) => Number.isFinite(l.preco) && l.preco > 0 && l.preco < 1e9)
   const porUnidade = new Map()

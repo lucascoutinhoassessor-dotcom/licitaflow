@@ -5,6 +5,7 @@ import { ArrowLeft, ChevronDown, ExternalLink, FileText, Tag, Trophy } from 'luc
 import { Badge, Button, Card, Carregando, Vazio } from '@/components/ui'
 import { abrirCompra, linkCompraComprasGov, type CompraFederal, type ItemCompraFederal } from '@/lib/compraFederal'
 import { rotaPorControle } from '@/lib/analiseEmpresa'
+import { linkPesquisaMarca } from '@/lib/precos'
 import { formatarCnpj, formatarData, formatarMoeda } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
@@ -30,7 +31,8 @@ function Item({ item }: { item: ItemCompraFederal }) {
             <div><dt className="text-[11px] font-semibold uppercase text-muted-foreground">Tipo</dt><dd className="mt-1 font-semibold">{item.tipo ?? '—'}</dd></div>
             <div><dt className="text-[11px] font-semibold uppercase text-muted-foreground">Quantidade</dt><dd className="mt-1 font-semibold">{item.quantidade?.toLocaleString('pt-BR') ?? '—'} {item.unidade ?? ''}</dd></div>
             <div><dt className="text-[11px] font-semibold uppercase text-muted-foreground">Estimado (unit.)</dt><dd className="mt-1 font-semibold">{item.sigiloso ? 'Sigiloso' : item.valorEstimado ? formatarMoeda(item.valorEstimado) : '—'}</dd></div>
-            <div><dt className="text-[11px] font-semibold uppercase text-muted-foreground">Marca vencedora</dt><dd className="mt-1 font-semibold">{item.marca ?? 'Não informada'}</dd></div>
+            <div><dt className="text-[11px] font-semibold uppercase text-muted-foreground">Marca vencedora</dt><dd className="mt-1 font-semibold">{item.marca ?? 'Não informada'}</dd>
+              {item.marca && <a href={linkPesquisaMarca(item.marca, item.resumo ?? item.descricao)} target="_blank" rel="noopener noreferrer" className="mt-1 inline-flex h-7 items-center gap-1 rounded-full border px-2.5 text-xs font-semibold hover:bg-muted">Pesquisar no Google</a>}</div>
           </dl>
           <p className="mt-3 whitespace-pre-wrap break-words text-muted-foreground">{item.descricao}</p>
           <div className="mt-2 flex flex-wrap gap-2">{[item.criterio, item.beneficio, item.situacao].filter(Boolean).map((t) => <Badge key={t}>{t}</Badge>)}</div>

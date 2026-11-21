@@ -30,3 +30,13 @@ export async function abrirCompra(idCompra: string, signal?: AbortSignal): Promi
 export function linkCompraComprasGov(idCompra: string) {
   return `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/public/compras/acompanhamento-compra?compra=${encodeURIComponent(idCompra)}`
 }
+
+/** Número de controle do PNCP de uma compra federal (para abrir a página do edital). */
+export async function controleDaCompra(idCompra: string, signal?: AbortSignal): Promise<string> {
+  const { data } = await supabase.auth.getSession()
+  if (!data.session) throw new Error('Entre na sua conta.')
+  const r = await fetch(`/api/compra?so=controle&idCompra=${encodeURIComponent(idCompra)}`, { headers: { Authorization: `Bearer ${data.session.access_token}` }, signal })
+  const corpo = await r.json().catch(() => null)
+  if (!r.ok || !corpo?.controle) throw new Error(corpo?.error ?? 'Não foi possível abrir o edital desta compra.')
+  return corpo.controle as string
+}

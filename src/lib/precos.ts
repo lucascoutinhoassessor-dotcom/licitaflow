@@ -6,6 +6,7 @@ export interface CompraPreco {
   data: string | null; preco: number; quantidade: number | null; unidade: string; descricao: string
   fornecedor: string | null; cnpj: string | null; marca: string | null; orgao: string | null; uasg: string | null
   uf: string | null; municipio: string | null; modalidade: number | null; idCompra: string
+  numeroItem: number | null; objeto: string | null; detalhe: string | null; dataCompra: string | null; unidadeCompradora: string | null
 }
 export interface HistoricoPrecos {
   tipo: 'M' | 'S'; codigo: number; incompleto: boolean; total: number
@@ -31,4 +32,17 @@ export async function historicoPrecos(item: Pick<ItemCatalogo, 'tipo' | 'codigo'
   const corpo = await r.json().catch(() => null)
   if (!r.ok) throw new Error(corpo?.error ?? 'Não foi possível consultar os preços agora.')
   return corpo as HistoricoPrecos
+}
+
+const MODALIDADES_SIASG: Record<number, string> = { 1: 'Convite', 2: 'Tomada de preços', 3: 'Concorrência', 4: 'Concurso', 5: 'Pregão eletrônico', 6: 'Dispensa', 7: 'Inexigibilidade', 20: 'Concorrência eletrônica', 22: 'Leilão' }
+/** Nome da modalidade (código do Compras.gov) e número/ano da compra a partir do código idCompra (UASG+modalidade+número+ano). */
+export function identificacaoCompra(idCompra: string, modalidade: number | null) {
+  const m = /^(\d{6})(\d{2})(\d{5})(\d{4})$/.exec(idCompra)
+  const nome = MODALIDADES_SIASG[modalidade ?? (m ? Number(m[2]) : 0)] ?? 'Compra'
+  return m ? `${nome} Nº ${Number(m[3])}/${m[4]}` : nome
+}
+/** Pesquisa da marca no Google (abre em nova aba). */
+export function linkPesquisaMarca(marca: string, descricao?: string | null) {
+  const termo = [marca, (descricao ?? '').split(/[,:]/)[0]].filter(Boolean).join(' ').slice(0, 120)
+  return `https://www.google.com/search?q=${encodeURIComponent(termo)}`
 }

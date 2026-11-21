@@ -6,10 +6,14 @@ import { Badge, Button, CabecalhoPagina, Card, Carregando, Input, Select, Vazio 
 import { buscarCatalogo, historicoPrecos, type ItemCatalogo } from '@/lib/precos'
 import { formatarData, formatarMoeda } from '@/lib/format'
 import { normalizar } from '@/lib/portais'
+import CartaoCompraPreco from '@/components/CartaoCompraPreco'
 import { cn } from '@/lib/utils'
 
 const UFS = 'AC AL AP AM BA CE DF ES GO MA MT MS MG PA PB PR PE PI RJ RN RS RO RR SC SP SE TO'.split(' ')
 const iso = (d: Date) => d.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
+/** Data de N anos atrás (o Painel de Preços é consultado em até 6 anos). */
+const anosAtras = (n: number) => { const d = new Date(); d.setFullYear(d.getFullYear() - n); return iso(d) }
+const limiteAntigo = anosAtras(6)
 
 export default function HistoricoPrecos() {
   const [termo, setTermo] = useState(''), [tipo, setTipo] = useState<'' | 'M' | 'S'>('')
@@ -60,9 +64,17 @@ export default function HistoricoPrecos() {
         {item && <>
           <Card className="mb-5 grid gap-3 p-4 sm:grid-cols-[repeat(3,minmax(0,1fr))_auto] sm:items-end">
             <label className="text-sm"><span className="mb-1 block font-medium">UF do órgão</span><Select value={filtros.uf} onChange={(e) => setFiltros((f) => ({ ...f, uf: e.target.value }))}><option value="">Brasil inteiro</option>{UFS.map((u) => <option key={u}>{u}</option>)}</Select></label>
-            <label className="text-sm"><span className="mb-1 block font-medium">Compras de</span><Input type="date" value={filtros.de} max={filtros.ate} onChange={(e) => setFiltros((f) => ({ ...f, de: e.target.value }))} /></label>
+            <label className="text-sm"><span className="mb-1 block font-medium">Compras de</span><Input type="date" value={filtros.de} min={limiteAntigo} max={filtros.ate} onChange={(e) => setFiltros((f) => ({ ...f, de: e.target.value < limiteAntigo ? limiteAntigo : e.target.value }))} /></label>
             <label className="text-sm"><span className="mb-1 block font-medium">Até</span><Input type="date" value={filtros.ate} min={filtros.de} onChange={(e) => setFiltros((f) => ({ ...f, ate: e.target.value }))} /></label>
             <span className="text-xs text-muted-foreground">Atualiza ao mudar.</span>
+            <div className="flex flex-wrap gap-2 sm:col-span-4" role="group" aria-label="Período rápido">
+              {[[1, '1 ano'], [2, '2 anos'], [6, '6 anos']].map(([anos, rotulo]) => {
+                const de = anosAtras(anos as number)
+                const ativo = filtros.de === de && filtros.ate === iso(new Date())
+                return <button key={rotulo} type="button" aria-pressed={ativo} onClick={() => setFiltros((f) => ({ ...f, de, ate: iso(new Date()) }))}
+                  className={cn('h-9 rounded-full border px-4 text-sm font-semibold', ativo ? 'border-primary bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:text-foreground')}>{rotulo}</button>
+              })}
+            </div>
           </Card>
 
           {precos.isLoading ? <Carregando texto="Consultando o Painel de Preços…" /> : precos.isError ? <Card className="p-4 text-sm">{(precos.error as Error).message} <button className="font-semibold text-primary underline" onClick={() => precos.refetch()}>Tentar novamente</button></Card> : precos.data && <>
@@ -87,18 +99,7 @@ export default function HistoricoPrecos() {
                   <h2 className="font-semibold">Compras ({compras.length}{precos.data.compras.length < precos.data.total ? ` das ${precos.data.compras.length} mais recentes` : ''})</h2>
                   <Input className="sm:w-72" placeholder="Filtrar por descrição, marca ou fornecedor" value={refino} onChange={(e) => setRefino(e.target.value)} />
                 </div>
-                <ul className="divide-y">
-                  {compras.map((c, i) => (
-                    <li key={`${c.idCompra}-${i}`} className="grid gap-1 py-3 text-sm sm:grid-cols-[1fr_auto] sm:gap-4">
-                      <div className="min-w-0">
-                        <p className="line-clamp-2 break-words font-medium">{/^\d{15,20}$/.test(c.idCompra) ? <Link className="text-sky-700 hover:underline dark:text-sky-300" to={`/app/compras/${c.idCompra}`}>{c.descricao || 'Sem descrição'}</Link> : (c.descricao || 'Sem descrição')}</p>
-                        <p className="text-xs text-muted-foreground">{formatarData(c.data)} · {c.orgao ?? 'Órgão não informado'}{c.municipio ? ` · ${c.municipio}` : ''}{c.uf ? `/${c.uf}` : ''}</p>
-                        <p className="text-xs text-muted-foreground">{c.fornecedor ? <>Vencedor: {c.cnpj && /^\d{14}$/.test(c.cnpj) ? <Link className="text-sky-700 hover:underline dark:text-sky-300" to={`/app/analise-empresas/${c.cnpj}`}>{c.fornecedor}</Link> : c.fornecedor}</> : 'Vencedor não informado'}{c.marca ? ` · Marca: ${c.marca}` : ''}</p>
-                      </div>
-                      <div className="text-left sm:text-right"><p className="text-base font-bold tabular-nums">{formatarMoeda(c.preco)}</p><p className="text-xs text-muted-foreground">por {c.unidade}{c.quantidade ? ` · qtd. ${c.quantidade.toLocaleString('pt-BR')}` : ''}</p>{/^\d{15,20}$/.test(c.idCompra) && <Link to={`/app/compras/${c.idCompra}`} className="mt-1 inline-flex h-8 items-center rounded-full border px-3 text-xs font-semibold hover:bg-muted">Ver compra, empresas e marcas</Link>}</div>
-                    </li>
-                  ))}
-                </ul>
+                <div className="space-y-3">{compras.map((c, i) => <CartaoCompraPreco key={`${c.idCompra}-${c.numeroItem}-${i}`} compra={c} />)}</div>
                 <p className="mt-3 text-xs text-muted-foreground">Fonte: Painel de Preços do governo federal (dados abertos do Compras.gov.br), consultado na hora.{precos.data.incompleto ? ' Muitas compras no período: a análise considera as 2.000 mais recentes.' : ''}</p>
               </Card>
             </>}

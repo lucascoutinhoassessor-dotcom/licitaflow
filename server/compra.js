@@ -84,6 +84,11 @@ export default async function handler(req, res) {
     const usuario = await usuarioLogado(base, anon, token)
     if (!usuario) return res.status(401).json({ error: 'Entre na sua conta' })
     if (excedeuLimite('compra', usuario)) return res.status(429).json({ error: 'Muitas consultas em pouco tempo. Aguarde um minuto e tente de novo.' })
+    if (req.query?.so === 'controle') {
+      const c = await emCache('compra-controle', idCompra, 60 * 60_000, async () => (await obter('modulo-contratacoes/1.1_consultarContratacoes_PNCP_14133_Id', { tipo: 'idCompra', codigo: idCompra }))[0] ?? null)
+      if (!c?.numeroControlePNCP) return res.status(404).json({ error: 'Esta compra não tem edital no PNCP (pode ser anterior à Lei 14.133).' })
+      return res.json({ controle: c.numeroControlePNCP })
+    }
     const corpo = await emCache('compra', idCompra, 10 * 60_000, async () => {
     const [contratacoes, itens, resultados] = await Promise.all([
       obter('modulo-contratacoes/1.1_consultarContratacoes_PNCP_14133_Id', { tipo: 'idCompra', codigo: idCompra }),
