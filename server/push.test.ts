@@ -10,7 +10,7 @@ function resposta() {
   return { r, res }
 }
 
-function banco(opcoes: { admin?: boolean; vapid?: boolean; aviso?: boolean } = {}) {
+function banco(opcoes: { admin?: boolean; vapid?: boolean; aviso?: boolean; orgIds?: string[] } = {}) {
   const chamadas: Chamada[] = []
   const fetcher = vi.fn(async (url: string, init: RequestInit) => {
     const u = url.replace('https://db', '')
@@ -20,7 +20,8 @@ function banco(opcoes: { admin?: boolean; vapid?: boolean; aviso?: boolean } = {
     if (u === '/auth/v1/user') return ok({ id: 'u1' })
     if (u.startsWith('/rest/v1/rpc/is_platform_admin')) return ok(opcoes.admin ?? false)
     if (u.startsWith('/rest/v1/push_vapid') && method === 'GET') return ok(opcoes.vapid === false && !chamadas.some(c => c.url.startsWith('/rest/v1/push_vapid') && c.method === 'POST') ? [] : [{ publica: 'PUB', privada: 'PRIV' }])
-    if (u.startsWith('/rest/v1/plataforma_avisos') && method === 'PATCH') return ok(opcoes.aviso === false ? [] : [{ id: AVISO, titulo: 'Novo recurso', texto: 'Texto\n do aviso', org_id: null }])
+    if (u.startsWith('/rest/v1/plataforma_avisos') && method === 'PATCH') return ok(opcoes.aviso === false ? [] : [{ id: AVISO, titulo: 'Novo recurso', texto: 'Texto\n do aviso', org_id: null, org_ids: opcoes.orgIds ?? null }])
+    if (u.startsWith('/rest/v1/plataforma_avisos') && method === 'GET') return ok([{ id: AVISO }])
     if (u.startsWith('/rest/v1/memberships')) return ok([{ user_id: 'u1' }, { user_id: 'u2' }, { user_id: 'u1' }])
     if (u.startsWith('/rest/v1/push_inscricoes') && method === 'GET') return ok([
       { id: 'a', endpoint: 'https://fcm.googleapis.com/a', p256dh: 'p', auth: 'k' },
@@ -100,5 +101,41 @@ describe('push', () => {
     await criarHandler({ webpush: wp, fetcher } as never)({ method: 'POST', headers: { authorization: 'Bearer t' }, body: { acao: 'enviar', aviso: AVISO } }, res)
     expect(r.body).toMatchObject({ enviados: 0 })
     expect(wp.sendNotification).not.toHaveBeenCalled()
+  })
+
+  it('o envio pelo master só reserva aviso já na hora e com push ligado', async () => {
+    const { fetcher, chamadas } = banco({ admin: true })
+    const { res } = resposta()
+    await criarHandler({ webpush: webpushFalso(), fetcher } as never)({ method: 'POST', headers: { authorization: 'Bearer t' }, body: { acao: 'enviar', aviso: AVISO } }, res)
+    const reserva = chamadas.find(c => c.method === 'PATCH')!.url
+    expect(reserva).toContain('enviar_push=is.true')
+    expect(reserva).toMatch(/publicar_em=lte\.\d{4}-/)
+  })
+
+  it('o agendador dispara os vencidos sem login, para vários clientes escolhidos', async () => {
+    const { fetcher, chamadas } = banco({ orgIds: ['o1', 'o2'] })
+    const wp = webpushFalso()
+    const { r, res } = resposta()
+    await criarHandler({ webpush: wp, fetcher } as never)({ method: 'POST', headers: {}, body: JSON.stringify({ acao: 'agendados' }) }, res)
+    expect(r.status).toBe(200)
+    expect(r.body).toEqual({ avisos: 1, enviados: 1, falhas: 1 })
+    expect(chamadas.some(c => c.url === '/auth/v1/user')).toBe(false)
+    expect(chamadas.find(c => c.url.startsWith('/rest/v1/memberships'))?.url).toContain('org_id=in.(o1,o2)')
+  })
+
+  it('o agendador não faz nada quando o aviso já saiu', async () => {
+    const { fetcher } = banco({ aviso: false })
+    const wp = webpushFalso()
+    const { r, res } = resposta()
+    await criarHandler({ webpush: wp, fetcher } as never)({ method: 'POST', headers: {}, body: { acao: 'agendados' } }, res)
+    expect(r.body).toEqual({ avisos: 0, enviados: 0, falhas: 0 })
+    expect(wp.sendNotification).not.toHaveBeenCalled()
+  })
+
+  it('outras ações continuam exigindo login', async () => {
+    const { fetcher } = banco({ admin: true })
+    const { r, res } = resposta()
+    await criarHandler({ webpush: webpushFalso(), fetcher } as never)({ method: 'POST', headers: {}, body: { acao: 'enviar', aviso: AVISO } }, res)
+    expect(r.status).toBe(401)
   })
 })

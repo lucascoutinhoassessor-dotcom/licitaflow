@@ -23,7 +23,8 @@ self.addEventListener('push', event => {
   event.waitUntil(self.registration.showNotification(d.titulo || 'LicitaFlow', {
     body: d.texto || '',
     icon: '/icons/app-192.png',
-    badge: '/icons/app-192.png',
+    // Ícone pequeno da barra de status (Android): silhueta branca transparente, senão vira um quadrado branco.
+    badge: '/icons/badge-96.png',
     tag: d.tag || 'licitaflow-aviso',
     renotify: true,
     vibrate: [200, 100, 200],

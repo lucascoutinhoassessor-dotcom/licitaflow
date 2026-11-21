@@ -222,6 +222,15 @@ expect((await as(U1, `select public.relatorio_cliente('${o1}','${e1}') r`)).rows
 await db.exec(`insert into public.platform_admins(user_id) values('${U2}')`);
 await as(U2, `select public.admin_arquivar_aviso('${av}')`);
 expect((await as(U1, `select id from public.plataforma_avisos`)).rows.length===1,'aviso arquivado desaparece do painel do cliente');
+await as(U2, `select public.admin_publicar_aviso('Agendado','Aviso futuro',null,null,null,now()+interval '1 hour')`);
+expect((await as(U1, `select id from public.plataforma_avisos`)).rows.length===1,'aviso agendado fica oculto até a hora');
+const avMulti=(await as(U2, `select public.admin_publicar_aviso('Vários','Para dois clientes',null,null,array['${o1}','${o2}']::uuid[]) id`)).rows[0].id;
+expect((await as(U1, `select id from public.plataforma_avisos where id='${avMulti}'`)).rows.length===1,'cliente escolhido recebe aviso para vários clientes');
+expect((await db.query(`select org_ids from public.plataforma_avisos where id='${avMulti}'`)).rows[0].org_ids.length===2,'aviso guarda os vários clientes');
+blocked=false;try{await as(U2, `select public.admin_publicar_aviso('Passado','Data antiga',null,null,null,now()-interval '1 day')`);}catch{blocked=true;}
+expect(blocked,'não agenda aviso no passado');
+blocked=false;try{await as(U2, `select public.admin_publicar_aviso('Expira','Antes do envio',null,now()+interval '1 hour',null,now()+interval '2 hours')`);}catch{blocked=true;}
+expect(blocked,'expiração precisa ser depois do envio agendado');
 await as(U2, `select public.admin_atualizar_org('${o1}', 'profissional', current_date, true, 'Teste de atendimento', null)`);
 expect(!!(await as(U1, `select public.abrir_chamado('${o1}', 'Solicito reativação', 'Preciso regularizar o acesso', 'suporte') id`)).rows[0].id,'cliente suspenso mantém canal de suporte');
 blocked=false;

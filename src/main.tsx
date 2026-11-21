@@ -24,6 +24,16 @@ createRoot(document.getElementById('root')!).render(
   </StrictMode>,
 )
 
+// Abertura animada (desenhada em index.html antes do JavaScript): sai depois que a animação termina.
+const splash = document.getElementById('lf-splash')
+if (splash) {
+  const animar = !window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  setTimeout(() => {
+    splash.classList.add('sair')
+    setTimeout(() => splash.remove(), 500)
+  }, Math.max(0, (animar ? 1750 : 300) - performance.now()))
+}
+
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => { navigator.serviceWorker.register('/sw.js').catch(() => { /* A aplicação online continua disponível. */ }) })
 }

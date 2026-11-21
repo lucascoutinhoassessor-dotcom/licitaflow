@@ -3,6 +3,7 @@
 // POST {acao:'inscrever'}  → grava a inscrição deste aparelho para o usuário logado
 // POST {acao:'cancelar'}   → remove a inscrição deste aparelho
 // POST {acao:'enviar'}     → (só master) manda o push de um aviso recém-publicado, uma vez só
+// POST {acao:'agendados'}  → (pg_cron, sem login) manda os pushes agendados que já venceram
 // As chaves VAPID são geradas no primeiro uso e guardadas em push_vapid (só a chave de serviço lê).
 import webpushPadrao from 'web-push'
 
@@ -51,13 +52,69 @@ export function criarHandler({ webpush = webpushPadrao, fetcher = fetch } = {}) 
       return gravada
     }
 
+    /** Envia o push de um aviso que já está na hora. Devolve null se já foi enviado, está agendado ou foi arquivado. */
+    async function enviarAviso(id) {
+      // Reserva o envio: só uma chamada consegue marcar push_enviado_em.
+      const agora = new Date().toISOString()
+      const reservados = await chamar(`/rest/v1/plataforma_avisos?id=eq.${id}&ativo=is.true&enviar_push=is.true&push_enviado_em=is.null&publicar_em=lte.${agora}&select=id,titulo,texto,org_id,org_ids`,
+        { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ push_enviado_em: agora }) })
+      const aviso = reservados?.[0]
+      if (!aviso) return null
+
+      // Destinatários: membros das organizações do aviso (ou de qualquer organização ativa, se for para todos).
+      const orgs = aviso.org_ids?.length ? aviso.org_ids : aviso.org_id ? [aviso.org_id] : []
+      const membros = await chamar(`/rest/v1/memberships?select=user_id,organizations!inner(suspensa)&organizations.suspensa=eq.false${orgs.length ? `&org_id=in.(${orgs.join(',')})` : ''}`)
+      const usuarios = [...new Set((membros ?? []).map(m => m.user_id))]
+      if (!usuarios.length) return { enviados: 0, falhas: 0 }
+      let inscricoes = []
+      for (let i = 0; i < usuarios.length; i += 100) {
+        const lote = usuarios.slice(i, i + 100).join(',')
+        inscricoes = inscricoes.concat(await chamar(`/rest/v1/push_inscricoes?select=id,endpoint,p256dh,auth&user_id=in.(${lote})`))
+      }
+      if (!inscricoes.length) return { enviados: 0, falhas: 0 }
+
+      const k = await chaves()
+      webpush.setVapidDetails(CONTATO, k.publica, k.privada)
+      const payload = JSON.stringify({ id: aviso.id, titulo: aviso.titulo, texto: resumo(aviso.texto), url: '/app/avisos', tag: aviso.id })
+      let enviados = 0, falhas = 0
+      const mortas = []
+      for (let i = 0; i < inscricoes.length; i += 25) {
+        await Promise.all(inscricoes.slice(i, i + 25).map(async s => {
+          try {
+            // urgency high: o Android/Chrome entrega na hora, sem esperar o aparelho "acordar" (modo soneca).
+            await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, payload, { TTL: 86400, urgency: 'high', timeout: 10000 })
+            enviados++
+          } catch (e) {
+            falhas++
+            if (e?.statusCode === 404 || e?.statusCode === 410) mortas.push(s.id)
+          }
+        }))
+      }
+      // Aparelhos que desinstalaram ou revogaram a permissão: some da lista.
+      if (mortas.length) await chamar(`/rest/v1/push_inscricoes?id=in.(${mortas.join(',')})`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } }).catch(() => undefined)
+      return { enviados, falhas }
+    }
+
     try {
       if (req.method === 'GET') return res.status(200).json({ chave: (await chaves()).publica })
       if (req.method !== 'POST') return res.status(405).json({ error: 'Método não permitido' })
+      const corpo = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : req.body ?? {}
+      // Chamado pelo pg_cron a cada minuto quando há push vencido. Não precisa de login: só dispara o que
+      // já está na hora e ainda não saiu (cada aviso é reservado antes de enviar, então nunca sai duas vezes).
+      if (corpo.acao === 'agendados') {
+        const agora = new Date().toISOString(), ontem = new Date(Date.now() - 86400000).toISOString()
+        const vencidos = await chamar(`/rest/v1/plataforma_avisos?select=id&enviar_push=is.true&ativo=is.true&push_enviado_em=is.null&publicar_em=lte.${agora}&publicar_em=gt.${ontem}&order=publicar_em&limit=10`)
+        let avisos = 0, enviados = 0, falhas = 0
+        for (const { id } of vencidos ?? []) {
+          const r = await enviarAviso(id)
+          if (r) { avisos++; enviados += r.enviados; falhas += r.falhas }
+        }
+        return res.status(200).json({ avisos, enviados, falhas })
+      }
       if (!/^Bearer \S+$/.test(token ?? '')) return res.status(401).json({ error: 'Entre na sua conta' })
       const eu = await chamar('/auth/v1/user', {}, false)
       if (!eu?.id) return res.status(401).json({ error: 'Entre na sua conta' })
-      const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : req.body ?? {}
+      const body = corpo
 
       if (body.acao === 'inscrever') {
         const s = body.inscricao
@@ -78,43 +135,8 @@ export function criarHandler({ webpush = webpushPadrao, fetcher = fetch } = {}) 
         const admin = await chamar('/rest/v1/rpc/is_platform_admin', { method: 'POST', body: '{}' }, false)
         if (admin !== true) return res.status(403).json({ error: 'Acesso restrito ao master' })
         if (!UUID.test(String(body.aviso ?? ''))) return res.status(400).json({ error: 'Aviso inválido' })
-        // Reserva o envio: só uma chamada consegue marcar push_enviado_em.
-        const reservados = await chamar(`/rest/v1/plataforma_avisos?id=eq.${body.aviso}&ativo=eq.true&push_enviado_em=is.null&select=id,titulo,texto,org_id`,
-          { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ push_enviado_em: new Date().toISOString() }) })
-        const aviso = reservados?.[0]
-        if (!aviso) return res.status(200).json({ enviados: 0, falhas: 0, motivo: 'já enviado ou arquivado' })
-
-        // Destinatários: membros da organização do aviso (ou de qualquer organização ativa, se for para todos).
-        const membros = await chamar(`/rest/v1/memberships?select=user_id,organizations!inner(suspensa)&organizations.suspensa=eq.false${aviso.org_id ? `&org_id=eq.${aviso.org_id}` : ''}`)
-        const usuarios = [...new Set((membros ?? []).map(m => m.user_id))]
-        if (!usuarios.length) return res.status(200).json({ enviados: 0, falhas: 0 })
-        let inscricoes = []
-        for (let i = 0; i < usuarios.length; i += 100) {
-          const lote = usuarios.slice(i, i + 100).join(',')
-          inscricoes = inscricoes.concat(await chamar(`/rest/v1/push_inscricoes?select=id,endpoint,p256dh,auth&user_id=in.(${lote})`))
-        }
-        if (!inscricoes.length) return res.status(200).json({ enviados: 0, falhas: 0 })
-
-        const k = await chaves()
-        webpush.setVapidDetails(CONTATO, k.publica, k.privada)
-        const payload = JSON.stringify({ id: aviso.id, titulo: aviso.titulo, texto: resumo(aviso.texto), url: '/app/avisos', tag: aviso.id })
-        let enviados = 0, falhas = 0
-        const mortas = []
-        for (let i = 0; i < inscricoes.length; i += 25) {
-          await Promise.all(inscricoes.slice(i, i + 25).map(async s => {
-            try {
-              // urgency high: o Android/Chrome entrega na hora, sem esperar o aparelho "acordar" (modo soneca).
-              await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, payload, { TTL: 86400, urgency: 'high', timeout: 10000 })
-              enviados++
-            } catch (e) {
-              falhas++
-              if (e?.statusCode === 404 || e?.statusCode === 410) mortas.push(s.id)
-            }
-          }))
-        }
-        // Aparelhos que desinstalaram ou revogaram a permissão: some da lista.
-        if (mortas.length) await chamar(`/rest/v1/push_inscricoes?id=in.(${mortas.join(',')})`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } }).catch(() => undefined)
-        return res.status(200).json({ enviados, falhas })
+        const r = await enviarAviso(body.aviso)
+        return res.status(200).json(r ?? { enviados: 0, falhas: 0, motivo: 'já enviado, agendado ou arquivado' })
       }
 
       return res.status(400).json({ error: 'Ação inválida' })
