@@ -57,11 +57,13 @@ const ICONES: Record<string, { dominio: string; direto?: string }> = {
   goias: { dominio: 'www.comprasnet.go.gov.br', direto: 'https://www.comprasnet.go.gov.br/favicon.ico' }, rj: { dominio: 'compras.rj.gov.br' },
   recife: { dominio: 'www.recife.pe.gov.br' }, licitanet: { dominio: 'licitanet.com.br' }, bll: { dominio: 'bllcompras.com' },
   elic: { dominio: 'www.portaldecompras.sc.gov.br' }, procergs: { dominio: 'www.procergs.rs.gov.br' }, mg: { dominio: 'www.compras.mg.gov.br' },
-  banpara: { dominio: 'www.banpara.b.br' }, pe: { dominio: 'www.pe.gov.br' }, bnc: { dominio: 'bnccompras.com' }, outros: { dominio: 'pncp.gov.br' },
+  banpara: { dominio: 'www.banpara.b.br' }, pe: { dominio: 'www.pe.gov.br' }, bnc: { dominio: 'bnccompras.com' }, outros: { dominio: '' },
 }
 /** Endereços do ícone do portal, do mais confiável ao reserva. */
 export function iconesPortal(id: string) {
   const i = ICONES[id] ?? ICONES.outros
+  // Sem domínio (outros portais): mostra só as iniciais, sem ícone de nenhuma fonte.
+  if (!i.dominio) return []
   return [
     `https://www.google.com/s2/favicons?domain=${i.dominio}&sz=64`,
     ...(i.direto ? [i.direto] : []),

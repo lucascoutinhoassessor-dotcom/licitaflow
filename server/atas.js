@@ -1,4 +1,5 @@
-import { emCache, excedeuLimite, usuarioLogado } from './protecao.js'
+import { emCache, excedeuLimite, guardarNoNavegador, usuarioLogado } from './protecao.js'
+import { cnpjBloqueado } from './bloqueio.js'
 // Leitura das atas de sessão publicadas no PNCP: abre os PDFs (ata da sessão, julgamento, homologação)
 // e separa os trechos de desclassificação, inabilitação e recusa, com empresa, itens e motivo.
 // As atas do Compras.gov.br (federais) ficam atrás de captcha e normalmente não vão para o PNCP;
@@ -187,7 +188,7 @@ export function extrairParticipantes(textoBruto, cnpjOrgao = null) {
 
 async function textoDoPdf(url) {
   const r = await fetch(url, { headers: { 'User-Agent': 'licitaflow-atas' }, signal: AbortSignal.timeout(25000) })
-  if (!r.ok) return { erro: 'O PNCP não entregou o arquivo.' }
+  if (!r.ok) return { erro: 'O arquivo da ata não pôde ser aberto.' }
   if (Number(r.headers.get('content-length')) > MAX_BYTES) return { erro: 'Arquivo grande demais para ler aqui.' }
   const bytes = new Uint8Array(await r.arrayBuffer())
   if (bytes.length > MAX_BYTES) return { erro: 'Arquivo grande demais para ler aqui.' }
@@ -222,19 +223,24 @@ export async function lerAtas(controle) {
       const lido = await textoDoPdf(d.url)
       if (lido.erro) { documentos.push({ titulo: d.titulo, url: d.url, lido: false, aviso: lido.erro }); continue }
       for (const p of extrairParticipantes(lido.texto, m[1])) {
+        if (cnpjBloqueado(p.cnpj)) continue
         const atual = participantes.get(p.cnpj)
         if (!atual) participantes.set(p.cnpj, { ...p, documento: d.titulo, url: d.url })
         else { atual.mencoes += p.mencoes; atual.nome ??= p.nome }
       }
       const achadas = extrairOcorrencias(lido.texto)
       documentos.push({ titulo: d.titulo, url: d.url, lido: true, paginas: lido.paginas, ocorrencias: achadas.length })
-      for (const o of achadas) if (!ocorrencias.some((x) => so(x.motivo).slice(0, 160) === so(o.motivo).slice(0, 160))) ocorrencias.push({ ...o, documento: d.titulo, url: d.url })
+      for (const o of achadas) if (!falaDeBloqueada(o) && !ocorrencias.some((x) => so(x.motivo).slice(0, 160) === so(o.motivo).slice(0, 160))) ocorrencias.push({ ...o, documento: d.titulo, url: d.url })
     } catch {
       documentos.push({ titulo: d.titulo, url: d.url, lido: false, aviso: 'Não foi possível ler este arquivo.' })
     }
   }
   return { controle, documentos, ocorrencias, participantes: [...participantes.values()] }
 }
+
+/** Ocorrência que cita uma empresa bloqueada (pelo CNPJ, com ou sem pontuação). */
+const falaDeBloqueada = (o) => cnpjBloqueado(o.cnpj) ||
+  [...`${o.empresa ?? ''} ${o.motivo ?? ''}`.matchAll(/\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2}/g)].some((x) => cnpjBloqueado(x[0]))
 
 const PALAVRAS_VAZIAS = new Set(['LTDA', 'EIRELI', 'ME', 'EPP', 'SA', 'MEI', 'COMERCIO', 'SERVICOS', 'DE', 'DA', 'DO', 'DOS', 'DAS', 'E', 'EM', 'INDUSTRIA', 'DISTRIBUIDORA'])
 /** A ocorrência fala desta empresa? Pelo CNPJ ou pelas primeiras palavras marcantes da razão social. */
@@ -267,15 +273,17 @@ export default async function handler(req, res) {
   const cnpj = String(q.cnpj ?? '').replace(/\D/g, '')
   const controles = String(q.controles ?? '').split(',').map((c) => c.trim()).filter((c) => /^\d{14}-1-\d+\/\d{4}$/.test(c))
   if (!controle && !(cnpj.length === 14 && controles.length)) return res.status(400).json({ error: 'Informe a compra ou a empresa.' })
+  if (cnpjBloqueado(cnpj)) return res.status(404).json({ error: 'Empresa não encontrada.' })
   try {
     const usuario = await usuarioLogado(base, anon, token)
     if (!usuario) return res.status(401).json({ error: 'Entre na sua conta' })
     if (excedeuLimite('atas', usuario, 20)) return res.status(429).json({ error: 'Muitas consultas em pouco tempo. Aguarde um minuto e tente de novo.' })
-    const ler = (c) => emCache('atas-v2', c, 6 * 60 * 60_000, () => lerAtas(c), 500)
-    if (controle) return res.json(await ler(controle))
+    const ler = (c) => emCache('atas-v3', c, 6 * 60 * 60_000, () => lerAtas(c), 500)
+    if (controle) { const lida = await ler(controle); guardarNoNavegador(res, 3600); return res.json(lida) }
     // Empresa: lê as atas das compras dela e fica só com o que fala dela.
     const lidas = await emLotes([...new Set(controles)].slice(0, 15), 4, (c) => ler(c).catch(() => ({ controle: c, documentos: [], ocorrencias: [] })))
     const nome = String(q.nome ?? '').slice(0, 200)
+    guardarNoNavegador(res, 1800)
     return res.json({
       cnpj,
       comprasConsultadas: lidas.length,

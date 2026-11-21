@@ -10,7 +10,7 @@ import { useOrg } from '@/providers/OrgProvider'
 import { useLista, useSalvar } from '@/hooks/useDados'
 import { dadosProcesso, rotaOportunidade, type CompraPNCP } from '@/lib/pncp'
 import { filtrosExtras, MODALIDADES, nomeModoDisputa, PERIODOS_ABERTURA, periodoAbertura, validarFiltros, type FiltrosOportunidades as Filtros } from '@/lib/filtrosOportunidades'
-import {pesquisarIndice} from '@/lib/buscaIndice'
+import {pesquisarIndice,type ResultadoIndice} from '@/lib/buscaIndice'
 import CategoriasObjeto from '@/components/CategoriasObjeto'
 import FiltrosOportunidades from '@/components/FiltrosOportunidades'
 import { codigoComprasnet, portalCompra, PORTAIS } from '@/lib/portais'
@@ -29,6 +29,15 @@ function lerBuscaSalva():{f:Partial<Filtros>;consulta:Partial<Filtros>|null;pagi
     if(!s||typeof s.f!=='object'||!s.f)return null
     return {f:s.f,consulta:s.consulta&&typeof s.consulta==='object'?s.consulta:null,pagina:Number.isInteger(s.pagina)&&s.pagina>0?s.pagina:1}
   }catch{return null}
+}
+// Guarda a última página de resultados desta aba: ao voltar para a lista, ela aparece na hora,
+// sem uma nova consulta ao banco enquanto tiver menos de 5 minutos.
+const CHAVE_RESULTADO='lf-oportunidades-resultado',VALIDADE_BUSCA=5*60_000
+function lerResultadoSalvo(chave:string):{em:number;data:ResultadoIndice}|undefined{
+  try{
+    const s=JSON.parse(sessionStorage.getItem(CHAVE_RESULTADO)??'null')
+    return s?.chave===chave&&Number.isFinite(s.em)&&s.data&&Array.isArray(s.data.data)?{em:s.em,data:s.data}:undefined
+  }catch{return undefined}
 }
 export default function Oportunidades() {
   const { podeEditar }=useOrg(),padrao=useEmpresaPadrao()
@@ -49,9 +58,15 @@ export default function Oportunidades() {
   const navigate=useNavigate()
   const processos=useLista<Processo>('processos',{porEmpresa:false})
   const {salvar}=useSalvar('processos',['processo_eventos','prazos'])
+  const chaveResultado=JSON.stringify([consulta,pagina]),salvo=lerResultadoSalvo(chaveResultado)
   const q=useQuery({
-    queryKey:['oportunidades-indexadas',consulta,pagina],enabled:!!consulta,retry:1,staleTime:30_000,
-    queryFn:({signal})=>pesquisarIndice(consulta!,pagina,signal),
+    queryKey:['oportunidades-indexadas',consulta,pagina],enabled:!!consulta,retry:1,staleTime:VALIDADE_BUSCA,gcTime:30*60_000,
+    initialData:salvo?.data,initialDataUpdatedAt:salvo?.em,
+    queryFn:async({signal})=>{
+      const r=await pesquisarIndice(consulta!,pagina,signal)
+      try{sessionStorage.setItem(CHAVE_RESULTADO,JSON.stringify({chave:chaveResultado,em:Date.now(),data:r}))}catch{/* armazenamento indisponível ou cheio */}
+      return r
+    },
   })
   const lista=q.data?.data??[],visiveis=lista
   const totalPaginas=Math.max(1,q.data?.totalPaginas??1)

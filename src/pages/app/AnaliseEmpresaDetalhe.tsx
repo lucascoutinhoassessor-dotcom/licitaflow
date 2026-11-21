@@ -62,7 +62,7 @@ export default function AnaliseEmpresaDetalhe() {
         <h1 className="mt-1 break-words text-xl font-bold sm:text-2xl">{a?.nome ?? formatarCnpj(cnpj)}</h1>
         <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
           <span>CNPJ {formatarCnpj(cnpj)}</span>{a?.porte && <Badge>Porte: {a.porte}</Badge>}
-          <a className="inline-flex items-center gap-1 text-primary hover:underline" href={linkContratosPNCP(cnpj)} target="_blank" rel="noopener noreferrer">Contratos no PNCP <ExternalLink className="h-3.5 w-3.5" /></a>
+          <a className="inline-flex items-center gap-1 text-primary hover:underline" href={linkContratosPNCP(cnpj)} target="_blank" rel="noopener noreferrer">Ver contratos <ExternalLink className="h-3.5 w-3.5" /></a>
         </div>
         <form className="mt-4 flex flex-wrap items-end gap-2" onSubmit={(e) => { e.preventDefault(); setPeriodo(rascunho) }}>
           <label className="text-sm"><span className="mb-1 block font-medium">De</span><Input type="date" value={rascunho.de} max={rascunho.ate} onChange={(e) => setRascunho((p) => ({ ...p, de: e.target.value }))} /></label>
@@ -102,7 +102,7 @@ export default function AnaliseEmpresaDetalhe() {
           </Secao>
 
           <Secao icone={<Tag className="h-4 w-4 text-sky-400" />} titulo="Principais marcas com que venceu"
-            nota="Marcas registradas no Painel de Preços do governo federal para os itens que a empresa venceu nas maiores compras do período.">
+            nota="Marcas registradas para os itens que a empresa venceu nas maiores compras do período.">
             {!a.marcas?.length ? <p className="text-sm text-muted-foreground">Marca não informada nas compras analisadas.</p>
               : <ListaRanking linhas={a.marcas.slice(0, 10).map((m) => ({ chave: m.marca, nome: m.marca, valor: m.n, texto: `${m.n.toLocaleString('pt-BR')} ${m.n === 1 ? 'item' : 'itens'}` }))} />}
           </Secao>
@@ -134,9 +134,9 @@ export default function AnaliseEmpresaDetalhe() {
             )}
           </Secao>
 
-          <Secao icone={a.sancoes?.length ? <ShieldAlert className="h-4 w-4 text-rose-400" /> : <ShieldCheck className="h-4 w-4 text-emerald-400" />} titulo="Penalidades (CEIS / CNEP)">
-            {!a.sancoesDisponiveis ? <p className="text-sm text-muted-foreground">A consulta de sanções do Portal da Transparência ainda não foi ativada no LicitaFlow.</p>
-              : a.sancoes === null ? <p className="text-sm text-muted-foreground">O Portal da Transparência não respondeu agora.</p>
+          <Secao icone={a.sancoes?.length ? <ShieldAlert className="h-4 w-4 text-rose-400" /> : <ShieldCheck className="h-4 w-4 text-emerald-400" />} titulo="Penalidades e sanções">
+            {!a.sancoesDisponiveis ? <p className="text-sm text-muted-foreground">A consulta de sanções ainda não foi ativada no LicitaFlow.</p>
+              : a.sancoes === null ? <p className="text-sm text-muted-foreground">A consulta de sanções não respondeu agora. Tente novamente em instantes.</p>
               : a.sancoes.length === 0 ? <p className="text-sm font-medium text-emerald-600 dark:text-emerald-400">Nenhuma sanção registrada.</p>
               : <ul className="space-y-2">{a.sancoes.map((s, i) => <li key={i} className="rounded-xl border border-rose-500/40 p-3 text-sm"><p className="font-semibold">{s.cadastro} · {s.tipo ?? 'Sanção'}</p><p className="text-xs text-muted-foreground">{s.orgao} · {s.inicio ?? '—'} a {s.fim ?? 'sem data final'}</p></li>)}</ul>}
           </Secao>
@@ -149,7 +149,7 @@ export default function AnaliseEmpresaDetalhe() {
             <h2 className="font-semibold">Últimos itens vencidos</h2>
             {a.ultimos.length > 1 && <BotaoInverterOrdem invertido={antigosPrimeiro} aoMudar={setAntigosPrimeiro} normal="Mais recentes primeiro" inverso="Mais antigos primeiro" />}
           </div>
-          {a.ultimos.length === 0 ? <p className="text-sm text-muted-foreground">Nenhum item vencido no período (resultados da Lei 14.133 publicados no PNCP).</p> : <ul className="divide-y">
+          {a.ultimos.length === 0 ? <p className="text-sm text-muted-foreground">Nenhum item vencido no período (resultados da Lei 14.133).</p> : <ul className="divide-y">
             {(antigosPrimeiro ? [...a.ultimos].reverse() : a.ultimos).map((r) => {
               const rota = rotaPorControle(r.controle)
               return <li key={`${r.controle}-${r.item}`} className="flex flex-wrap items-center gap-x-4 gap-y-1 py-2.5 text-sm">
@@ -162,7 +162,7 @@ export default function AnaliseEmpresaDetalhe() {
               </li>
             })}
           </ul>}
-          <p className="mt-3 text-xs text-muted-foreground">Fonte: dados abertos do Compras.gov.br (resultados de itens publicados no PNCP), consultados na hora.</p>
+          <p className="mt-3 text-xs text-muted-foreground">Dados oficiais de compras públicas, consultados na hora.</p>
         </Card>
       </>}
     </>
@@ -177,17 +177,17 @@ function DesclassificacoesEmpresa({ cnpj, nome, compras }: { cnpj: string; nome:
     <Card className="mb-5 p-5">
       <h2 className="mb-2 flex items-center gap-2 font-semibold"><XCircle className="h-4 w-4 text-rose-400" />Desclassificações, inabilitações e motivos</h2>
       {!lista.length ? <p className="text-sm text-muted-foreground">Sem compras no período para ler as atas.</p>
-        : q.isLoading ? <Carregando texto={`Lendo as atas de ${lista.length} compras no PNCP…`} />
+        : q.isLoading ? <Carregando texto={`Lendo as atas de ${lista.length} compras…`} />
         : q.isError ? <p className="text-sm">{(q.error as Error).message} <button className="font-semibold text-primary underline" onClick={() => q.refetch()}>Tentar novamente</button></p>
         : q.data && (
           <>
-            <p className="mb-3 text-xs text-muted-foreground">{q.data.comprasConsultadas} compras consultadas · {q.data.comAta} com ata da sessão publicada no PNCP.</p>
+            <p className="mb-3 text-xs text-muted-foreground">{q.data.comprasConsultadas} compras consultadas · {q.data.comAta} com ata da sessão publicada.</p>
             {q.data.ocorrencias.length === 0
               ? <p className="text-sm text-muted-foreground">Nenhuma desclassificação ou inabilitação desta empresa encontrada nas atas lidas.</p>
               : <ListaOcorrencias ocorrencias={q.data.ocorrencias} mostrarCompra />}
           </>
         )}
-      <p className="mt-3 text-xs text-muted-foreground">Lemos as atas das compras mais recentes em que a empresa venceu algum item. Compras do governo federal (Compras.gov.br) quase nunca publicam a ata no PNCP, e lá a consulta é protegida por captcha. Por isso, a cobertura é maior em estados e municípios. Confira sempre o trecho na ata original.</p>
+      <p className="mt-3 text-xs text-muted-foreground">Lemos as atas das compras mais recentes em que a empresa venceu algum item. Compras do governo federal quase nunca têm a ata publicada. Por isso, a cobertura é maior em estados e municípios. Confira sempre o trecho na ata original.</p>
     </Card>
   )
 }

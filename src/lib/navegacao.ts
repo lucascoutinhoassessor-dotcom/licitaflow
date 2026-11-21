@@ -18,6 +18,7 @@ import {
   LineChart,
   SearchCheck,
   Tag,
+  MapPinned,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -98,6 +99,12 @@ export const GRUPOS_NAV: GrupoNav[] = [
     rotulo: 'Análise',
     icone: LineChart,
     itens: [
+      {
+        rota: '/app/analise-mercado',
+        rotulo: 'Análise de mercado',
+        icone: MapPinned,
+        descricao: 'Valor contratado por estado e por mês, principais órgãos, empresas vencedoras e marcas de um produto ou serviço.',
+      },
       {
         rota: '/app/analise-empresas',
         rotulo: 'Análise de empresas',

@@ -90,7 +90,7 @@ export default function OportunidadeDetalhe() {
         )}
         <div className="mt-5 flex flex-wrap justify-center gap-2">
           {origem && <a href={origem} target="_blank" rel="noopener noreferrer"><Button variante="contorno" tamanho="sm"><ExternalLink className="h-4 w-4" />Acessar no portal</Button></a>}
-          <a href={linkCompra(compra)} target="_blank" rel="noopener noreferrer"><Button variante="contorno" tamanho="sm"><FileText className="h-4 w-4" />Edital e arquivos (PNCP)</Button></a>
+          <a href={linkCompra(compra)} target="_blank" rel="noopener noreferrer"><Button variante="contorno" tamanho="sm"><FileText className="h-4 w-4" />Edital e arquivos</Button></a>
         </div>
       </Card>
 

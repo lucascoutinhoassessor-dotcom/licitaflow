@@ -1,4 +1,5 @@
-import { emCache, excedeuLimite, usuarioLogado } from './protecao.js'
+import { emCache, excedeuLimite, guardarNoNavegador, usuarioLogado } from './protecao.js'
+import { cnpjBloqueado } from './bloqueio.js'
 // Histórico de preços sob demanda: compras homologadas de um material (PDM) ou serviço do catálogo federal,
 // direto do Painel de Preços (dados abertos do Compras.gov.br). Nada é guardado no banco.
 
@@ -15,20 +16,30 @@ function estatisticas(valores) {
   return { n: v.length, minimo: arred(v[0]), maximo: arred(v[v.length - 1]), media: arred(v.reduce((s, x) => s + x, 0) / v.length), mediana: arred(v.length % 2 ? v[meio] : (v[meio - 1] + v[meio]) / 2) }
 }
 
-/** Agrupa as compras por unidade de fornecimento e calcula as estatísticas de preço unitário. */
-export function resumirPrecos(compras) {
-  const linhas = compras
-    .map((c) => ({
-      data: c.dataResultado ?? c.dataCompra ?? null, preco: Number(c.precoUnitario), quantidade: Number(c.quantidade) || null,
-      unidade: (c.siglaUnidadeFornecimento ?? c.siglaUnidadeMedida ?? c.nomeUnidadeFornecimento ?? c.nomeUnidadeMedida ?? 'UN').toString().trim().toUpperCase() || 'UN',
-      descricao: c.descricaoItem ?? '', fornecedor: c.nomeFornecedor ?? null, cnpj: c.niFornecedor ?? null, marca: c.marca && c.marca !== 'null' ? c.marca : null,
-      orgao: c.nomeOrgao ?? c.nomeUasg ?? null, unidadeCompradora: c.nomeUasg ?? null, uasg: c.codigoUasg ?? null, uf: c.estado ?? null, municipio: c.municipio ?? null, modalidade: c.modalidade ?? null, idCompra: String(c.idCompra ?? ''),
-      numeroItem: Number(c.numeroItemCompra) || null, objeto: c.objetoCompra ?? null, detalhe: c.descricaoDetalhadaItem ?? null, dataCompra: c.dataCompra ?? null,
-    }))
-    .filter((l) => Number.isFinite(l.preco) && l.preco > 0 && l.preco < 1e9)
+/** Uma compra do Painel de Preços no formato usado pelo LicitaFlow. */
+export function linhaDeCompra(c) {
+  const oculto = cnpjBloqueado(c.niFornecedor)
+  return {
+    data: c.dataResultado ?? c.dataCompra ?? null, preco: Number(c.precoUnitario), quantidade: Number(c.quantidade) || null,
+    unidade: (c.siglaUnidadeFornecimento ?? c.siglaUnidadeMedida ?? c.nomeUnidadeFornecimento ?? c.nomeUnidadeMedida ?? 'UN').toString().trim().toUpperCase() || 'UN',
+    descricao: c.descricaoItem ?? '', fornecedor: oculto ? null : c.nomeFornecedor ?? null, cnpj: oculto ? null : c.niFornecedor ?? null, marca: c.marca && c.marca !== 'null' ? c.marca : null,
+    orgao: c.nomeOrgao ?? c.nomeUasg ?? null, unidadeCompradora: c.nomeUasg ?? null, uasg: c.codigoUasg ?? null, uf: c.estado ?? null, municipio: c.municipio ?? null, modalidade: c.modalidade ?? null, idCompra: String(c.idCompra ?? ''),
+    numeroItem: Number(c.numeroItemCompra) || null, objeto: c.objetoCompra ?? null, detalhe: c.descricaoDetalhadaItem ?? null, dataCompra: c.dataCompra ?? null,
+  }
+}
+export const precoValido = (l) => Number.isFinite(l.preco) && l.preco > 0 && l.preco < 1e9
+
+/** Estatísticas de preço unitário por unidade de fornecimento. */
+export function precosPorUnidade(linhas) {
   const porUnidade = new Map()
   for (const l of linhas) porUnidade.set(l.unidade, [...(porUnidade.get(l.unidade) ?? []), l])
-  const unidades = [...porUnidade.entries()].map(([unidade, ls]) => ({ unidade, ...estatisticas(ls.map((l) => l.preco)) })).sort((a, b) => b.n - a.n)
+  return [...porUnidade.entries()].map(([unidade, ls]) => ({ unidade, ...estatisticas(ls.map((l) => l.preco)) })).sort((a, b) => b.n - a.n)
+}
+
+/** Agrupa as compras por unidade de fornecimento e calcula as estatísticas de preço unitário. */
+export function resumirPrecos(compras) {
+  const linhas = compras.map(linhaDeCompra).filter(precoValido)
+  const unidades = precosPorUnidade(linhas)
   const marcas = {}
   for (const l of linhas) if (l.marca) marcas[l.marca.toUpperCase()] = (marcas[l.marca.toUpperCase()] ?? 0) + 1
   return {
@@ -50,9 +61,9 @@ async function buscarCompras(tipo, codigo, filtros) {
     if (filtros.de) p.set('dataCompraInicio', filtros.de)
     if (filtros.ate) p.set('dataCompraFim', filtros.ate)
     const r = await fetch(`${BASE}/${caminho}?${p}`, { headers: { Accept: 'application/json', 'User-Agent': 'licitaflow-precos' }, signal: AbortSignal.timeout(25000) })
-    if (!r.ok) throw Object.assign(new Error('O Painel de Preços não respondeu. Tente novamente em instantes.'), { status: 502 })
+    if (!r.ok) throw Object.assign(new Error('A consulta de preços não respondeu. Tente novamente em instantes.'), { status: 502 })
     const j = await r.json()
-    if (!Array.isArray(j.resultado)) throw Object.assign(new Error('O Painel de Preços respondeu em formato inesperado.'), { status: 502 })
+    if (!Array.isArray(j.resultado)) throw Object.assign(new Error('A consulta de preços respondeu em formato inesperado.'), { status: 502 })
     todas.push(...j.resultado)
     paginas = Number(j.totalPaginas) || 1
   }
@@ -81,6 +92,7 @@ export default async function handler(req, res) {
       const { todas, incompleto } = await buscarCompras(tipo, codigo, { uf, de, ate })
       return { tipo, codigo, incompleto, ...resumirPrecos(todas) }
     })
+    guardarNoNavegador(res, 600)
     return res.json(corpo)
   } catch (e) {
     return res.status(e.status ?? 500).json({ error: e.status ? e.message : 'Não foi possível consultar os preços agora.' })

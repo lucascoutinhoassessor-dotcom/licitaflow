@@ -7,14 +7,9 @@ import { controleDaCompra } from '@/lib/compraFederal'
 import { rotaPorControle } from '@/lib/analiseEmpresa'
 import { identificacaoCompra, linkPesquisaMarca, type CompraPreco } from '@/lib/precos'
 import { formatarData, formatarMoeda } from '@/lib/format'
+import { UF_NOME } from '@/lib/mercado'
 import { cn } from '@/lib/utils'
 
-const UF_NOME: Record<string, string> = {
-  AC: 'Acre', AL: 'Alagoas', AP: 'Amapá', AM: 'Amazonas', BA: 'Bahia', CE: 'Ceará', DF: 'Distrito Federal', ES: 'Espírito Santo', GO: 'Goiás',
-  MA: 'Maranhão', MT: 'Mato Grosso', MS: 'Mato Grosso do Sul', MG: 'Minas Gerais', PA: 'Pará', PB: 'Paraíba', PR: 'Paraná', PE: 'Pernambuco',
-  PI: 'Piauí', RJ: 'Rio de Janeiro', RN: 'Rio Grande do Norte', RS: 'Rio Grande do Sul', RO: 'Rondônia', RR: 'Roraima', SC: 'Santa Catarina',
-  SP: 'São Paulo', SE: 'Sergipe', TO: 'Tocantins',
-}
 
 /** Uma compra do histórico de preços, no formato: órgão · modalidade, "Item N — descrição", objeto e dados do item. */
 export default function CartaoCompraPreco({ compra: c }: { compra: CompraPreco }) {

@@ -36,4 +36,14 @@ export async function usuarioLogado(base, anon, token) {
   return typeof u?.id === 'string' ? u.id : 'usuario'
 }
 
+/**
+ * Deixa o navegador do próprio usuário reaproveitar uma resposta certa por `segundos`.
+ * `private` impede o cache compartilhado da Vercel (que pularia o login);
+ * `Vary: Authorization` separa as respostas de cada sessão no mesmo navegador.
+ */
+export function guardarNoNavegador(res, segundos) {
+  res.setHeader('Cache-Control', `private, max-age=${segundos}`)
+  res.setHeader('Vary', 'Authorization')
+}
+
 export function limparProtecoes() { caches.clear(); janelas.clear() }

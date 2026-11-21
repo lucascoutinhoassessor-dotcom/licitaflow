@@ -42,9 +42,9 @@ export default function EmpresasDisputa({ controle, vencedoras = [] }: { control
         </ul>
       )}
       {!valido ? (linhas.length === 0 && <p className="text-sm text-muted-foreground">Nenhuma empresa identificada.</p>)
-        : q.isLoading ? <div className="mt-3"><Carregando texto="Procurando os participantes nas atas do PNCP…" /></div>
+        : q.isLoading ? <div className="mt-3"><Carregando texto="Procurando os participantes nas atas da compra…" /></div>
         : q.isError ? <p className="mt-3 text-sm">{(q.error as Error).message} <button className="font-semibold text-primary underline" onClick={() => q.refetch()}>Tentar novamente</button></p>
-        : lidos.length === 0 ? <p className="mt-3 text-xs text-muted-foreground">{linhas.length ? 'Só aparecem as vencedoras: esta' : 'Esta'} compra não tem ata da sessão em PDF com texto no PNCP. A lista completa de licitantes fica na página da disputa, no portal de compras.</p>
+        : lidos.length === 0 ? <p className="mt-3 text-xs text-muted-foreground">{linhas.length ? 'Só aparecem as vencedoras: esta' : 'Esta'} compra não tem ata da sessão em PDF com texto publicada. A lista completa de licitantes fica na página da disputa, no portal de compras.</p>
         : <>
           {linhas.length === 0 && <p className="text-sm text-muted-foreground">A ata foi lida, mas não traz o CNPJ das empresas (alguns portais mostram só "Licitante 01, 02…").</p>}
           <p className="mt-3 text-xs text-muted-foreground">Empresas lidas em: {lidos.map((d, i) => <span key={d.url}>{i > 0 && ', '}<a href={d.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{d.titulo}</a></span>)}. A leitura é automática: confira na ata original.</p>

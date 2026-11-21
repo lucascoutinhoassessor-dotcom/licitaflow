@@ -1,4 +1,5 @@
-import { emCache, excedeuLimite, usuarioLogado } from './protecao.js'
+import { emCache, excedeuLimite, guardarNoNavegador, usuarioLogado } from './protecao.js'
+import { cnpjBloqueado } from './bloqueio.js'
 // Análise de empresa sob demanda: itens vencidos (resultados homologados) por CNPJ, direto da fonte oficial
 // de dados abertos do Compras.gov.br (Lei 14.133, publicados no PNCP). Nada é guardado no banco.
 // Opcional: sanções no Portal da Transparência (CEIS e CNEP), quando PORTAL_TRANSPARENCIA_CHAVE existir.
@@ -72,7 +73,7 @@ export function resumirResultados(resultados) {
 async function paginaResultados(cnpj, janela, pagina) {
   const u = `${FONTE}?pagina=${pagina}&tamanhoPagina=500&niFornecedor=${cnpj}&dataResultadoPncpInicial=${janela.de}&dataResultadoPncpFinal=${janela.ate}`
   const r = await fetch(u, { headers: { Accept: 'application/json', 'User-Agent': 'licitaflow-analise' }, signal: AbortSignal.timeout(25000) })
-  if (!r.ok) throw Object.assign(new Error('A fonte de resultados (Compras.gov.br) não respondeu. Tente novamente em instantes.'), { status: 502 })
+  if (!r.ok) throw Object.assign(new Error('A consulta de resultados não respondeu. Tente novamente em instantes.'), { status: 502 })
   const j = await r.json()
   if (!Array.isArray(j.resultado)) throw Object.assign(new Error('A fonte de resultados respondeu em formato inesperado.'), { status: 502 })
   return { resultado: j.resultado, totalPaginas: Number(j.totalPaginas) || 1 }
@@ -177,6 +178,7 @@ export default async function handler(req, res) {
   const cnpj = String(req.query?.cnpj ?? '').replace(/\D/g, '')
   const { de, ate } = req.query ?? {}
   if (!/^\d{14}$/.test(cnpj)) return res.status(400).json({ error: 'Informe um CNPJ com 14 dígitos.' })
+  if (cnpjBloqueado(cnpj)) return res.status(404).json({ error: 'Empresa não encontrada.' })
   if (!dataValida(de) || !dataValida(ate) || de > ate || Date.parse(ate) - Date.parse(de) > MAX_DIAS * DIA) return res.status(400).json({ error: 'Período inválido (máximo de 6 anos).' })
   try {
     const usuario = await usuarioLogado(base, anon, token)
@@ -189,6 +191,7 @@ export default async function handler(req, res) {
       const ultimos = resumo.ultimos.map((u) => ({ ...u, marca: perfil.marcaPorItem[`${u.idCompra}-${u.item}`] ?? null }))
       return { cnpj, de, ate, incompleto, ...resumo, ultimos, fortes: perfil.fortes, marcas: perfil.marcas, sancoes, sancoesDisponiveis: !!env.PORTAL_TRANSPARENCIA_CHAVE }
     })
+    guardarNoNavegador(res, 600)
     return res.json(corpo)
   } catch (e) {
     return res.status(e.status ?? 500).json({ error: e.status ? e.message : 'Não foi possível montar a análise agora.' })

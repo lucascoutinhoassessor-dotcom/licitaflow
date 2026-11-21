@@ -103,7 +103,7 @@ export default function Onboarding() {
             <div className="space-y-5">
               <div>
                 <h1 className="text-xl font-semibold">{org?.tipo === 'assessoria' ? 'Cadastre a primeira empresa cliente' : 'Cadastre sua empresa'}</h1>
-                <p className="mt-1 text-sm text-muted-foreground">Digite o CNPJ: buscamos os dados na Receita Federal automaticamente.</p>
+                <p className="mt-1 text-sm text-muted-foreground">Digite o CNPJ: buscamos os dados da empresa automaticamente.</p>
               </div>
               <EmpresaForm
                 orgId={org!.id}

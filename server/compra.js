@@ -1,4 +1,5 @@
-import { emCache, excedeuLimite, usuarioLogado } from './protecao.js'
+import { emCache, excedeuLimite, guardarNoNavegador, usuarioLogado } from './protecao.js'
+import { cnpjBloqueado } from './bloqueio.js'
 // Detalhe de uma compra do governo federal (Lei 14.133) a partir do código do Painel de Preços (idCompra):
 // edital no PNCP, itens, vencedores por item (valores, porte, ordem de classificação) e marca de cada item vencido.
 // Tudo consultado na hora nos dados abertos do Compras.gov.br; nada é guardado no banco.
@@ -9,7 +10,7 @@ const MAX_MARCAS = 15 // consultas de marca por compra (uma por PDM/serviço dis
 async function obter(caminho, params) {
   const r = await fetch(`${BASE}/${caminho}?${new URLSearchParams(params)}`, { headers: { Accept: 'application/json', 'User-Agent': 'licitaflow-compra' }, signal: AbortSignal.timeout(25000) })
   if (r.status === 204) return []
-  if (!r.ok) throw Object.assign(new Error('Os dados abertos do Compras.gov.br não responderam. Tente novamente em instantes.'), { status: 502 })
+  if (!r.ok) throw Object.assign(new Error('A consulta da compra não respondeu. Tente novamente em instantes.'), { status: 502 })
   const j = await r.json()
   return Array.isArray(j.resultado) ? j.resultado : []
 }
@@ -29,7 +30,7 @@ async function marcasDaCompra(idCompra, itens) {
         : await obter('modulo-pesquisa-preco/3_consultarServico', { pagina: '1', tamanhoPagina: '500', codigoItemCatalogo: String(k.codigo), idCompra })
       for (const p of lista) {
         const n = Number(p.numeroItemCompra)
-        if (Number.isInteger(n)) marcas[n] = { marca: p.marca && p.marca !== 'null' ? p.marca : null, fornecedor: p.nomeFornecedor ?? null, cnpj: p.niFornecedor ?? null }
+        if (Number.isInteger(n)) marcas[n] = cnpjBloqueado(p.niFornecedor) ? { marca: null, fornecedor: null, cnpj: null } : { marca: p.marca && p.marca !== 'null' ? p.marca : null, fornecedor: p.nomeFornecedor ?? null, cnpj: p.niFornecedor ?? null }
       }
     } catch { /* marca é complemento: segue sem ela */ }
   }))
@@ -40,7 +41,7 @@ async function marcasDaCompra(idCompra, itens) {
 export function montarCompra(contratacao, itens, resultados, marcas) {
   const porItem = new Map()
   for (const r of resultados) {
-    if (r.dataCancelamentoPncp) continue
+    if (r.dataCancelamentoPncp || cnpjBloqueado(r.niFornecedor)) continue
     const n = Number(r.numeroItemPncp)
     porItem.set(n, [...(porItem.get(n) ?? []), {
       fornecedor: r.nomeRazaoSocialFornecedor ?? null, cnpj: r.niFornecedor ?? null, porte: r.porteFornecedorNome ?? null,
@@ -87,7 +88,8 @@ export default async function handler(req, res) {
     if (excedeuLimite('compra', usuario)) return res.status(429).json({ error: 'Muitas consultas em pouco tempo. Aguarde um minuto e tente de novo.' })
     if (req.query?.so === 'controle') {
       const c = await emCache('compra-controle', idCompra, 60 * 60_000, async () => (await obter('modulo-contratacoes/1.1_consultarContratacoes_PNCP_14133_Id', { tipo: 'idCompra', codigo: idCompra }))[0] ?? null)
-      if (!c?.numeroControlePNCP) return res.status(404).json({ error: 'Esta compra não tem edital no PNCP (pode ser anterior à Lei 14.133).' })
+      if (!c?.numeroControlePNCP) return res.status(404).json({ error: 'Esta compra não tem edital publicado (pode ser anterior à Lei 14.133).' })
+      guardarNoNavegador(res, 3600)
       return res.json({ controle: c.numeroControlePNCP })
     }
     const corpo = await emCache('compra', idCompra, 10 * 60_000, async () => {
@@ -100,6 +102,7 @@ export default async function handler(req, res) {
     const marcas = await marcasDaCompra(idCompra, itens)
     return montarCompra(contratacoes[0], itens, resultados, marcas)
     })
+    guardarNoNavegador(res, 600)
     return res.json(corpo)
   } catch (e) {
     return res.status(e.status ?? 500).json({ error: e.status ? e.message : 'Não foi possível abrir a compra agora.' })

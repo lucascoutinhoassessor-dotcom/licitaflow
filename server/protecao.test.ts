@@ -1,8 +1,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { emCache, excedeuLimite, limparProtecoes } from './protecao.js'
+import { emCache, excedeuLimite, guardarNoNavegador, limparProtecoes } from './protecao.js'
 
 afterEach(() => limparProtecoes())
 describe('proteções das funções do servidor', () => {
+  it('deixa só o navegador do usuário guardar a resposta, separada por sessão', () => {
+    const cab: Record<string, string> = {}
+    guardarNoNavegador({ setHeader: (k: string, v: string) => { cab[k] = v } }, 600)
+    expect(cab['Cache-Control']).toBe('private, max-age=600')
+    expect(cab.Vary).toBe('Authorization')
+  })
   it('reaproveita a mesma resposta dentro do prazo do cache', async () => {
     const gerar = vi.fn(async () => ({ ok: 1 }))
     await emCache('t', 'a', 60_000, gerar)

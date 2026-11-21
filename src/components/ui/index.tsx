@@ -182,7 +182,7 @@ export function CabecalhoPagina({ titulo, descricao, acoes }: { titulo: string; 
   )
 }
 
-export function Modal({ aberto, aoFechar, titulo, children }: { aberto: boolean; aoFechar: () => void; titulo: string; children: ReactNode }) {
+export function Modal({ aberto, aoFechar, titulo, children, largo }: { aberto: boolean; aoFechar: () => void; titulo: string; children: ReactNode; largo?: boolean }) {
   if (!aberto) return null
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4" onMouseDown={aoFechar}>
@@ -190,7 +190,7 @@ export function Modal({ aberto, aoFechar, titulo, children }: { aberto: boolean;
         role="dialog"
         aria-modal="true"
         aria-label={titulo}
-        className="max-h-[92dvh] w-full min-w-0 overflow-y-auto overscroll-contain rounded-t-xl border bg-card p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-xl sm:max-w-lg sm:rounded-xl sm:p-6"
+        className={cn('max-h-[92dvh] w-full min-w-0 overflow-y-auto overscroll-contain rounded-t-xl border bg-card p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-xl sm:rounded-xl sm:p-6', largo ? 'sm:max-w-3xl' : 'sm:max-w-lg')}
         onMouseDown={(e) => e.stopPropagation()}
         onKeyDown={(e) => e.key === 'Escape' && aoFechar()}
       >

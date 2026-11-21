@@ -80,7 +80,7 @@ export default function HistoricoPrecos() {
             </div>
           </Card>
 
-          {precos.isLoading ? <Carregando texto="Consultando o Painel de Preços…" /> : precos.isError ? <Card className="p-4 text-sm">{(precos.error as Error).message} <button className="font-semibold text-primary underline" onClick={() => precos.refetch()}>Tentar novamente</button></Card> : precos.data && <>
+          {precos.isLoading ? <Carregando texto="Consultando os preços…" /> : precos.isError ? <Card className="p-4 text-sm">{(precos.error as Error).message} <button className="font-semibold text-primary underline" onClick={() => precos.refetch()}>Tentar novamente</button></Card> : precos.data && <>
             {precos.data.total === 0 ? <Vazio titulo="Nenhuma compra no período" texto="Amplie o período ou tire o filtro de UF." /> : <>
               <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {precos.data.unidades.slice(0, 3).map((u) => (
@@ -106,7 +106,7 @@ export default function HistoricoPrecos() {
                   </div>
                 </div>
                 <div className="space-y-3">{compras.map((c, i) => <CartaoCompraPreco key={`${c.idCompra}-${c.numeroItem}-${i}`} compra={c} />)}</div>
-                <p className="mt-3 text-xs text-muted-foreground">Fonte: Painel de Preços do governo federal (dados abertos do Compras.gov.br), consultado na hora.{precos.data.incompleto ? ' Muitas compras no período: a análise considera as 2.000 mais recentes.' : ''}</p>
+                <p className="mt-3 text-xs text-muted-foreground">Dados oficiais de compras públicas, consultados na hora.{precos.data.incompleto ? ' Muitas compras no período: a análise considera as 2.000 mais recentes.' : ''}</p>
               </Card>
             </>}
           </>}

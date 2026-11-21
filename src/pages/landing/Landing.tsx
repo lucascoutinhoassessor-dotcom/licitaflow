@@ -114,7 +114,7 @@ const AGENTES: { icone: LucideIcon; nome: string; texto: string; cor: string }[]
 
 const PASSOS = [
   { t: 'Crie sua conta', d: 'Em menos de um minuto, sem cartão de crédito.' },
-  { t: 'Digite o CNPJ', d: 'Buscamos os dados da sua empresa na Receita Federal automaticamente.' },
+  { t: 'Digite o CNPJ', d: 'Buscamos os dados da sua empresa automaticamente.' },
   { t: 'Diga o que você vende', d: 'O Radar passa a procurar pregões e dispensas sob medida para você.' },
   { t: 'Dispute com controle', d: 'Prazos, documentos e contratos organizados do edital ao pagamento.' },
 ]

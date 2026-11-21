@@ -13,7 +13,7 @@ export default function AnaliseEmpresas() {
   const [consulta, setConsulta] = useState<{ termo: string; uf: string } | null>(null), [pagina, setPagina] = useState(1)
   const [aviso, setAviso] = useState('')
   const q = useQuery({
-    queryKey: ['fornecedores', consulta, pagina], enabled: !!consulta, retry: 1, staleTime: 60_000,
+    queryKey: ['fornecedores', consulta, pagina], enabled: !!consulta, retry: 1, staleTime: 5 * 60_000, gcTime: 30 * 60_000,
     queryFn: ({ signal }) => pesquisarFornecedores(consulta!.termo, consulta!.uf, pagina, signal),
   })
   const lista = q.data?.data ?? [], status = q.data?.status, totalPaginas = Math.max(1, q.data?.totalPaginas ?? 1)
@@ -29,7 +29,7 @@ export default function AnaliseEmpresas() {
     setConsulta(nova)
   }
   return <>
-    <CabecalhoPagina titulo="Análise de empresas" descricao="Veja quanto cada empresa já vendeu para o governo, segundo os contratos publicados no PNCP." />
+    <CabecalhoPagina titulo="Análise de empresas" descricao="Veja quanto cada empresa já vendeu para o governo, segundo os contratos públicos publicados." />
     <Card className="mb-5 p-4">
       <form onSubmit={pesquisar} className="flex flex-col gap-2 sm:flex-row">
         <div className="relative min-w-0 flex-1"><Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
@@ -54,7 +54,7 @@ export default function AnaliseEmpresas() {
         <Card key={f.cnpj} className="p-4">
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div className="min-w-0"><h2 className="break-words text-sm font-semibold sm:text-base"><Link to={`/app/analise-empresas/${f.cnpj}`} className="text-sky-700 hover:underline dark:text-sky-300">{f.nome}</Link></h2><p className="text-xs text-muted-foreground">CNPJ {formatarCnpj(f.cnpj)}</p></div>
-            <div className="flex flex-wrap items-center gap-3"><Link to={`/app/analise-empresas/${f.cnpj}`} className="lf-degrade inline-flex h-8 items-center gap-1.5 rounded-full px-3.5 text-sm font-semibold text-white hover:brightness-110"><BarChart3 className="h-4 w-4" />Ver análise completa</Link><a className="inline-flex items-center gap-1 text-sm text-primary hover:underline" href={linkContratosPNCP(f.cnpj)} target="_blank" rel="noopener noreferrer">Contratos no PNCP <ExternalLink className="h-3.5 w-3.5" /></a></div>
+            <div className="flex flex-wrap items-center gap-3"><Link to={`/app/analise-empresas/${f.cnpj}`} className="lf-degrade inline-flex h-8 items-center gap-1.5 rounded-full px-3.5 text-sm font-semibold text-white hover:brightness-110"><BarChart3 className="h-4 w-4" />Ver análise completa</Link><a className="inline-flex items-center gap-1 text-sm text-primary hover:underline" href={linkContratosPNCP(f.cnpj)} target="_blank" rel="noopener noreferrer">Ver contratos <ExternalLink className="h-3.5 w-3.5" /></a></div>
           </div>
           <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-4">
             <div><dt className="text-xs text-muted-foreground">Contratos</dt><dd className="font-medium">{f.contratos.toLocaleString('pt-BR')}</dd></div>

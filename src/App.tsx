@@ -25,6 +25,7 @@ const Equipe = lazy(() => import('@/pages/app/Equipe'))
 const Configuracoes = lazy(() => import('@/pages/app/Configuracoes'))
 const Oportunidades = lazy(() => import('@/pages/app/Oportunidades'))
 const OportunidadeDetalhe = lazy(() => import('@/pages/app/OportunidadeDetalhe'))
+const AnaliseMercado = lazy(() => import('@/pages/app/AnaliseMercado'))
 const AnaliseEmpresas = lazy(() => import('@/pages/app/AnaliseEmpresas'))
 const AnaliseEmpresaDetalhe = lazy(() => import('@/pages/app/AnaliseEmpresaDetalhe'))
 const HistoricoPrecos = lazy(() => import('@/pages/app/HistoricoPrecos'))
@@ -141,6 +142,7 @@ export default function App() {
             <Route path="configuracoes" element={<Configuracoes />} />
             <Route path="oportunidades" element={<Oportunidades />} />
             <Route path="oportunidades/:cnpj/:ano/:seq" element={<OportunidadeDetalhe />} />
+            <Route path="analise-mercado" element={<AnaliseMercado />} />
             <Route path="analise-empresas" element={<AnaliseEmpresas />} />
             <Route path="analise-empresas/:cnpj" element={<AnaliseEmpresaDetalhe />} />
             <Route path="historico-precos" element={<HistoricoPrecos />} />

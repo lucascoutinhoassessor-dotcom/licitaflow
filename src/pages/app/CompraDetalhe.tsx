@@ -69,7 +69,7 @@ export default function CompraDetalhe() {
       <button type="button" onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/app/historico-precos'))} className="mb-4 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
         <ArrowLeft className="h-4 w-4" /> Voltar
       </button>
-      {q.isLoading ? <Carregando texto="Consultando a compra nos dados abertos do governo…" /> : q.isError ? (
+      {q.isLoading ? <Carregando texto="Consultando a compra…" /> : q.isError ? (
         <Card className="p-5 text-sm">{(q.error as Error).message} <button className="font-semibold text-primary underline" onClick={() => q.refetch()}>Tentar novamente</button></Card>
       ) : c && <>
         <Card className="mb-5 p-5 sm:p-7">
@@ -86,9 +86,9 @@ export default function CompraDetalhe() {
           </div>
           <div className="mt-4 flex flex-wrap gap-2">
             {rota && <Link to={rota}><Button tamanho="sm"><FileText className="h-4 w-4" />Acessar a oportunidade</Button></Link>}
-            <a href={linkCompraComprasGov(idCompra)} target="_blank" rel="noopener noreferrer"><Button variante="contorno" tamanho="sm"><ExternalLink className="h-4 w-4" />Ver disputa no Compras.gov</Button></a>
+            <a href={linkCompraComprasGov(idCompra)} target="_blank" rel="noopener noreferrer"><Button variante="contorno" tamanho="sm"><ExternalLink className="h-4 w-4" />Ver disputa no portal</Button></a>
           </div>
-          <p className="mt-3 text-xs text-muted-foreground">Lances, propostas desclassificadas e motivos ficam na página oficial da compra (Compras.gov), que exige acesso próprio.</p>
+          <p className="mt-3 text-xs text-muted-foreground">Lances, propostas desclassificadas e motivos ficam na página oficial da compra, no portal da disputa, que exige acesso próprio.</p>
         </Card>
         <EmpresasDisputa controle={c.controle} vencedoras={vencedorasDa(c)} />
         <h2 className="mb-3 flex items-center gap-2 text-lg font-semibold"><Tag className="h-5 w-5 text-sky-400" />Itens, vencedores e marcas</h2>
