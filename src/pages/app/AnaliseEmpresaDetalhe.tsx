@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { ArrowLeft, Award, Building2, CalendarRange, ExternalLink, FileText, MapPin, ShieldAlert, ShieldCheck, Tag, Target, Trophy, XCircle } from 'lucide-react'
+import BotaoInverterOrdem from '@/components/BotaoInverterOrdem'
 import { Badge, Button, Card, Carregando, Input, Vazio } from '@/components/ui'
 import { analisarEmpresa, rotaPorControle } from '@/lib/analiseEmpresa'
 import { linkContratosPNCP } from '@/lib/fornecedores'
@@ -15,6 +16,7 @@ export default function AnaliseEmpresaDetalhe() {
   const navigate = useNavigate()
   const hoje = new Date(), umAno = new Date(); umAno.setFullYear(umAno.getFullYear() - 1)
   const [periodo, setPeriodo] = useState({ de: iso(umAno), ate: iso(hoje) })
+  const [antigosPrimeiro, setAntigosPrimeiro] = useState(false)
   const [rascunho, setRascunho] = useState(periodo)
   const valido = /^\d{14}$/.test(cnpj)
   const q = useQuery({ queryKey: ['analise-empresa', cnpj, periodo], enabled: valido, retry: 1, staleTime: 300_000, queryFn: ({ signal }) => analisarEmpresa(cnpj, periodo.de, periodo.ate, signal) })
@@ -119,9 +121,12 @@ export default function AnaliseEmpresaDetalhe() {
         </Card>
 
         <Card className="p-5">
-          <h2 className="mb-3 font-semibold">Últimos itens vencidos</h2>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <h2 className="font-semibold">Últimos itens vencidos</h2>
+            {a.ultimos.length > 1 && <BotaoInverterOrdem invertido={antigosPrimeiro} aoMudar={setAntigosPrimeiro} normal="Mais recentes primeiro" inverso="Mais antigos primeiro" />}
+          </div>
           {a.ultimos.length === 0 ? <p className="text-sm text-muted-foreground">Nenhum item vencido no período (resultados da Lei 14.133 publicados no PNCP).</p> : <ul className="divide-y">
-            {a.ultimos.map((r) => {
+            {(antigosPrimeiro ? [...a.ultimos].reverse() : a.ultimos).map((r) => {
               const rota = rotaPorControle(r.controle)
               return <li key={`${r.controle}-${r.item}`} className="flex flex-wrap items-center gap-x-4 gap-y-1 py-2.5 text-sm">
                 <span className="min-w-0 flex-1">{rota ? <Link to={rota} className="font-semibold text-sky-700 hover:underline dark:text-sky-300">{r.controle}</Link> : r.controle} · Item {r.item}</span>

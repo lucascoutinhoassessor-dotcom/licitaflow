@@ -11,6 +11,7 @@ const UFS = 'AC AL AP AM BA CE DF ES GO MA MT MS MG PA PB PR PE PI RJ RN RS RO R
 export default function AnaliseEmpresas() {
   const [termo, setTermo] = useState(''), [uf, setUf] = useState('')
   const [consulta, setConsulta] = useState<{ termo: string; uf: string } | null>(null), [pagina, setPagina] = useState(1)
+  const [aviso, setAviso] = useState('')
   const q = useQuery({
     queryKey: ['fornecedores', consulta, pagina], enabled: !!consulta, retry: 1, staleTime: 60_000,
     queryFn: ({ signal }) => pesquisarFornecedores(consulta!.termo, consulta!.uf, pagina, signal),
@@ -19,6 +20,9 @@ export default function AnaliseEmpresas() {
   function pesquisar(e: FormEvent) {
     e.preventDefault()
     const nova = { termo: termo.trim(), uf }
+    // Sem nome ou CNPJ não pesquisa: a lista do Brasil inteiro não ajuda a analisar um concorrente.
+    if (nova.termo.replace(/[^\p{L}\p{N}]/gu, '').length < 3) { setAviso('Digite o nome ou o CNPJ da empresa (pelo menos 3 letras ou números).'); return }
+    setAviso('')
     // Mesma pesquisa na primeira página: busca de novo em vez de mostrar o resultado guardado.
     if (consulta && pagina === 1 && consulta.termo === nova.termo && consulta.uf === nova.uf) { void q.refetch(); return }
     setPagina(1)
@@ -29,12 +33,13 @@ export default function AnaliseEmpresas() {
     <Card className="mb-5 p-4">
       <form onSubmit={pesquisar} className="flex flex-col gap-2 sm:flex-row">
         <div className="relative min-w-0 flex-1"><Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-          <Input className="pl-9" aria-label="Nome ou CNPJ da empresa" placeholder="Nome ou CNPJ. Ex.: papelaria, 11.222.333/0001-44" value={termo} onChange={e => setTermo(e.target.value)} maxLength={128} /></div>
+          <Input className="pl-9" aria-label="Nome ou CNPJ da empresa" placeholder="Nome ou CNPJ. Ex.: papelaria, 11.222.333/0001-44" value={termo} onChange={e => { setTermo(e.target.value); if (aviso) setAviso('') }} maxLength={128} required minLength={3} aria-invalid={!!aviso} aria-describedby={aviso ? 'aviso-empresa' : undefined} /></div>
         <Select aria-label="UF do órgão contratante" className="sm:w-48" value={uf} onChange={e => setUf(e.target.value)}><option value="">Brasil inteiro</option>{UFS.map(u => <option key={u} value={u}>{u}</option>)}</Select>
-        <Button type="submit" carregando={q.isFetching}>Pesquisar</Button>
+        <Button type="submit" carregando={q.isFetching} disabled={termo.trim().length < 3}>Pesquisar</Button>
       </form>
+      {aviso && <p id="aviso-empresa" role="alert" className="mt-2 text-sm font-medium text-destructive">{aviso}</p>}
     </Card>
-    {!consulta ? <Vazio icone={Building} titulo="Conheça seus concorrentes" texto="Pesquise pelo nome ou CNPJ. Deixe em branco para ver as empresas que mais venderam." /> : <>
+    {!consulta ? <Vazio icone={Building} titulo="Conheça seus concorrentes" texto="Digite o nome ou o CNPJ da empresa para ver contratos, vitórias, marcas e penalidades." /> : <>
       {consulta.termo.replace(/\D/g, '').length === 14 && <Card className="mb-4 flex flex-wrap items-center justify-between gap-3 p-4"><p className="text-sm">Ver vitórias, valores homologados e penalidades do CNPJ <strong>{consulta.termo}</strong> direto nas fontes oficiais.</p><Link to={`/app/analise-empresas/${consulta.termo.replace(/\D/g, '')}`} className="lf-degrade inline-flex h-9 items-center gap-1.5 rounded-full px-4 text-sm font-semibold text-white hover:brightness-110"><BarChart3 className="h-4 w-4" />Analisar este CNPJ</Link></Card>}
       <div role="status" aria-live="polite" className="mb-4 space-y-1">
         {q.isFetching ? <p className="text-sm text-muted-foreground">Pesquisando...</p>

@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { Package, Search, Tag, Wrench } from 'lucide-react'
+import BotaoInverterOrdem from '@/components/BotaoInverterOrdem'
 import { Badge, Button, CabecalhoPagina, Card, Carregando, Input, Select, Vazio } from '@/components/ui'
 import { buscarCatalogo, historicoPrecos, type ItemCatalogo } from '@/lib/precos'
 import { formatarData, formatarMoeda } from '@/lib/format'
@@ -21,7 +22,7 @@ export default function HistoricoPrecos() {
   const [item, setItem] = useState<ItemCatalogo | null>(null)
   const umAno = new Date(); umAno.setFullYear(umAno.getFullYear() - 1)
   const [filtros, setFiltros] = useState({ uf: '', de: iso(umAno), ate: iso(new Date()) })
-  const [refino, setRefino] = useState('')
+  const [refino, setRefino] = useState(''), [antigasPrimeiro, setAntigasPrimeiro] = useState(false)
   const catalogo = useQuery({ queryKey: ['catalogo', pesquisa], enabled: !!pesquisa, staleTime: 300_000, retry: 1, queryFn: ({ signal }) => buscarCatalogo(pesquisa!.termo, pesquisa!.tipo, signal) })
   const precos = useQuery({ queryKey: ['precos', item?.tipo, item?.codigo, filtros], enabled: !!item, staleTime: 300_000, retry: 1, queryFn: ({ signal }) => historicoPrecos(item!, filtros, signal) })
 
@@ -31,7 +32,9 @@ export default function HistoricoPrecos() {
     setItem(null); setRefino('')
     setPesquisa({ termo: termo.trim(), tipo })
   }
-  const compras = (precos.data?.compras ?? []).filter((c) => !refino.trim() || normalizar(`${c.descricao} ${c.marca ?? ''} ${c.fornecedor ?? ''}`).includes(normalizar(refino.trim())))
+  const filtradas = (precos.data?.compras ?? []).filter((c) => !refino.trim() || normalizar(`${c.descricao} ${c.marca ?? ''} ${c.fornecedor ?? ''}`).includes(normalizar(refino.trim())))
+  // A fonte entrega das mais recentes para as mais antigas; o botão inverte.
+  const compras = antigasPrimeiro ? [...filtradas].reverse() : filtradas
 
   return <>
     <CabecalhoPagina titulo="Histórico de preços" descricao="Quanto o governo pagou por um produto ou serviço: preços homologados, marcas, fornecedores e órgãos." />
@@ -97,7 +100,10 @@ export default function HistoricoPrecos() {
               <Card className="p-4 sm:p-5">
                 <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <h2 className="font-semibold">Compras ({compras.length}{precos.data.compras.length < precos.data.total ? ` das ${precos.data.compras.length} mais recentes` : ''})</h2>
-                  <Input className="sm:w-72" placeholder="Filtrar por descrição, marca ou fornecedor" value={refino} onChange={(e) => setRefino(e.target.value)} />
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                    <BotaoInverterOrdem invertido={antigasPrimeiro} aoMudar={setAntigasPrimeiro} normal="Mais recentes primeiro" inverso="Mais antigas primeiro" />
+                    <Input className="sm:w-72" placeholder="Filtrar por descrição, marca ou fornecedor" value={refino} onChange={(e) => setRefino(e.target.value)} />
+                  </div>
                 </div>
                 <div className="space-y-3">{compras.map((c, i) => <CartaoCompraPreco key={`${c.idCompra}-${c.numeroItem}-${i}`} compra={c} />)}</div>
                 <p className="mt-3 text-xs text-muted-foreground">Fonte: Painel de Preços do governo federal (dados abertos do Compras.gov.br), consultado na hora.{precos.data.incompleto ? ' Muitas compras no período: a análise considera as 2.000 mais recentes.' : ''}</p>

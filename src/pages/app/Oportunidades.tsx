@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import BotaoInverterOrdem from '@/components/BotaoInverterOrdem'
 import { Link, useNavigate } from 'react-router-dom'
 import { CalendarClock, Package, Radar, Search, SlidersHorizontal, ChevronDown } from 'lucide-react'
 import { toast } from 'sonner'
@@ -81,7 +82,9 @@ export default function Oportunidades() {
     </Card>
     {!consulta?<Vazio icone={Radar} titulo="Encontre sua próxima oportunidade" texto="Pesquise o produto ou serviço. Por padrão, a busca inclui o Brasil inteiro e editais recebendo propostas." />:<>
       <div role="status" aria-live="polite" className="mb-4 space-y-2">
-        {q.isFetching?<p className="text-sm text-muted-foreground">Pesquisando...</p>:q.isError?<div role="alert" className="flex flex-wrap items-center gap-3 text-sm text-destructive"><p>{q.error.message}</p><Button tamanho="sm" variante="contorno" onClick={()=>q.refetch()}>Tentar novamente</Button></div>:<p className="text-sm font-medium">{q.data?.totalRegistros??0} {(q.data?.totalRegistros??0)===1?'oportunidade encontrada':'oportunidades encontradas'}</p>}
+        {q.isFetching?<p className="text-sm text-muted-foreground">Pesquisando...</p>:q.isError?<div role="alert" className="flex flex-wrap items-center gap-3 text-sm text-destructive"><p>{q.error.message}</p><Button tamanho="sm" variante="contorno" onClick={()=>q.refetch()}>Tentar novamente</Button></div>:<div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm font-medium">{q.data?.totalRegistros??0} {(q.data?.totalRegistros??0)===1?'oportunidade encontrada':'oportunidades encontradas'}</p>
+          <BotaoInverterOrdem invertido={!!consulta.inverter} aoMudar={inverter=>{const novo={...consulta,inverter};setF(v=>({...v,inverter}));setPagina(1);setConsulta(novo)}}
+            normal={consulta.situacao==='abertas'?'Mais próximas primeiro':'Mais recentes primeiro'} inverso={consulta.situacao==='abertas'?'Mais distantes primeiro':'Mais antigas primeiro'} /></div>}
         {catalogo?.ultima_coleta_em&&<p className="text-xs text-muted-foreground">Base atualizada em {new Date(catalogo.ultima_coleta_em).toLocaleString('pt-BR')}.</p>}
         {catalogo&&!catalogo.carga_inicial_concluida&&<p className="text-sm text-muted-foreground">A base está recebendo a carga inicial. {catalogo.editais_indexados.toLocaleString('pt-BR')} editais já estão disponíveis; a cobertura ainda é parcial.</p>}
         {catalogo?.aviso&&<p className="text-xs text-muted-foreground">{catalogo.aviso}</p>}

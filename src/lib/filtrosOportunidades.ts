@@ -21,8 +21,10 @@ export interface FiltrosOportunidades extends FiltrosPNCP {
   aberturaDe: string; aberturaAte: string
   /** Só sessões em dias úteis (seg. a sex., fora de feriados nacionais). */
   diasUteis: boolean
+  /** Inverte a ordem: abertas mais distantes primeiro; publicações mais antigas primeiro. */
+  inverter: boolean
 }
-export const filtrosExtras = { modalidades: MODALIDADES.map(m=>m[0]) as string[], portais: PORTAIS.map(p => p[0]) as string[], busca: '', orgao: '', minimo: '', maximo: '', itemMinimo: '', itemMaximo: '', maxItens: '', naoDivulgado: false, exclusivo: false, excluirSrp: false, excluir: '', tipoItem: '' as '' | 'M' | 'S', modosDisputa: [] as string[], aberturaDe: '', aberturaAte: '', diasUteis: true }
+export const filtrosExtras = { modalidades: MODALIDADES.map(m=>m[0]) as string[], portais: PORTAIS.map(p => p[0]) as string[], busca: '', orgao: '', minimo: '', maximo: '', itemMinimo: '', itemMaximo: '', maxItens: '', naoDivulgado: false, exclusivo: false, excluirSrp: false, excluir: '', tipoItem: '' as '' | 'M' | 'S', modosDisputa: [] as string[], aberturaDe: '', aberturaAte: '', diasUteis: true, inverter: false }
 export interface ItemCompra {
   numeroItem: number; descricao?: string; quantidade?: number; unidadeMedida?: string
   valorUnitarioEstimado: number | null; valorTotal?: number | null; orcamentoSigiloso?: boolean

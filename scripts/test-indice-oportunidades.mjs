@@ -169,6 +169,23 @@ await db.query('select licitaflow_coleta.registrar_itens($1,$2::jsonb,1,true)',[
 const enx=(await como('authenticated','select public.itens_oportunidade_indexados($1) r',[c.numeroControlePNCP])).rows[0].r
 ok(enx.length===2&&enx[0].descricao.length===160&&Number(enx[0].valorTotal)===6000&&enx[1].valorUnitarioEstimado===null&&enx[1].valorTotal===null,'itens enxutos: descrição curta, total calculado e sigilo preservado')
 ok((await buscar({busca:'notebook',exclusivo:true,itemMinimo:'2000'})).totalRegistros===1,'filtros por item continuam funcionando sem o índice extra')
+// Campos de volta (migration 20261121000022): critério, situação, grupo, lote e valor total.
+await db.exec(readFileSync('supabase/migrations/20261121000022_itens_campos_de_volta.sql','utf8'))
+ok((await db.query("select count(*)::int n from licitaflow_coleta.jobs where tipo='itens' and ciclo like '%/recoleta-20261121' and not concluido")).rows[0].n>=0,'recoleta dos itens já guardados é enfileirada sem erro')
+await db.query('select licitaflow_coleta.registrar_itens($1,$2::jsonb,1,true)',[c.numeroControlePNCP,JSON.stringify([
+ {numeroItem:1,descricao:'Notebook',quantidade:2,unidadeMedida:'UN',valorUnitarioEstimado:3000,valorTotal:5999.5,tipoBeneficio:1,criterioJulgamentoId:1,criterioJulgamentoNome:'Menor preço',situacaoCompraItem:1,situacaoCompraItemNome:'Em Andamento',numeroGrupo:3},
+ {numeroItem:2,descricao:'Mouse sigiloso',orcamentoSigiloso:true,valorUnitarioEstimado:50,valorTotal:150,quantidade:3,criterioJulgamentoNome:'Maior desconto',numeroLote:'7'}])])
+const volta=(await como('authenticated','select public.itens_oportunidade_indexados($1) r',[c.numeroControlePNCP])).rows[0].r
+ok(Number(volta[0].valorTotal)===5999.5&&volta[0].criterioJulgamentoNome==='Menor preço'&&volta[0].situacaoCompraItemNome==='Em andamento'&&volta[0].numeroGrupo==='3'&&volta[0].tipoBeneficioNome==='Participação exclusiva para ME/EPP','critério, situação, grupo, benefício e valor total publicados voltam')
+ok(volta[1].criterioJulgamentoNome==='Maior desconto'&&volta[1].numeroLote==='7'&&volta[1].valorTotal===null&&volta[1].valorUnitarioEstimado===null,'critério só pelo nome é reconhecido, lote volta e sigilo continua escondendo valores')
+ok((await buscar({busca:'notebook',exclusivo:true,itemMinimo:'2000'})).totalRegistros===1,'filtros por item seguem funcionando com os campos de volta')
+// Inverter ordem (migration 20261121000023).
+await db.exec(readFileSync('supabase/migrations/20261121000023_inverter_ordem.sql','utf8'))
+const datas=r=>r.data.map(x=>x.dataEncerramentoProposta)
+const normal=datas(await buscar({})),invertida=datas(await buscar({inverter:true}))
+ok(normal.length>1&&normal[0]<=normal[normal.length-1]&&invertida[0]>=invertida[invertida.length-1]&&invertida[0]!==normal[0],'botão inverter: abertas mais distantes primeiro')
+const pubN=(await buscar({situacao:'publicacoes',inicio:'2000-01-01',fim:'2099-12-31'})).data.map(x=>x.dataPublicacaoPncp),pubI=(await buscar({situacao:'publicacoes',inicio:'2000-01-01',fim:'2099-12-31',inverter:true})).data.map(x=>x.dataPublicacaoPncp)
+ok(pubN.length>1&&pubN[0]>=pubN[pubN.length-1]&&pubI[0]<=pubI[pubI.length-1],'botão inverter: publicações mais antigas primeiro')
 console.log('Preparando 50 mil editais de teste...')
 await db.exec(`insert into public.oportunidades_indice(controle,objeto,complemento,orgao_cnpj,orgao_nome,uf,modalidade,portal_id,publicacao,encerramento,situacao,valor,srp,compra)
 select 'benchmark-'||n,case when n%100=0 then 'Aquisição de microcomputadores para educação' else 'Aquisição de material de escritório e papelaria '||n end,'','12345678000190','Órgão público',case when n%3=0 then 'SP' else 'RJ' end,6,'comprasnet',now()-(n||' seconds')::interval,'2099-12-31',1,10000,false,jsonb_build_object('numeroControlePNCP','benchmark-'||n,'objetoCompra','Aquisição de bens públicos') from generate_series(1,50000) n;analyze public.oportunidades_indice;analyze public.oportunidades_itens_indice;`)
