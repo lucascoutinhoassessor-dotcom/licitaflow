@@ -91,11 +91,11 @@ export default function HistoricoPrecos() {
                   {compras.map((c, i) => (
                     <li key={`${c.idCompra}-${i}`} className="grid gap-1 py-3 text-sm sm:grid-cols-[1fr_auto] sm:gap-4">
                       <div className="min-w-0">
-                        <p className="line-clamp-2 break-words font-medium">{c.descricao || 'Sem descrição'}</p>
+                        <p className="line-clamp-2 break-words font-medium">{/^\d{15,20}$/.test(c.idCompra) ? <Link className="text-sky-700 hover:underline dark:text-sky-300" to={`/app/compras/${c.idCompra}`}>{c.descricao || 'Sem descrição'}</Link> : (c.descricao || 'Sem descrição')}</p>
                         <p className="text-xs text-muted-foreground">{formatarData(c.data)} · {c.orgao ?? 'Órgão não informado'}{c.municipio ? ` · ${c.municipio}` : ''}{c.uf ? `/${c.uf}` : ''}</p>
                         <p className="text-xs text-muted-foreground">{c.fornecedor ? <>Vencedor: {c.cnpj && /^\d{14}$/.test(c.cnpj) ? <Link className="text-sky-700 hover:underline dark:text-sky-300" to={`/app/analise-empresas/${c.cnpj}`}>{c.fornecedor}</Link> : c.fornecedor}</> : 'Vencedor não informado'}{c.marca ? ` · Marca: ${c.marca}` : ''}</p>
                       </div>
-                      <div className="text-left sm:text-right"><p className="text-base font-bold tabular-nums">{formatarMoeda(c.preco)}</p><p className="text-xs text-muted-foreground">por {c.unidade}{c.quantidade ? ` · qtd. ${c.quantidade.toLocaleString('pt-BR')}` : ''}</p></div>
+                      <div className="text-left sm:text-right"><p className="text-base font-bold tabular-nums">{formatarMoeda(c.preco)}</p><p className="text-xs text-muted-foreground">por {c.unidade}{c.quantidade ? ` · qtd. ${c.quantidade.toLocaleString('pt-BR')}` : ''}</p>{/^\d{15,20}$/.test(c.idCompra) && <Link to={`/app/compras/${c.idCompra}`} className="mt-1 inline-flex h-8 items-center rounded-full border px-3 text-xs font-semibold hover:bg-muted">Ver compra, empresas e marcas</Link>}</div>
                     </li>
                   ))}
                 </ul>

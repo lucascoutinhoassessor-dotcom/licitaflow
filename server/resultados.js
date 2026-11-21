@@ -1,3 +1,4 @@
+import { emCache, excedeuLimite, usuarioLogado } from './protecao.js'
 // Análise de empresa sob demanda: itens vencidos (resultados homologados) por CNPJ, direto da fonte oficial
 // de dados abertos do Compras.gov.br (Lei 14.133, publicados no PNCP). Nada é guardado no banco.
 // Opcional: sanções no Portal da Transparência (CEIS e CNEP), quando PORTAL_TRANSPARENCIA_CHAVE existir.
@@ -27,6 +28,14 @@ export function resumirResultados(resultados) {
     if (r.idContratacaoPNCP) editais.add(r.idContratacaoPNCP)
     if (r.aplicacaoBeneficioMeepp) meEpp += 1
   }
+  // Sazonalidade: valor e itens vencidos por mês (AAAA-MM).
+  const porMes = {}
+  for (const r of validos) {
+    const mes = String(r.dataResultadoPncp ?? '').slice(0, 7)
+    if (!/^\d{4}-\d{2}$/.test(mes)) continue
+    const m = (porMes[mes] ??= { mes, itens: 0, valor: 0 })
+    m.itens += 1; m.valor += valor(r)
+  }
   const ordenados = [...validos].sort((a, b) => String(b.dataResultadoPncp).localeCompare(String(a.dataResultadoPncp)))
   return {
     nome: validos[0]?.nomeRazaoSocialFornecedor ?? resultados[0]?.nomeRazaoSocialFornecedor ?? null,
@@ -37,7 +46,9 @@ export function resumirResultados(resultados) {
     itensComBeneficioMeEpp: meEpp,
     porUf: Object.entries(porUf).map(([uf, v]) => ({ uf, valor: Math.round(v * 100) / 100 })).sort((a, b) => b.valor - a.valor),
     principaisOrgaos: Object.values(porOrgao).sort((a, b) => b.valor - a.valor).slice(0, 10),
+    porMes: Object.values(porMes).map((m) => ({ ...m, valor: Math.round(m.valor * 100) / 100 })).sort((a, b) => a.mes.localeCompare(b.mes)),
     ultimos: ordenados.slice(0, 50).map((r) => ({
+      idCompra: String(r.idCompraItem ?? '').slice(0, 17) || null,
       controle: r.idContratacaoPNCP ?? r.numeroControlePNCPCompra, item: r.numeroItemPncp, data: r.dataResultadoPncp,
       uf: r.unidadeOrgaoUfSigla, orgaoCnpj: r.orgaoEntidadeCnpj, quantidade: Number(r.quantidadeHomologada) || null,
       valorUnitario: Number(r.valorUnitarioHomologado) || null, valorTotal: valor(r) || null, meEpp: !!r.aplicacaoBeneficioMeepp,
@@ -58,6 +69,60 @@ async function buscarResultados(cnpj, de, ate) {
     paginas = Number(j.totalPaginas) || 1
   }
   return { todos, incompleto: paginas > MAX_PAGINAS }
+}
+
+const DADOS = 'https://dadosabertos.compras.gov.br'
+async function obterDados(caminho, params) {
+  const r = await fetch(`${DADOS}/${caminho}?${new URLSearchParams(params)}`, { headers: { Accept: 'application/json', 'User-Agent': 'licitaflow-analise' }, signal: AbortSignal.timeout(15000) })
+  if (!r.ok) return []
+  const j = await r.json().catch(() => null)
+  return Array.isArray(j?.resultado) ? j.resultado : []
+}
+
+/**
+ * Perfil da empresa a partir das maiores compras vencidas: o que mais vende (padrão descritivo do catálogo)
+ * e com quais marcas venceu (Painel de Preços). Limitado para responder em poucos segundos.
+ */
+export async function perfilEmpresa(cnpj, resultados, { maxCompras = 8, maxMarcas = 12 } = {}) {
+  const valor = (r) => { const v = Number(r.valorTotalHomologado); return Number.isFinite(v) && v > 0 && v < 1e11 ? v : 0 }
+  const venceu = new Map() // idCompra -> Map(numeroItem -> valor)
+  for (const r of resultados) {
+    if (r.dataCancelamentoPncp) continue
+    const id = String(r.idCompraItem ?? '').slice(0, 17)
+    if (!/^\d{17}$/.test(id)) continue
+    const m = venceu.get(id) ?? new Map(); m.set(Number(r.numeroItemPncp), valor(r)); venceu.set(id, m)
+  }
+  const maiores = [...venceu.entries()].map(([id, m]) => [id, m, [...m.values()].reduce((s, v) => s + v, 0)]).sort((a, b) => b[2] - a[2]).slice(0, maxCompras)
+  const fortes = {}, marcas = {}, marcaPorItem = {}
+  const consultasMarca = []
+  await Promise.all(maiores.map(async ([idCompra, itensVencidos]) => {
+    const itens = await obterDados('modulo-contratacoes/2.1_consultarItensContratacoes_PNCP_14133_Id', { tipo: 'idCompra', codigo: idCompra }).catch(() => [])
+    const vistos = new Set() // a fonte pode repetir o mesmo item (versões)
+    for (const i of itens) {
+      const n = Number(i.numeroItemPncp)
+      if (!itensVencidos.has(n) || vistos.has(n)) continue
+      vistos.add(n)
+      const nome = (i.nomePdm || i.itemCategoriaNome || i.descricaoResumida || '').toString().trim().toUpperCase().slice(0, 80)
+      if (nome) { const f = (fortes[nome] ??= { nome, itens: 0, valor: 0 }); f.itens += 1; f.valor += itensVencidos.get(n) ?? 0 }
+      if (i.materialOuServico === 'M' && i.codigoPdm) consultasMarca.push({ idCompra, codigoPdm: i.codigoPdm, numeroItemCompra: Number(i.numeroItemCompra), numero: n })
+    }
+  }))
+  const unicas = new Map()
+  for (const c of consultasMarca) unicas.set(`${c.idCompra}-${c.codigoPdm}`, c)
+  await Promise.all([...unicas.values()].slice(0, maxMarcas).map(async (c) => {
+    const lista = await obterDados('modulo-pesquisa-preco/1_consultarMaterial', { pagina: '1', tamanhoPagina: '500', tipo: 'codigoPdm', codigo: String(c.codigoPdm), idCompra: c.idCompra }).catch(() => [])
+    for (const p of lista) {
+      if (String(p.niFornecedor) !== cnpj || !p.marca || p.marca === 'null') continue
+      const marca = String(p.marca).trim().toUpperCase()
+      marcas[marca] = (marcas[marca] ?? 0) + 1
+      marcaPorItem[`${c.idCompra}-${p.numeroItemCompra}`] = marca
+    }
+  }))
+  return {
+    fortes: Object.values(fortes).map((f) => ({ ...f, valor: Math.round(f.valor * 100) / 100 })).sort((a, b) => b.valor - a.valor).slice(0, 10),
+    marcas: Object.entries(marcas).map(([marca, n]) => ({ marca, n })).sort((a, b) => b.n - a.n).slice(0, 12),
+    marcaPorItem,
+  }
 }
 
 async function buscarSancoes(cnpj, chave) {
@@ -90,10 +155,17 @@ export default async function handler(req, res) {
   if (!/^\d{14}$/.test(cnpj)) return res.status(400).json({ error: 'Informe um CNPJ com 14 dígitos.' })
   if (!dataValida(de) || !dataValida(ate) || de > ate || Date.parse(ate) - Date.parse(de) > 400 * 86_400_000) return res.status(400).json({ error: 'Período inválido (máximo de 1 ano).' })
   try {
-    const u = await fetch(`${base}/auth/v1/user`, { headers: { apikey: anon, Authorization: token }, signal: AbortSignal.timeout(10000) })
-    if (!u.ok) return res.status(401).json({ error: 'Entre na sua conta' })
-    const [{ todos, incompleto }, sancoes] = await Promise.all([buscarResultados(cnpj, de, ate), buscarSancoes(cnpj, env.PORTAL_TRANSPARENCIA_CHAVE).catch(() => null)])
-    return res.json({ cnpj, de, ate, incompleto, ...resumirResultados(todos), sancoes, sancoesDisponiveis: !!env.PORTAL_TRANSPARENCIA_CHAVE })
+    const usuario = await usuarioLogado(base, anon, token)
+    if (!usuario) return res.status(401).json({ error: 'Entre na sua conta' })
+    if (excedeuLimite('resultados', usuario)) return res.status(429).json({ error: 'Muitas consultas em pouco tempo. Aguarde um minuto e tente de novo.' })
+    const corpo = await emCache('resultados', `${cnpj}|${de}|${ate}`, 10 * 60_000, async () => {
+      const [{ todos, incompleto }, sancoes] = await Promise.all([buscarResultados(cnpj, de, ate), buscarSancoes(cnpj, env.PORTAL_TRANSPARENCIA_CHAVE).catch(() => null)])
+      const resumo = resumirResultados(todos)
+      const perfil = await perfilEmpresa(cnpj, todos).catch(() => ({ fortes: [], marcas: [], marcaPorItem: {} }))
+      const ultimos = resumo.ultimos.map((u) => ({ ...u, marca: perfil.marcaPorItem[`${u.idCompra}-${u.item}`] ?? null }))
+      return { cnpj, de, ate, incompleto, ...resumo, ultimos, fortes: perfil.fortes, marcas: perfil.marcas, sancoes, sancoesDisponiveis: !!env.PORTAL_TRANSPARENCIA_CHAVE }
+    })
+    return res.json(corpo)
   } catch (e) {
     return res.status(e.status ?? 500).json({ error: e.status ? e.message : 'Não foi possível montar a análise agora.' })
   }

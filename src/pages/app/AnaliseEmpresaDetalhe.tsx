@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowLeft, Award, Building2, ExternalLink, FileText, MapPin, ShieldAlert, ShieldCheck, Trophy } from 'lucide-react'
+import { ArrowLeft, Award, Building2, CalendarRange, ExternalLink, FileText, MapPin, ShieldAlert, ShieldCheck, Tag, Target, Trophy, XCircle } from 'lucide-react'
 import { Badge, Button, Card, Carregando, Input, Vazio } from '@/components/ui'
 import { analisarEmpresa, rotaPorControle } from '@/lib/analiseEmpresa'
 import { linkContratosPNCP } from '@/lib/fornecedores'
@@ -21,6 +21,8 @@ export default function AnaliseEmpresaDetalhe() {
   if (!valido) return <Vazio titulo="CNPJ inválido" texto="Informe um CNPJ com 14 dígitos." acao={<Link to="/app/analise-empresas"><Button variante="contorno">Voltar</Button></Link>} />
   const a = q.data
   const maxUf = Math.max(1, ...(a?.porUf.map((u) => u.valor) ?? [1]))
+  const maxMes = Math.max(1, ...(a?.porMes?.map((m) => m.valor) ?? [1]))
+  const nomeMes = (m: string) => new Date(`${m}-15T12:00:00`).toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' })
   const indicadores = a ? [
     { rotulo: 'Itens vencidos', valor: a.itensVencidos.toLocaleString('pt-BR'), icone: Trophy, cor: 'from-emerald-500/25 to-teal-400/10 text-emerald-400 ring-emerald-500/30' },
     { rotulo: 'Licitações vencidas', valor: a.editaisVencidos.toLocaleString('pt-BR'), icone: Award, cor: 'from-sky-500/25 to-blue-500/10 text-sky-400 ring-sky-500/30' },
@@ -86,6 +88,36 @@ export default function AnaliseEmpresaDetalhe() {
           </Card>
         </div>
 
+        <div className="mb-5 grid gap-5 lg:grid-cols-3">
+          <Card className="p-5 lg:col-span-2">
+            <h2 className="mb-3 flex items-center gap-2 font-semibold"><CalendarRange className="h-4 w-4 text-violet-400" />Sazonalidade (valor vencido por mês)</h2>
+            {!a.porMes?.length ? <p className="text-sm text-muted-foreground">Sem resultados no período.</p> : (
+              <div className="flex h-44 items-end gap-1.5" role="img" aria-label="Valor vencido por mês">
+                {a.porMes.map((m) => (
+                  <div key={m.mes} className="flex min-w-0 flex-1 flex-col items-center gap-1" title={`${nomeMes(m.mes)}: ${formatarMoeda(m.valor)} em ${m.itens} ${m.itens === 1 ? 'item' : 'itens'}`}>
+                    <div className="lf-degrade w-full rounded-t-md" style={{ height: `${Math.max(4, (m.valor / maxMes) * 140)}px` }} />
+                    <span className="truncate text-[10px] text-muted-foreground">{nomeMes(m.mes)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+          <Card className="p-5">
+            <h2 className="mb-3 flex items-center gap-2 font-semibold"><Target className="h-4 w-4 text-emerald-400" />Pontos fortes</h2>
+            {!a.fortes?.length ? <p className="text-sm text-muted-foreground">Ainda sem itens detalhados para identificar.</p> : <ul className="space-y-2 text-sm">
+              {a.fortes.slice(0, 6).map((f) => <li key={f.nome} className="flex justify-between gap-3"><span className="min-w-0 truncate font-medium">{f.nome}</span><span className="shrink-0 tabular-nums text-muted-foreground">{formatarMoeda(f.valor)}</span></li>)}
+            </ul>}
+            <h3 className="mb-2 mt-5 flex items-center gap-2 text-sm font-semibold"><Tag className="h-4 w-4 text-sky-400" />Marcas com que venceu</h3>
+            {!a.marcas?.length ? <p className="text-sm text-muted-foreground">Marca não informada nas compras analisadas.</p> : <div className="flex flex-wrap gap-2">{a.marcas.map((m) => <Badge key={m.marca} cor="azul">{m.marca} · {m.n}</Badge>)}</div>}
+            <p className="mt-3 text-xs text-muted-foreground">Baseado nas maiores compras vencidas no período (catálogo e Painel de Preços do governo federal).</p>
+          </Card>
+        </div>
+
+        <Card className="mb-5 p-5">
+          <h2 className="mb-2 flex items-center gap-2 font-semibold"><XCircle className="h-4 w-4 text-rose-400" />Desclassificações e motivos</h2>
+          <p className="text-sm text-muted-foreground">As propostas desclassificadas, inabilitações e seus motivos não são publicadas nos dados abertos do governo: ficam na ata de cada compra no Compras.gov.br, que exige acesso próprio. Abra uma compra abaixo e use "Ver disputa no Compras.gov" para consultar a ata.</p>
+        </Card>
+
         <Card className="p-5">
           <h2 className="mb-3 font-semibold">Últimos itens vencidos</h2>
           {a.ultimos.length === 0 ? <p className="text-sm text-muted-foreground">Nenhum item vencido no período (resultados da Lei 14.133 publicados no PNCP).</p> : <ul className="divide-y">
@@ -95,7 +127,9 @@ export default function AnaliseEmpresaDetalhe() {
                 <span className="min-w-0 flex-1">{rota ? <Link to={rota} className="font-semibold text-sky-700 hover:underline dark:text-sky-300">{r.controle}</Link> : r.controle} · Item {r.item}</span>
                 <span className="text-muted-foreground">{formatarData(r.data)} · {r.uf ?? '—'}</span>
                 <span className="font-semibold tabular-nums">{r.valorTotal ? formatarMoeda(r.valorTotal) : 'Valor não informado'}</span>
+                {r.marca && <Badge cor="azul">Marca: {r.marca}</Badge>}
                 {r.meEpp && <Badge cor="verde">ME/EPP</Badge>}
+                {r.idCompra && /^\d{17}$/.test(r.idCompra) && <Link to={`/app/compras/${r.idCompra}`} className="text-xs font-semibold text-primary hover:underline">Ver compra</Link>}
               </li>
             })}
           </ul>}

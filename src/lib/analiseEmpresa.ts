@@ -1,6 +1,7 @@
 import { supabase } from './supabase'
 
 export interface ResultadoItem {
+  idCompra: string | null; marca?: string | null
   controle: string; item: number; data: string | null; uf: string | null; orgaoCnpj: string | null
   quantidade: number | null; valorUnitario: number | null; valorTotal: number | null; meEpp: boolean
 }
@@ -10,6 +11,9 @@ export interface AnaliseEmpresa {
   itensVencidos: number; editaisVencidos: number; valorHomologado: number; itensComBeneficioMeEpp: number
   porUf: { uf: string; valor: number }[]; principaisOrgaos: { cnpj: string; itens: number; valor: number }[]
   ultimos: ResultadoItem[]; sancoes: Sancao[] | null; sancoesDisponiveis: boolean
+  porMes: { mes: string; itens: number; valor: number }[]
+  fortes: { nome: string; itens: number; valor: number }[]
+  marcas: { marca: string; n: number }[]
 }
 
 /** Itens vencidos e sanções de uma empresa, consultados na hora nas fontes oficiais. */

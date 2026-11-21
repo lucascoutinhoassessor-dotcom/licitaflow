@@ -8,7 +8,7 @@ function apiLocal(): Plugin {
     name: 'licitaflow-api-local',
     configureServer(server) {
       Object.assign(process.env, loadEnv('development', process.cwd(), ''))
-      for (const nome of ['resultados', 'precos']) server.middlewares.use(`/api/${nome}`, async (req, res) => {
+      for (const nome of ['resultados', 'precos', 'compra']) server.middlewares.use(`/api/${nome}`, async (req, res) => {
         const mod = await server.ssrLoadModule(`/server/${nome}.js`)
         const url = new URL(req.url ?? '', 'http://localhost')
         const resposta = {

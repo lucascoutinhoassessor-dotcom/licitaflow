@@ -1,3 +1,4 @@
+import { emCache, excedeuLimite, usuarioLogado } from './protecao.js'
 // Histórico de preços sob demanda: compras homologadas de um material (PDM) ou serviço do catálogo federal,
 // direto do Painel de Preços (dados abertos do Compras.gov.br). Nada é guardado no banco.
 
@@ -72,10 +73,14 @@ export default async function handler(req, res) {
   if (uf && !UFS.has(uf)) return res.status(400).json({ error: 'UF inválida.' })
   if ((de && !dataValida(de)) || (ate && !dataValida(ate)) || (de && ate && de > ate)) return res.status(400).json({ error: 'Período inválido.' })
   try {
-    const u = await fetch(`${base}/auth/v1/user`, { headers: { apikey: anon, Authorization: token }, signal: AbortSignal.timeout(10000) })
-    if (!u.ok) return res.status(401).json({ error: 'Entre na sua conta' })
-    const { todas, incompleto } = await buscarCompras(tipo, codigo, { uf, de, ate })
-    return res.json({ tipo, codigo, incompleto, ...resumirPrecos(todas) })
+    const usuario = await usuarioLogado(base, anon, token)
+    if (!usuario) return res.status(401).json({ error: 'Entre na sua conta' })
+    if (excedeuLimite('precos', usuario)) return res.status(429).json({ error: 'Muitas consultas em pouco tempo. Aguarde um minuto e tente de novo.' })
+    const corpo = await emCache('precos', `${tipo}|${codigo}|${uf}|${de}|${ate}`, 10 * 60_000, async () => {
+      const { todas, incompleto } = await buscarCompras(tipo, codigo, { uf, de, ate })
+      return { tipo, codigo, incompleto, ...resumirPrecos(todas) }
+    })
+    return res.json(corpo)
   } catch (e) {
     return res.status(e.status ?? 500).json({ error: e.status ? e.message : 'Não foi possível consultar os preços agora.' })
   }
