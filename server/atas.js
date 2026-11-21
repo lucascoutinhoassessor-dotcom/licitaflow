@@ -115,6 +115,76 @@ export function extrairOcorrencias(textoBruto) {
   return lista.slice(0, 80)
 }
 
+// Palavras que ficam entre o nome e o CNPJ ("inscrita no CNPJ nº") e podem ser puladas.
+const ROTULO_CNPJ = /^(?:\d{1,4}|cnpj|cpf\/cnpj|cpf|mf|n[º°o.]*|sob|o|a|no|na|inscrit[oa]|portador[a]?|com|sede|-|–|:|,|\(|\)|\/)[:,.]?$/i
+const LIGA_NOME = /^(?:de|da|do|das|dos|e|&|em|-|–)$/i
+// Cabeçalhos e falas da ata que não fazem parte da razão social.
+const NAO_NOME = /^(?:FORNECEDOR(?:ES)?|LICITANTES?|EMPRESAS?|PARTICIPANTES?|PROPONENTES?|VALIDADE|EDITAL|DIAS|CNPJ|CPF|ITEM|ITENS|LOTE|GRUPO|VALOR|LANCES?|PROPOSTAS?|MENSAGEM|PREGOEIR[OA]|SISTEMA|ESCLARECIMENTO|REQUERIDO|REQUERIMENTO|IMPUGNA[ÇC][ÃA]O|PEDIDO|RECURSO|RESPOSTA|DECIS[ÃA]O|ARREMATANTE|VENCEDOR[A]?|HABILITAD[OA]|INABILITAD[OA]|CLASSIFICAD[OA]|DESCLASSIFICAD[OA]|ACEIT[OA]|RECUSAD[OA]|SITUA[ÇC][ÃA]O|RAZ[ÃA]O|SOCIAL|NOME|DOCUMENTO|PORTE|ME\/EPP|SIM|N[ÃA]O|TOTAL|UNIT[ÁA]RIO|MARCA|MODELO|DATA|HORA|STATUS|CONFORME|ABERT[OA]|NEGOCIA[ÇC][ÃA]O|BENEF[ÍI]CIO|ENCERRAD[OA]|ADJUDICAD[OA]|HOMOLOGAD[OA]|CANCELAD[OA]|FRACASSAD[OA]|DESERT[OA]|SUSPENS[OA]|AN[ÁA]LISE|AGUARDANDO|OFERTA|INICIAL|FINAL)[:.,]?$/i
+const PALAVRA_NOME = /^(?:[A-ZÀ-Ý][\wÀ-ÿ&.'’\/-]*|\d+[A-Za-zÀ-ÿ][\wÀ-ÿ&.\/-]*|S\/A|S\.A\.?)[,]?$/
+
+/**
+ * Lê palavras a partir do CNPJ (para trás ou para frente) e junta a razão social: palavras com inicial
+ * maiúscula, ligadas por "de/da/e/&". Para em números, cabeçalhos ou palavras minúsculas.
+ */
+function nomeJunto(palavras, paraTras) {
+  let i = 0, pulos = 0
+  while (i < palavras.length && pulos < 6 && ROTULO_CNPJ.test(palavras[i])) { i++; pulos++ }
+  const nome = []
+  for (; i < palavras.length && nome.length < 14; i++) {
+    const p = palavras[i]
+    if (LIGA_NOME.test(p) && nome.length) { nome.push(p); continue }
+    if (NAO_NOME.test(p) || !PALAVRA_NOME.test(p)) break
+    nome.push(p)
+    if (!paraTras && /[,;]$/.test(p)) break
+  }
+  while (nome.length && LIGA_NOME.test(nome.at(-1))) nome.pop()
+  const ordem = paraTras ? nome.reverse() : nome
+  const texto = limparNome(ordem.join(' ').replace(/[,;]$/, ''))
+  if (texto.replace(/[^A-Za-zÀ-ÿ]/g, '').length < 4 || ordem.length < 2 && !/\b(?:LTDA|EIRELI|S\/?A|ME|EPP|MEI)\b/i.test(texto)) return null
+  return { nome: texto, dist: pulos }
+}
+
+/** Dígitos verificadores do CNPJ conferem (evita pegar números de processo ou telefone). */
+export function cnpjValido(c) {
+  if (!/^\d{14}$/.test(c) || /^(\d)\1{13}$/.test(c)) return false
+  const dv = (n) => {
+    const pesos = n === 12 ? [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2] : [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]
+    const r = pesos.reduce((t, p, i) => t + p * Number(c[i]), 0) % 11
+    return r < 2 ? 0 : 11 - r
+  }
+  return dv(12) === Number(c[12]) && dv(13) === Number(c[13])
+}
+
+/**
+ * Empresas que aparecem na ata (licitantes, propostas, classificação): cada CNPJ válido com a razão
+ * social mais próxima. O CNPJ do órgão (dono da compra) fica de fora.
+ */
+export function extrairParticipantes(textoBruto, cnpjOrgao = null) {
+  const texto = limpar(textoBruto)
+  const achados = [...texto.matchAll(/\b\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\s?\d{2}\b/g)]
+  // Para cada CNPJ, o nome logo antes e logo depois dele (sem passar por outro CNPJ) e a distância em palavras.
+  const candidatos = achados.map((m, k) => {
+    const limite = k ? achados[k - 1].index + achados[k - 1][0].length : 0
+    const fim = k + 1 < achados.length ? achados[k + 1].index : texto.length
+    const antes = nomeJunto(texto.slice(Math.max(limite, m.index - 200), m.index).split(' ').filter(Boolean).reverse(), true)
+    const depois = nomeJunto(texto.slice(m.index + m[0].length, Math.min(fim, m.index + m[0].length + 200)).split(' ').filter(Boolean), false)
+    return { m, antes: antes?.nome ?? null, depois: depois?.nome ?? null, distA: antes?.dist ?? Infinity, distD: depois?.dist ?? Infinity }
+  })
+  // Tabelas "Fornecedor  CNPJ" trazem o nome antes; "CNPJ  Razão social", depois. Empate: vale o padrão do documento.
+  let votos = 0
+  for (const c of candidatos) votos += c.distA < c.distD ? 1 : c.distD < c.distA ? -1 : 0
+  const porCnpj = new Map()
+  for (const c of candidatos) {
+    const cnpj = c.m[0].replace(/\D/g, '')
+    if (!cnpjValido(cnpj) || cnpj === cnpjOrgao) continue
+    const nome = c.distA < c.distD ? c.antes : c.distD < c.distA ? c.depois : votos >= 0 ? (c.antes ?? c.depois) : (c.depois ?? c.antes)
+    const atual = porCnpj.get(cnpj)
+    if (!atual) porCnpj.set(cnpj, { cnpj, nome, mencoes: 1 })
+    else { atual.mencoes++; atual.nome ??= nome }
+  }
+  return [...porCnpj.values()].slice(0, 200)
+}
+
 async function textoDoPdf(url) {
   const r = await fetch(url, { headers: { 'User-Agent': 'licitaflow-atas' }, signal: AbortSignal.timeout(25000) })
   if (!r.ok) return { erro: 'O PNCP não entregou o arquivo.' }
@@ -146,11 +216,16 @@ export async function lerAtas(controle) {
     .filter((a) => a.prioridade !== null)
     .sort((a, b) => a.prioridade - b.prioridade)
     .slice(0, MAX_DOCS)
-  const documentos = [], ocorrencias = []
+  const documentos = [], ocorrencias = [], participantes = new Map()
   for (const d of candidatos) {
     try {
       const lido = await textoDoPdf(d.url)
       if (lido.erro) { documentos.push({ titulo: d.titulo, url: d.url, lido: false, aviso: lido.erro }); continue }
+      for (const p of extrairParticipantes(lido.texto, m[1])) {
+        const atual = participantes.get(p.cnpj)
+        if (!atual) participantes.set(p.cnpj, { ...p, documento: d.titulo, url: d.url })
+        else { atual.mencoes += p.mencoes; atual.nome ??= p.nome }
+      }
       const achadas = extrairOcorrencias(lido.texto)
       documentos.push({ titulo: d.titulo, url: d.url, lido: true, paginas: lido.paginas, ocorrencias: achadas.length })
       for (const o of achadas) if (!ocorrencias.some((x) => so(x.motivo).slice(0, 160) === so(o.motivo).slice(0, 160))) ocorrencias.push({ ...o, documento: d.titulo, url: d.url })
@@ -158,7 +233,7 @@ export async function lerAtas(controle) {
       documentos.push({ titulo: d.titulo, url: d.url, lido: false, aviso: 'Não foi possível ler este arquivo.' })
     }
   }
-  return { controle, documentos, ocorrencias }
+  return { controle, documentos, ocorrencias, participantes: [...participantes.values()] }
 }
 
 const PALAVRAS_VAZIAS = new Set(['LTDA', 'EIRELI', 'ME', 'EPP', 'SA', 'MEI', 'COMERCIO', 'SERVICOS', 'DE', 'DA', 'DO', 'DOS', 'DAS', 'E', 'EM', 'INDUSTRIA', 'DISTRIBUIDORA'])
@@ -196,7 +271,7 @@ export default async function handler(req, res) {
     const usuario = await usuarioLogado(base, anon, token)
     if (!usuario) return res.status(401).json({ error: 'Entre na sua conta' })
     if (excedeuLimite('atas', usuario, 20)) return res.status(429).json({ error: 'Muitas consultas em pouco tempo. Aguarde um minuto e tente de novo.' })
-    const ler = (c) => emCache('atas', c, 6 * 60 * 60_000, () => lerAtas(c), 500)
+    const ler = (c) => emCache('atas-v2', c, 6 * 60 * 60_000, () => lerAtas(c), 500)
     if (controle) return res.json(await ler(controle))
     // Empresa: lê as atas das compras dela e fica só com o que fala dela.
     const lidas = await emLotes([...new Set(controles)].slice(0, 15), 4, (c) => ler(c).catch(() => ({ controle: c, documentos: [], ocorrencias: [] })))

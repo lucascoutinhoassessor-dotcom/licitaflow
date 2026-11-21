@@ -8,7 +8,7 @@ import { SeletorEmpresa, useEmpresaPadrao } from '@/components/Situacoes'
 import ItensAcordeao from '@/components/ItensAcordeao'
 import IconePortal from '@/components/IconePortal'
 import CodigoComprasnet from '@/components/CodigoComprasnet'
-import DesclassificacoesCompra from '@/components/OcorrenciasAta'
+import EmpresasDisputa from '@/components/EmpresasDisputa'
 import { useOrg } from '@/providers/OrgProvider'
 import { useLista, useSalvar } from '@/hooks/useDados'
 import { dadosProcesso, linkCompra, type CompraPNCP } from '@/lib/pncp'
@@ -107,7 +107,8 @@ export default function OportunidadeDetalhe() {
         ) : <p className="text-sm text-muted-foreground">Peça a um administrador para adicionar este edital aos processos.</p>}
       </Card>
 
-      <DesclassificacoesCompra controle={compra.numeroControlePNCP} />
+      {/* Depois da abertura das propostas, as atas publicadas no PNCP mostram quem disputou. */}
+      {compra.dataEncerramentoProposta && new Date(compra.dataEncerramentoProposta) < new Date() && <EmpresasDisputa controle={compra.numeroControlePNCP} />}
 
       <section id="itens">
         <h2 className="mb-3 text-lg font-semibold">Itens do edital</h2>

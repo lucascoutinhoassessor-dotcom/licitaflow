@@ -6,7 +6,8 @@ export interface OcorrenciaAta {
   data: string | null; motivo: string; documento: string; url: string; controle?: string
 }
 export interface DocumentoAta { titulo: string; url: string; lido: boolean; paginas?: number; ocorrencias?: number; aviso?: string }
-export interface AtasCompra { controle: string; documentos: DocumentoAta[]; ocorrencias: OcorrenciaAta[] }
+export interface ParticipanteAta { cnpj: string; nome: string | null; mencoes: number; documento: string; url: string }
+export interface AtasCompra { controle: string; documentos: DocumentoAta[]; ocorrencias: OcorrenciaAta[]; participantes?: ParticipanteAta[] }
 export interface AtasEmpresa { cnpj: string; comprasConsultadas: number; comAta: number; ocorrencias: OcorrenciaAta[] }
 
 export const NOME_TIPO: Record<TipoOcorrencia, string> = { desclassificacao: 'Desclassificação', inabilitacao: 'Inabilitação', recusa: 'Proposta recusada' }

@@ -58,7 +58,8 @@ export function montarCompra(contratacao, itens, resultados, marcas) {
     numero: c.numeroCompra ?? null, ano: c.anoCompraPncp ?? null, srp: c.srp ?? null, situacao: c.situacaoCompraNomePncp ?? null,
     valorEstimado: Number(c.valorTotalEstimado) || null, valorHomologado: Number(c.valorTotalHomologado) || null,
     abertura: c.dataAberturaPropostaPncp ?? null, encerramento: c.dataEncerramentoPropostaPncp ?? null, publicacao: c.dataPublicacaoPncp ?? null,
-    itens: [...itens].sort((a, b) => a.numeroItemPncp - b.numeroItemPncp).map((i) => ({
+    // A fonte às vezes devolve o mesmo item duas vezes: fica um por número.
+    itens: [...new Map(itens.map((i) => [Number(i.numeroItemPncp), i])).values()].sort((a, b) => a.numeroItemPncp - b.numeroItemPncp).map((i) => ({
       numero: i.numeroItemPncp, descricao: i.descricaodetalhada || i.descricaoResumida || '', resumo: i.descricaoResumida ?? null,
       tipo: i.materialOuServicoNome ?? null, quantidade: Number(i.quantidade) || null, unidade: i.unidadeMedida ?? null,
       valorEstimado: Number(i.valorUnitarioEstimado) || null, sigiloso: !!i.orcamentoSigiloso, situacao: i.situacaoCompraItemNome ?? null,

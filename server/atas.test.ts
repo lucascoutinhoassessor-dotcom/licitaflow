@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import handler, { extrairOcorrencias, falaDaEmpresa, prioridadeDocumento } from './atas.js'
+import handler, { cnpjValido, extrairOcorrencias, extrairParticipantes, falaDaEmpresa, prioridadeDocumento } from './atas.js'
 
 const resposta = () => ({ setHeader: vi.fn(), status: vi.fn().mockReturnThis(), json: vi.fn() })
 
@@ -61,5 +61,32 @@ describe('endpoint das atas', () => {
     const r2 = resposta(); await handler({ method: 'GET', headers: { authorization: 'Bearer x' }, query: {} }, r2)
     expect(r2.status).toHaveBeenCalledWith(400)
     expect(f).not.toHaveBeenCalled()
+  })
+})
+
+describe('participantes da ata', () => {
+  it('lista cada CNPJ válido com a razão social, sem o órgão e sem números inválidos', () => {
+    const texto = `PREFEITURA MUNICIPAL CNPJ 77.888.999/0001-81. Licitantes participantes:
+      ALFA COMERCIO LTDA, CNPJ 11.222.333/0001-81, apresentou proposta.
+      44.555.666/0001-81 BETA SERVICOS EIRELI Sim Não
+      Processo 12.345.678/0001-00. ALFA COMERCIO LTDA 11222333000181 classificada em 1º lugar.`
+    const p = extrairParticipantes(texto, '77888999000181')
+    expect(p).toEqual([
+      { cnpj: '11222333000181', nome: 'ALFA COMERCIO LTDA', mencoes: 2 },
+      { cnpj: '44555666000181', nome: 'BETA SERVICOS EIRELI', mencoes: 1 },
+    ])
+  })
+
+  it('lê tabelas com nome em caixa mista, sem LTDA ou com código antes do CNPJ', () => {
+    const validade = `Fornecedor CPF/CNPJ Validade (conforme edital) Porto Seguro Companhia de Seguros Gerais 11.222.333/0001-81 60 dias SEGVERDE - CONSULTORIA AMBIENTAL LTDA 44.555.666/0001-81 60 dias Aberta`
+    expect(extrairParticipantes(validade).map((p) => p.nome)).toEqual(['Porto Seguro Companhia de Seguros Gerais', 'SEGVERDE - CONSULTORIA AMBIENTAL LTDA'])
+    const classificacao = `Razão Social Num Documento Oferta Inicial Oferta Final ME 1 GENESIS DISTRIBUIDORA HOSPITALAR LTDA 013 11.222.333/0001-81 8,23 5,99 Sim 2 CENTRALL MED 302 44.555.666/0001-81 8,23 8,23 Sim`
+    expect(extrairParticipantes(classificacao).map((p) => p.nome)).toEqual(['GENESIS DISTRIBUIDORA HOSPITALAR LTDA', 'CENTRALL MED'])
+  })
+
+  it('confere os dígitos do CNPJ', () => {
+    expect(cnpjValido('11222333000181')).toBe(true)
+    expect(cnpjValido('11222333000182')).toBe(false)
+    expect(cnpjValido('11111111111111')).toBe(false)
   })
 })
