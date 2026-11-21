@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
+import { Link, Navigate, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { CalendarPlus, Check, Copy, Download, RotateCcw, Scale } from 'lucide-react'
-import { Aviso, Badge, Button, CabecalhoPagina, Campo, Card, Input, Select, Textarea } from '@/components/ui'
+import { Abas, Aviso, Badge, Button, CabecalhoPagina, Campo, Card, Input, Select, Textarea } from '@/components/ui'
+import BuscaPecas from '@/components/BuscaPecas'
+import { textoDoModelo, type PecaPublicada } from '@/lib/pecasJuridicas'
 import { useLista, useSalvar } from '@/hooks/useDados'
 import { useOrg } from '@/providers/OrgProvider'
 import { MODALIDADES } from '@/lib/dominio'
@@ -38,14 +40,57 @@ const ATOS_SUGERIDOS: Partial<Record<TipoPeca, string[]>> = {
   recurso: ['a decisão que desclassificou a proposta da recorrente', 'a decisão que inabilitou a recorrente', 'a decisão que aceitou a proposta da empresa declarada vencedora', 'a decisão que habilitou a empresa declarada vencedora'],
 }
 
+type Aba = 'modelos' | 'minuta'
+interface Modelo { texto: string; origem: string }
+
 export default function Juridico() {
   const { tipo } = useParams()
   const def = pecaPorId(tipo)
+  const navigate = useNavigate()
+  const location = useLocation()
+  const [params] = useSearchParams()
   if (!def) return <Navigate to="/app/juridico/impugnacao" replace />
-  return <Editor key={def.id} tipo={def.id} />
+  const aba: Aba = params.get('aba') === 'minuta' ? 'minuta' : 'modelos'
+  const modelo = (location.state as { modelo?: Modelo } | null)?.modelo ?? null
+
+  function usarModelo(p: PecaPublicada, texto: string) {
+    const origem = [p.titulo, p.empresa, p.processo.orgao].filter(Boolean).join(' · ')
+    navigate(`/app/juridico/${p.tipo}?aba=minuta`, { state: { modelo: { texto: textoDoModelo(p, texto), origem } } })
+    window.scrollTo({ top: 0 })
+  }
+
+  return (
+    <>
+      <CabecalhoPagina
+        titulo="Jurídico"
+        descricao={aba === 'modelos'
+          ? 'Consulte peças já publicadas nos portais e use uma delas como ponto de partida da sua.'
+          : 'Monte a peça com os dados do processo, revise o texto e baixe em Word para protocolar no portal.'}
+      />
+      <div className="mb-4 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" role="tablist" aria-label="Tipo de peça">
+        {PECAS.map((p) => (
+          <Link key={p.id} to={`/app/juridico/${p.id}${aba === 'minuta' ? '?aba=minuta' : ''}`} role="tab" aria-selected={p.id === def.id}
+            className={cn('flex h-9 shrink-0 items-center rounded-full border px-4 text-sm font-medium transition-colors',
+              p.id === def.id ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-card text-muted-foreground hover:text-foreground')}>
+            {p.rotulo}
+          </Link>
+        ))}
+      </div>
+      <div className="mb-5">
+        <Abas<Aba>
+          abas={[{ id: 'modelos', rotulo: 'Modelos publicados' }, { id: 'minuta', rotulo: 'Escrever minuta' }]}
+          atual={aba}
+          aoTrocar={(a) => navigate(`/app/juridico/${def.id}${a === 'minuta' ? '?aba=minuta' : ''}`)}
+        />
+      </div>
+      {aba === 'modelos'
+        ? <BuscaPecas key={def.id} tipoInicial={def.id} aoUsarModelo={usarModelo} />
+        : <Editor key={`${def.id}-${location.key}`} tipo={def.id} modelo={modelo} />}
+    </>
+  )
 }
 
-function Editor({ tipo }: { tipo: TipoPeca }) {
+function Editor({ tipo, modelo }: { tipo: TipoPeca; modelo: Modelo | null }) {
   const def = pecaPorId(tipo)!
   const navigate = useNavigate()
   const { empresa: empresaAtual, empresas, podeEditar } = useOrg()
@@ -62,8 +107,8 @@ function Editor({ tipo }: { tipo: TipoPeca }) {
     data: dataPorExtenso(),
   }))
   const [base, setBase] = useState(def.baseData === 'abertura' ? '' : hoje())
-  const [texto, setTexto] = useState('')
-  const [editado, setEditado] = useState(false)
+  const [texto, setTexto] = useState(modelo?.texto ?? '')
+  const [editado, setEditado] = useState(!!modelo)
   const [copiado, setCopiado] = useState(false)
   const [agendado, setAgendado] = useState(false)
 
@@ -146,21 +191,14 @@ function Editor({ tipo }: { tipo: TipoPeca }) {
 
   return (
     <>
-      <CabecalhoPagina
-        titulo="Jurídico"
-        descricao="Monte a peça com os dados do processo, revise o texto e baixe em Word para protocolar no portal."
-      />
-
-      <div className="mb-5 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" role="tablist" aria-label="Tipo de peça">
-        {PECAS.map((p) => (
-          <Link key={p.id} to={`/app/juridico/${p.id}`} role="tab" aria-selected={p.id === tipo}
-            className={cn('flex h-9 shrink-0 items-center rounded-full border px-4 text-sm font-medium transition-colors',
-              p.id === tipo ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-card text-muted-foreground hover:text-foreground')}>
-            {p.rotulo}
-          </Link>
-        ))}
-      </div>
-
+      {modelo && editado && (
+        <div className="mb-4">
+          <Aviso tipo="info">
+            A minuta começou do modelo publicado <strong>{modelo.origem}</strong>. Troque os dados da outra empresa e do outro processo pelos seus.
+            “Refazer pelo formulário” volta ao texto gerado pelos campos.
+          </Aviso>
+        </div>
+      )}
       <div className="grid gap-5 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
         <div className="min-w-0 space-y-5">
           <Card className="p-4 sm:p-5">
@@ -307,7 +345,7 @@ function Editor({ tipo }: { tipo: TipoPeca }) {
           <Card className="p-4 sm:p-5">
             <div className="mb-3 flex flex-wrap items-center gap-2">
               <h2 className="mr-auto font-semibold">Minuta</h2>
-              {editado && <Badge cor="amarelo">editada à mão</Badge>}
+              {editado && <Badge cor="amarelo">{modelo && texto.startsWith('[MODELO DE REFERÊNCIA') ? 'a partir de modelo publicado' : 'editada à mão'}</Badge>}
               {tipo === 'intencao-recurso' && <Badge cor={texto.length > limiteIntencao ? 'vermelho' : 'neutro'}>{texto.length} caracteres</Badge>}
             </div>
             <Textarea

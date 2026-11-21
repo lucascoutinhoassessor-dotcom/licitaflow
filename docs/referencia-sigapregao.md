@@ -66,7 +66,7 @@ Legenda: ✅ temos · 🟡 temos parcialmente · ❌ não temos · ⛔ fora do e
 | Item | LicitaFlow |
 |---|---|
 | Robô de lances | ⛔ fora do escopo por decisão do produto |
-| Peças jurídicas: busca em impugnações, esclarecimentos, intenções de recurso, recursos e contrarrazões, filtro por órgão e "somente nova lei" | ❌ |
+| Peças jurídicas: busca em impugnações, esclarecimentos, intenções de recurso, recursos e contrarrazões, filtro por órgão e "somente nova lei" | 🟡 desde 21/11/2026, com peças do Portal de Compras Públicas (municípios); as federais ficam atrás de captcha. Ver [pecas-juridicas.md](pecas-juridicas.md) |
 
 ### Menu da conta
 Documentos (pastas, filtros por tipo e validade: com validade, próximos a vencer, vencidos) 🟡 · Minhas empresas ✅ · Integrações ❌ · Modelos de tarefas ❌ · Meus dados ✅ · Tema claro ✅ · Sair ✅.
