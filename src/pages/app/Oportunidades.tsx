@@ -20,18 +20,30 @@ import type { Processo } from '@/types/db'
 function dataLocal(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
 }
+const CHAVE_BUSCA='lf-oportunidades-busca'
+function lerBuscaSalva():{f:Partial<Filtros>;consulta:Partial<Filtros>|null;pagina:number}|null {
+  try{
+    const s=JSON.parse(sessionStorage.getItem(CHAVE_BUSCA)??'null')
+    if(!s||typeof s.f!=='object'||!s.f)return null
+    return {f:s.f,consulta:s.consulta&&typeof s.consulta==='object'?s.consulta:null,pagina:Number.isInteger(s.pagina)&&s.pagina>0?s.pagina:1}
+  }catch{return null}
+}
 export default function Oportunidades() {
   const { podeEditar }=useOrg(),padrao=useEmpresaPadrao()
   const [empresaId,setEmpresaId]=useState(padrao)
   useEffect(()=>setEmpresaId(padrao),[padrao])
   // Padrão: sessões dos próximos 15 dias, em dias úteis; a lista já abre carregada.
-  const [inicial]=useState<Filtros>(()=>{
+  // Ao voltar de uma oportunidade, recupera os filtros e a página da última busca desta aba.
+  const [inicial]=useState(()=>{
     const hoje=new Date(),inicio=new Date();inicio.setDate(inicio.getDate()-30)
-    return {...filtrosExtras,inicio:dataLocal(inicio),fim:dataLocal(hoje),situacao:'abertas',modalidade:'6',uf:'',...periodoAbertura(15)}
+    const padraoFiltros:Filtros={...filtrosExtras,inicio:dataLocal(inicio),fim:dataLocal(hoje),situacao:'abertas',modalidade:'6',uf:'',...periodoAbertura(15)}
+    const salvo=lerBuscaSalva()
+    return salvo?{f:{...padraoFiltros,...salvo.f},consulta:salvo.consulta&&{...padraoFiltros,...salvo.consulta},pagina:salvo.pagina}:{f:padraoFiltros,consulta:padraoFiltros,pagina:1}
   })
-  const [f,setF]=useState<Filtros>(inicial)
-  const [consulta,setConsulta]=useState<Filtros|null>(inicial),[avancados,setAvancados]=useState(false)
-  const [pagina,setPagina]=useState(1)
+  const [f,setF]=useState<Filtros>(inicial.f)
+  const [consulta,setConsulta]=useState<Filtros|null>(inicial.consulta),[avancados,setAvancados]=useState(false)
+  const [pagina,setPagina]=useState(inicial.pagina)
+  useEffect(()=>{try{sessionStorage.setItem(CHAVE_BUSCA,JSON.stringify({f,consulta,pagina}))}catch{/* armazenamento indisponível */}},[f,consulta,pagina])
   const navigate=useNavigate()
   const processos=useLista<Processo>('processos',{porEmpresa:false})
   const {salvar}=useSalvar('processos',['processo_eventos','prazos'])

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import handler, { resumirResultados } from './resultados.js'
+import handler, { janelasPeriodo, resumirResultados } from './resultados.js'
 
 const r = (o: Record<string, unknown>) => ({
   idContratacaoPNCP: '07954480000179-1-023585/2026', numeroItemPncp: 1, nomeRazaoSocialFornecedor: 'EMPRESA TESTE SA', porteFornecedorNome: 'Demais',
@@ -36,7 +36,7 @@ describe('endpoint de análise de empresa', () => {
     expect(res.status).toHaveBeenCalledWith(401)
     res = resposta(); await handler({ method: 'GET', headers: { authorization: 'Bearer t' }, query: { cnpj: '123', de: '2026-01-01', ate: '2026-11-01' } }, res)
     expect(res.status).toHaveBeenCalledWith(400)
-    res = resposta(); await handler({ method: 'GET', headers: { authorization: 'Bearer t' }, query: { cnpj: '81243735000903', de: '2020-01-01', ate: '2026-11-01' } }, res)
+    res = resposta(); await handler({ method: 'GET', headers: { authorization: 'Bearer t' }, query: { cnpj: '81243735000903', de: '2019-01-01', ate: '2026-11-01' } }, res)
     expect(res.status).toHaveBeenCalledWith(400)
     expect(fetch).not.toHaveBeenCalled()
   })
@@ -51,5 +51,18 @@ describe('endpoint de análise de empresa', () => {
     const url = fetch.mock.calls.map((c) => String(c[0])).find((u) => u.includes('dadosabertos.compras.gov.br'))!
     expect(url).toContain('niFornecedor=81243735000903')
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ itensVencidos: 1, valorHomologado: 1000, sancoes: null, sancoesDisponiveis: false }))
+  })
+})
+
+describe('janelas do período', () => {
+  it('divide 6 anos em janelas de até 365 dias, da mais recente para a mais antiga, sem buracos', () => {
+    const j = janelasPeriodo('2020-11-20', '2026-11-20')
+    expect(j[0].ate).toBe('2026-11-20')
+    expect(j.at(-1)!.de).toBe('2020-11-20')
+    for (const x of j) expect((Date.parse(x.ate) - Date.parse(x.de)) / 86_400_000).toBeLessThanOrEqual(365)
+    for (let i = 1; i < j.length; i++) expect(Date.parse(j[i - 1].de) - Date.parse(j[i].ate)).toBe(86_400_000)
+  })
+  it('um período de até 1 ano é uma janela só', () => {
+    expect(janelasPeriodo('2025-11-20', '2026-11-20')).toEqual([{ de: '2025-11-20', ate: '2026-11-20' }])
   })
 })

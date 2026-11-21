@@ -12,12 +12,29 @@ import { formatarCnpj, formatarData, formatarMoeda } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
 const iso = (d: Date) => d.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
+/** Preenche com zero os meses sem resultado, para o eixo do gráfico ficar contínuo. */
+function mesesContinuos(porMes: { mes: string; itens: number; valor: number }[]) {
+  if (!porMes.length) return []
+  const por = new Map(porMes.map((m) => [m.mes, m])), saida: typeof porMes = []
+  let [ano, mes] = porMes[0].mes.split('-').map(Number)
+  const fim = porMes[porMes.length - 1].mes
+  for (let k = 0; k < 120; k++) {
+    const chave = `${ano}-${String(mes).padStart(2, '0')}`
+    saida.push(por.get(chave) ?? { mes: chave, itens: 0, valor: 0 })
+    if (chave >= fim) break
+    if (++mes > 12) { mes = 1; ano++ }
+  }
+  return saida
+}
+function ultimosAnos(n: number) {
+  const hoje = new Date(), inicio = new Date(); inicio.setFullYear(inicio.getFullYear() - n)
+  return { de: iso(inicio), ate: iso(hoje) }
+}
 
 export default function AnaliseEmpresaDetalhe() {
   const { cnpj = '' } = useParams()
   const navigate = useNavigate()
-  const hoje = new Date(), umAno = new Date(); umAno.setFullYear(umAno.getFullYear() - 1)
-  const [periodo, setPeriodo] = useState({ de: iso(umAno), ate: iso(hoje) })
+  const [periodo, setPeriodo] = useState(() => ultimosAnos(1))
   const [antigosPrimeiro, setAntigosPrimeiro] = useState(false)
   const [rascunho, setRascunho] = useState(periodo)
   const valido = /^\d{14}$/.test(cnpj)
@@ -25,7 +42,8 @@ export default function AnaliseEmpresaDetalhe() {
   if (!valido) return <Vazio titulo="CNPJ inválido" texto="Informe um CNPJ com 14 dígitos." acao={<Link to="/app/analise-empresas"><Button variante="contorno">Voltar</Button></Link>} />
   const a = q.data
   const maxUf = Math.max(1, ...(a?.porUf.map((u) => u.valor) ?? [1]))
-  const maxMes = Math.max(1, ...(a?.porMes?.map((m) => m.valor) ?? [1]))
+  const meses = mesesContinuos(a?.porMes ?? [])
+  const maxMes = Math.max(1, ...meses.map((m) => m.valor))
   const nomeMes = (m: string) => new Date(`${m}-15T12:00:00`).toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' })
   const indicadores = a ? [
     { rotulo: 'Itens vencidos', valor: a.itensVencidos.toLocaleString('pt-BR'), icone: Trophy, cor: 'from-emerald-500/25 to-teal-400/10 text-emerald-400 ring-emerald-500/30' },
@@ -51,8 +69,16 @@ export default function AnaliseEmpresaDetalhe() {
           <label className="text-sm"><span className="mb-1 block font-medium">De</span><Input type="date" value={rascunho.de} max={rascunho.ate} onChange={(e) => setRascunho((p) => ({ ...p, de: e.target.value }))} /></label>
           <label className="text-sm"><span className="mb-1 block font-medium">Até</span><Input type="date" value={rascunho.ate} min={rascunho.de} onChange={(e) => setRascunho((p) => ({ ...p, ate: e.target.value }))} /></label>
           <Button type="submit" carregando={q.isFetching}>Atualizar</Button>
-          <span className="text-xs text-muted-foreground">Período de até 1 ano.</span>
+          <span className="text-xs text-muted-foreground">Período de até 6 anos.</span>
         </form>
+        <div className="mt-2 flex flex-wrap gap-2" role="group" aria-label="Períodos rápidos">
+          {[1, 3, 6].map((n) => {
+            const p = ultimosAnos(n), ativo = periodo.de === p.de && periodo.ate === p.ate
+            return <button key={n} type="button" aria-pressed={ativo} disabled={q.isFetching} onClick={() => { setRascunho(p); setPeriodo(p) }}
+              className={`h-8 rounded-full border px-3.5 text-sm font-medium transition-colors disabled:opacity-60 ${ativo ? 'border-primary bg-primary text-primary-foreground' : 'border-input bg-card hover:bg-muted'}`}>
+              {n === 1 ? 'Último ano' : `Últimos ${n} anos`}</button>
+          })}
+        </div>
       </Card>
 
       {q.isLoading ? <Carregando texto="Consultando resultados oficiais…" /> : q.isError ? (
@@ -67,7 +93,7 @@ export default function AnaliseEmpresaDetalhe() {
             </Card>
           ))}
         </div>
-        {a.incompleto && <p className="mb-4 text-xs text-muted-foreground">A empresa tem muitos resultados no período; a análise considera os 3.000 mais recentes. Reduza o período para ver tudo.</p>}
+        {a.incompleto && <p className="mb-4 text-xs text-muted-foreground">A empresa tem muitos resultados no período; a análise considera até 12.000 resultados, priorizando os mais recentes. Reduza o período para ver tudo.</p>}
 
         <div className="mb-5 grid gap-5 lg:grid-cols-2">
           <Card className="p-5">
@@ -95,14 +121,18 @@ export default function AnaliseEmpresaDetalhe() {
         <div className="mb-5 grid gap-5 lg:grid-cols-3">
           <Card className="p-5 lg:col-span-2">
             <h2 className="mb-3 flex items-center gap-2 font-semibold"><CalendarRange className="h-4 w-4 text-violet-400" />Sazonalidade (valor vencido por mês)</h2>
-            {!a.porMes?.length ? <p className="text-sm text-muted-foreground">Sem resultados no período.</p> : (
-              <div className="flex h-44 items-end gap-1.5" role="img" aria-label="Valor vencido por mês">
-                {a.porMes.map((m) => (
-                  <div key={m.mes} className="flex min-w-0 flex-1 flex-col items-center gap-1" title={`${nomeMes(m.mes)}: ${formatarMoeda(m.valor)} em ${m.itens} ${m.itens === 1 ? 'item' : 'itens'}`}>
-                    <div className="lf-degrade w-full rounded-t-md" style={{ height: `${Math.max(4, (m.valor / maxMes) * 140)}px` }} />
-                    <span className="truncate text-[10px] text-muted-foreground">{nomeMes(m.mes)}</span>
-                  </div>
-                ))}
+            {!meses.length ? <p className="text-sm text-muted-foreground">Sem resultados no período.</p> : (
+              <div className={`flex h-44 items-end ${meses.length > 18 ? 'gap-px' : 'gap-1.5'}`} role="img" aria-label="Valor vencido por mês">
+                {meses.map((m, i) => {
+                  // Períodos longos: rótulo só na virada de cada ano, para caber.
+                  const longo = meses.length > 18, rotulo = !longo ? nomeMes(m.mes) : (m.mes.endsWith('-01') || (i === 0 && m.mes.slice(5) <= '09')) ? m.mes.slice(0, 4) : ''
+                  return (
+                    <div key={m.mes} className="flex min-w-0 flex-1 flex-col items-center gap-1" title={`${nomeMes(m.mes)}: ${formatarMoeda(m.valor)} em ${m.itens} ${m.itens === 1 ? 'item' : 'itens'}`}>
+                      <div className={`w-full ${m.valor > 0 ? 'lf-degrade' : 'bg-muted'} ${longo ? 'rounded-t-sm' : 'rounded-t-md'}`} style={{ height: `${m.valor > 0 ? Math.max(4, (m.valor / maxMes) * 140) : 2}px` }} />
+                      <span className={`text-[10px] text-muted-foreground ${longo ? 'overflow-visible whitespace-nowrap' : 'truncate'}`}>{rotulo || ' '}</span>
+                    </div>
+                  )
+                })}
               </div>
             )}
           </Card>

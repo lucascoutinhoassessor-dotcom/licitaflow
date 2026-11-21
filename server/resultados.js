@@ -5,8 +5,19 @@ import { emCache, excedeuLimite, usuarioLogado } from './protecao.js'
 
 const FONTE = 'https://dadosabertos.compras.gov.br/modulo-contratacoes/3_consultarResultadoItensContratacoes_PNCP_14133'
 const TRANSPARENCIA = 'https://api.portaldatransparencia.gov.br/api-de-dados'
-const MAX_PAGINAS = 6 // até 3.000 itens vencidos por consulta
+const MAX_PAGINAS = 24 // até 12.000 itens vencidos por consulta, somando todas as janelas
+const MAX_DIAS = 6 * 366 + 2 // período de até 6 anos
+const PARALELO = 6
+const DIA = 86_400_000
 const dataValida = (d) => /^\d{4}-\d{2}-\d{2}$/.test(d ?? '') && !Number.isNaN(Date.parse(d))
+
+/** A fonte aceita no máximo 365 dias por consulta: divide o período em janelas, da mais recente para a mais antiga. */
+export function janelasPeriodo(de, ate) {
+  const iso = (t) => new Date(t).toISOString().slice(0, 10)
+  const inicio = Date.parse(de), janelas = []
+  for (let fim = Date.parse(ate); fim >= inicio; fim -= 366 * DIA) janelas.push({ de: iso(Math.max(inicio, fim - 365 * DIA)), ate: iso(fim) })
+  return janelas
+}
 
 /** Resume os resultados de itens de um fornecedor. */
 export function resumirResultados(resultados) {
@@ -58,19 +69,30 @@ export function resumirResultados(resultados) {
   }
 }
 
+async function paginaResultados(cnpj, janela, pagina) {
+  const u = `${FONTE}?pagina=${pagina}&tamanhoPagina=500&niFornecedor=${cnpj}&dataResultadoPncpInicial=${janela.de}&dataResultadoPncpFinal=${janela.ate}`
+  const r = await fetch(u, { headers: { Accept: 'application/json', 'User-Agent': 'licitaflow-analise' }, signal: AbortSignal.timeout(25000) })
+  if (!r.ok) throw Object.assign(new Error('A fonte de resultados (Compras.gov.br) não respondeu. Tente novamente em instantes.'), { status: 502 })
+  const j = await r.json()
+  if (!Array.isArray(j.resultado)) throw Object.assign(new Error('A fonte de resultados respondeu em formato inesperado.'), { status: 502 })
+  return { resultado: j.resultado, totalPaginas: Number(j.totalPaginas) || 1 }
+}
+
+async function emLotes(tarefas, n) {
+  const saida = []
+  for (let i = 0; i < tarefas.length; i += n) saida.push(...await Promise.all(tarefas.slice(i, i + n).map((t) => t())))
+  return saida
+}
+
 async function buscarResultados(cnpj, de, ate) {
-  const todos = []
-  let paginas = 1
-  for (let pagina = 1; pagina <= Math.min(paginas, MAX_PAGINAS); pagina++) {
-    const u = `${FONTE}?pagina=${pagina}&tamanhoPagina=500&niFornecedor=${cnpj}&dataResultadoPncpInicial=${de}&dataResultadoPncpFinal=${ate}`
-    const r = await fetch(u, { headers: { Accept: 'application/json', 'User-Agent': 'licitaflow-analise' }, signal: AbortSignal.timeout(25000) })
-    if (!r.ok) throw Object.assign(new Error('A fonte de resultados (Compras.gov.br) não respondeu. Tente novamente em instantes.'), { status: 502 })
-    const j = await r.json()
-    if (!Array.isArray(j.resultado)) throw Object.assign(new Error('A fonte de resultados respondeu em formato inesperado.'), { status: 502 })
-    todos.push(...j.resultado)
-    paginas = Number(j.totalPaginas) || 1
-  }
-  return { todos, incompleto: paginas > MAX_PAGINAS }
+  const janelas = janelasPeriodo(de, ate)
+  // Primeira página de cada janela; depois as demais, das janelas mais recentes primeiro, até o limite.
+  const primeiras = await emLotes(janelas.map((j) => () => paginaResultados(cnpj, j, 1)), PARALELO)
+  const resto = []
+  janelas.forEach((j, k) => { for (let p = 2; p <= primeiras[k].totalPaginas; p++) resto.push([j, p]) })
+  const cabem = resto.slice(0, Math.max(0, MAX_PAGINAS - janelas.length))
+  const demais = await emLotes(cabem.map(([j, p]) => () => paginaResultados(cnpj, j, p)), PARALELO)
+  return { todos: [...primeiras, ...demais].flatMap((x) => x.resultado), incompleto: cabem.length < resto.length }
 }
 
 const DADOS = 'https://dadosabertos.compras.gov.br'
@@ -155,7 +177,7 @@ export default async function handler(req, res) {
   const cnpj = String(req.query?.cnpj ?? '').replace(/\D/g, '')
   const { de, ate } = req.query ?? {}
   if (!/^\d{14}$/.test(cnpj)) return res.status(400).json({ error: 'Informe um CNPJ com 14 dígitos.' })
-  if (!dataValida(de) || !dataValida(ate) || de > ate || Date.parse(ate) - Date.parse(de) > 400 * 86_400_000) return res.status(400).json({ error: 'Período inválido (máximo de 1 ano).' })
+  if (!dataValida(de) || !dataValida(ate) || de > ate || Date.parse(ate) - Date.parse(de) > MAX_DIAS * DIA) return res.status(400).json({ error: 'Período inválido (máximo de 6 anos).' })
   try {
     const usuario = await usuarioLogado(base, anon, token)
     if (!usuario) return res.status(401).json({ error: 'Entre na sua conta' })
