@@ -13,6 +13,7 @@ import { filtrosExtras, MODALIDADES, nomeModoDisputa, PERIODOS_ABERTURA, periodo
 import {pesquisarIndice,type ResultadoIndice} from '@/lib/buscaIndice'
 import CategoriasObjeto from '@/components/CategoriasObjeto'
 import FiltrosOportunidades from '@/components/FiltrosOportunidades'
+import OportunidadesDesertas from '@/components/OportunidadesDesertas'
 import { codigoComprasnet, portalCompra, PORTAIS } from '@/lib/portais'
 import IconePortal from '@/components/IconePortal'
 import CodigoComprasnet from '@/components/CodigoComprasnet'
@@ -25,7 +26,9 @@ import type { Processo } from '@/types/db'
 function dataLocal(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
 }
-const CHAVE_BUSCA='lf-oportunidades-busca'
+const CHAVE_BUSCA='lf-oportunidades-busca',CHAVE_ABA='lf-oportunidades-aba'
+type Aba='abertas'|'desertas'
+function lerAba():Aba{try{return sessionStorage.getItem(CHAVE_ABA)==='desertas'?'desertas':'abertas'}catch{return 'abertas'}}
 function lerBuscaSalva():{f:Partial<Filtros>;consulta:Partial<Filtros>|null;pagina:number}|null {
   try{
     const s=JSON.parse(sessionStorage.getItem(CHAVE_BUSCA)??'null')
@@ -57,6 +60,8 @@ export default function Oportunidades() {
   const [f,setF]=useState<Filtros>(inicial.f)
   const [consulta,setConsulta]=useState<Filtros|null>(inicial.consulta),[avancados,setAvancados]=useState(false)
   const [pagina,setPagina]=useState(inicial.pagina)
+  const [aba,setAba]=useState<Aba>(lerAba)
+  useEffect(()=>{try{sessionStorage.setItem(CHAVE_ABA,aba)}catch{/* armazenamento indisponível */}},[aba])
   useEffect(()=>{try{sessionStorage.setItem(CHAVE_BUSCA,JSON.stringify({f,consulta,pagina}))}catch{/* armazenamento indisponível */}},[f,consulta,pagina])
   const navigate=useNavigate()
   const processos=useLista<Processo>('processos',{porEmpresa:false})
@@ -66,7 +71,7 @@ export default function Oportunidades() {
   const efetiva=useMemo(()=>consulta&&aplicarLiberacao(consulta,estados),[consulta,estados])
   const chaveResultado=JSON.stringify([efetiva,pagina]),salvo=lerResultadoSalvo(chaveResultado)
   const q=useQuery({
-    queryKey:['oportunidades-indexadas',efetiva,pagina],enabled:!!efetiva&&estados!==null,retry:1,staleTime:VALIDADE_BUSCA,gcTime:30*60_000,
+    queryKey:['oportunidades-indexadas',efetiva,pagina],enabled:!!efetiva&&estados!==null&&aba==='abertas',retry:1,staleTime:VALIDADE_BUSCA,gcTime:30*60_000,
     initialData:salvo?.data,initialDataUpdatedAt:salvo?.em,
     queryFn:async({signal})=>{
       const r=await pesquisarIndice(efetiva!,pagina,signal)
@@ -99,6 +104,11 @@ export default function Oportunidades() {
   }
   return <>
     <CabecalhoPagina titulo="Oportunidades" descricao="Encontre editais e consulte seus itens." />
+    <div role="tablist" aria-label="Tipo de oportunidade" className="mb-4 inline-flex rounded-full border bg-card p-1">
+      {([['abertas','Editais abertos'],['desertas','Desertas e fracassadas']] as const).map(([id,rotulo])=><button key={id} type="button" role="tab" aria-selected={aba===id} onClick={()=>setAba(id)}
+        className={`h-9 rounded-full px-4 text-sm font-semibold transition-colors ${aba===id?'bg-primary text-primary-foreground':'text-muted-foreground hover:text-foreground'}`}>{rotulo}</button>)}
+    </div>
+    {aba==='desertas'?<OportunidadesDesertas />:<>
     <Card className="mb-5 p-4">
       <form onSubmit={pesquisar} className="space-y-3">
         <div className="flex flex-col gap-2 sm:flex-row"><div className="relative min-w-0 flex-1"><Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input className="pl-9" aria-label="Pesquisar oportunidades" placeholder="O que sua empresa vende? Ex.: notebook; computador" value={f.busca} onChange={set('busca')} maxLength={300} /></div><Button type="submit" carregando={q.isFetching}>Buscar oportunidades</Button></div>
@@ -141,6 +151,7 @@ export default function Oportunidades() {
       })}</div>}
       {processos.isError&&<p role="alert" className="mt-3 text-sm text-destructive">Não foi possível verificar os processos já importados. <button className="underline" onClick={()=>processos.refetch()}>Tentar novamente</button></p>}
       {totalPaginas>1&&<div className="mt-5 flex items-center justify-between gap-2"><Button variante="contorno" disabled={pagina<=1} onClick={()=>setPagina(p=>p-1)}>Anterior</Button><span className="text-sm">{pagina} / {totalPaginas}</span><Button variante="contorno" disabled={pagina>=totalPaginas} onClick={()=>setPagina(p=>p+1)}>Próxima</Button></div>}
+    </>}
     </>}
   </>
 }
