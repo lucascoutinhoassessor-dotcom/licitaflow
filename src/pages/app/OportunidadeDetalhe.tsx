@@ -7,13 +7,14 @@ import { Badge, Button, Card, Carregando, Vazio } from '@/components/ui'
 import { SeletorEmpresa, useEmpresaPadrao } from '@/components/Situacoes'
 import ItensAcordeao from '@/components/ItensAcordeao'
 import IconePortal from '@/components/IconePortal'
+import CodigoComprasnet from '@/components/CodigoComprasnet'
 import DesclassificacoesCompra from '@/components/OcorrenciasAta'
 import { useOrg } from '@/providers/OrgProvider'
 import { useLista, useSalvar } from '@/hooks/useDados'
 import { dadosProcesso, linkCompra, type CompraPNCP } from '@/lib/pncp'
 import { itensDoEdital } from '@/lib/itensIndice'
 import { consultarItens, nomeModoDisputa } from '@/lib/filtrosOportunidades'
-import { portalCompra, urlOrigem } from '@/lib/portais'
+import { codigoComprasnet, portalCompra, urlOrigem } from '@/lib/portais'
 import { formatarDataHora, formatarMoeda, prazoRelativo } from '@/lib/format'
 import type { Processo } from '@/types/db'
 
@@ -70,7 +71,8 @@ export default function OportunidadeDetalhe() {
 
       <Card className="mb-5 p-5 text-center sm:p-8">
         <p className="flex items-center justify-center gap-2 text-sm font-semibold text-muted-foreground"><IconePortal id={portalCompra(compra)[0]} nome={portalCompra(compra)[1]} className="h-5 w-5" />{portalCompra(compra)[1]}</p>
-        <h1 className="mt-1 text-lg font-bold sm:text-2xl">{compra.modalidadeNome} Nº {compra.numeroCompra}</h1>
+        <h1 className="mt-1 text-lg font-bold sm:text-2xl">{compra.modalidadeNome} Nº {codigoComprasnet(compra)?.numero ?? compra.numeroCompra}</h1>
+        <CodigoComprasnet compra={compra} className="mt-2 justify-center" />
         <p className="mt-1 text-sm font-semibold uppercase text-muted-foreground">{compra.orgaoEntidade.razaoSocial} · {compra.unidadeOrgao.municipioNome}/{compra.unidadeOrgao.ufSigla}</p>
         <p className="mx-auto mt-4 max-w-4xl whitespace-pre-wrap break-words text-sm font-medium sm:text-base">{compra.objetoCompra}</p>
         <div className="mt-4 flex flex-wrap justify-center gap-2">

@@ -1,4 +1,4 @@
-import { portalCompra } from './portais'
+import { codigoComprasnet, portalCompra } from './portais'
 import type { Modalidade } from './dominio'
 
 export interface CompraPNCP {
@@ -43,7 +43,7 @@ export function dadosProcesso(c: CompraPNCP, empresaId: string) {
   return {
     empresa_id: empresaId, etapa: 'captacao', prioridade: 'media',
     modalidade: modalidades[c.modalidadeId] ?? 'outra',
-    numero: c.numeroCompra, objeto: c.objetoCompra,
+    numero: codigoComprasnet(c)?.numero ?? c.numeroCompra, uasg: codigoComprasnet(c)?.uasg ?? null, objeto: c.objetoCompra,
     orgao_nome: c.orgaoEntidade.razaoSocial, orgao_cnpj: c.orgaoEntidade.cnpj,
     uf: c.unidadeOrgao?.ufSigla ?? null, municipio: c.unidadeOrgao?.municipioNome ?? null,
     pncp_controle: c.numeroControlePNCP, portal: portalCompra(c)[1], link_edital: linkCompra(c),

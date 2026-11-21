@@ -34,6 +34,17 @@ export function portalCompra(c: CompraPNCP) {
     ?? PORTAIS[PORTAIS.length - 1]
 }
 
+/**
+ * UASG e número completo da compra no Compras.gov (ComprasNet), como o fornecedor digita ao cadastrar a proposta.
+ * Vêm do código da compra no link do edital: UASG (6) + modalidade (2) + número (5) + ano (4), ex.: 168008 05 00283 2026.
+ */
+export function codigoComprasnet(c: Pick<CompraPNCP, 'linkSistemaOrigem'>): { uasg: string; numero: string } | null {
+  let codigo = ''
+  try { codigo = new URL(c.linkSistemaOrigem ?? '').searchParams.get('compra') ?? '' } catch { return null }
+  const m = /^(\d{6})(\d{2})(\d{5})(\d{4})$/.exec(codigo)
+  return m ? { uasg: m[1], numero: `${m[3]}/${m[4]}` } : null
+}
+
 export function rotuloPortal(portal: string | null | undefined) {
   return portal?.trim().toUpperCase() === 'PNCP' ? 'Fonte oficial de compras' : portal
 }
