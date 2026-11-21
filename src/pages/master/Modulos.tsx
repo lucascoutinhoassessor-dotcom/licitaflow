@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Eye, EyeOff, FlaskConical, Hourglass } from 'lucide-react'
+import { Eye, EyeOff, FlaskConical, Hourglass, SlidersHorizontal } from 'lucide-react'
 import { supabase, mensagemErro } from '@/lib/supabase'
 import { CATALOGO_MODULOS, type EstadoModulo, type ModuloCatalogo } from '@/lib/modulos'
+import { CATALOGO_FILTROS } from '@/lib/filtrosLiberacao'
 import { cn } from '@/lib/utils'
 import { Aviso, Badge, Button, CabecalhoPagina, Card, Carregando, Input, Modal } from '@/components/ui'
 
@@ -13,6 +14,12 @@ const ESTADOS: { id: EstadoModulo; rotulo: string; ajuda: string; icone: typeof 
   { id: 'teste', rotulo: 'Em teste', ajuda: 'Só as organizações escolhidas', icone: FlaskConical, cor: 'border-sky-500/60 bg-sky-500/10 text-sky-600 dark:text-sky-300' },
   { id: 'em_breve', rotulo: 'Em breve', ajuda: 'Aparece no menu, sem abrir', icone: Hourglass, cor: 'border-amber-500/60 bg-amber-500/10 text-amber-600 dark:text-amber-300' },
   { id: 'oculto', rotulo: 'Oculto', ajuda: 'Ninguém vê no menu', icone: EyeOff, cor: 'border-zinc-500/60 bg-zinc-500/10 text-zinc-600 dark:text-zinc-300' },
+]
+
+/** Módulos do menu e, em seguida, cada filtro da tela Oportunidades. */
+const ITENS: ModuloCatalogo[] = [
+  ...CATALOGO_MODULOS,
+  ...CATALOGO_FILTROS.map((f) => ({ id: f.id, rotulo: f.rotulo, descricao: f.descricao, grupo: 'Filtros de Oportunidades', icone: SlidersHorizontal })),
 ]
 
 export default function Modulos() {
@@ -29,11 +36,11 @@ export default function Modulos() {
 
   const grupos = useMemo(() => {
     const m = new Map<string, ModuloCatalogo[]>()
-    for (const mod of CATALOGO_MODULOS) m.set(mod.grupo, [...(m.get(mod.grupo) ?? []), mod])
+    for (const mod of ITENS) m.set(mod.grupo, [...(m.get(mod.grupo) ?? []), mod])
     return [...m.entries()]
   }, [])
   const estado = (id: string): EstadoModulo => q.data?.[id]?.estado ?? 'oculto'
-  const contagem = (e: EstadoModulo) => CATALOGO_MODULOS.filter((m) => estado(m.id) === e).length
+  const contagem = (e: EstadoModulo) => ITENS.filter((m) => estado(m.id) === e).length
 
   async function salvar(mod: ModuloCatalogo, novo: EstadoModulo, orgsTeste?: string[]) {
     const atual = estado(mod.id)
@@ -54,7 +61,7 @@ export default function Modulos() {
   const orgsFiltradas = (orgs.data ?? []).filter((o) => !busca.trim() || `${o.nome} ${o.dono_email ?? ''}`.toLowerCase().includes(busca.trim().toLowerCase()))
 
   return <>
-    <CabecalhoPagina titulo="Funcionalidades" descricao="Escolha o que cada cliente vê no LicitaFlow. Libere um módulo para todos quando estiver pronto, ou teste antes com organizações escolhidas (inclusive a sua)." />
+    <CabecalhoPagina titulo="Funcionalidades" descricao="Escolha o que cada cliente vê no LicitaFlow. Libere um módulo ou um filtro para todos quando estiver pronto, ou teste antes com organizações escolhidas (inclusive a sua)." />
     {q.isLoading && <Carregando />}
     {q.isError && <Aviso>{mensagemErro(q.error)} — aplique a migração de funcionalidades.</Aviso>}
     {q.data && <>
@@ -85,7 +92,7 @@ export default function Modulos() {
           </div>
         })}</Card>
       </section>)}</div>
-      <p className="mt-6 text-xs text-muted-foreground">Módulos novos chegam ocultos: só aparecem para os clientes quando você liberar aqui. Painel, empresas, equipe, plano, cobranças, avisos, suporte e configurações ficam sempre disponíveis. Ocultar um módulo esconde o menu e bloqueia a abertura pelo endereço; os dados do cliente não são apagados.</p>
+      <p className="mt-6 text-xs text-muted-foreground">Módulos novos chegam ocultos: só aparecem para os clientes quando você liberar aqui. Painel, empresas, equipe, plano, cobranças, avisos, suporte e configurações ficam sempre disponíveis. Ocultar um módulo esconde o menu e bloqueia a abertura pelo endereço; os dados do cliente não são apagados. Filtro oculto some da busca e não é aplicado; em breve aparece desativado.</p>
     </>}
 
     <Modal aberto={!!teste} aoFechar={() => { if (!ocupado) setTeste(null) }} titulo={`Testar "${teste?.modulo.rotulo ?? ''}" com quem?`}>

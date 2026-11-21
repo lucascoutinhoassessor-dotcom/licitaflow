@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import BotaoInverterOrdem from '@/components/BotaoInverterOrdem'
 import { Link, useNavigate } from 'react-router-dom'
@@ -16,6 +16,9 @@ import FiltrosOportunidades from '@/components/FiltrosOportunidades'
 import { codigoComprasnet, portalCompra, PORTAIS } from '@/lib/portais'
 import IconePortal from '@/components/IconePortal'
 import CodigoComprasnet from '@/components/CodigoComprasnet'
+import { FiltroLiberado } from '@/components/FiltroLiberado'
+import { useFiltrosLiberados } from '@/hooks/useModulos'
+import { aplicarLiberacao } from '@/lib/filtrosLiberacao'
 import { formatarData, formatarMoeda, prazoRelativo } from '@/lib/format'
 import type { Processo } from '@/types/db'
 
@@ -58,12 +61,15 @@ export default function Oportunidades() {
   const navigate=useNavigate()
   const processos=useLista<Processo>('processos',{porEmpresa:false})
   const {salvar}=useSalvar('processos',['processo_eventos','prazos'])
-  const chaveResultado=JSON.stringify([consulta,pagina]),salvo=lerResultadoSalvo(chaveResultado)
+  // Filtros que o master não liberou voltam ao padrão (ex.: valor guardado de uma busca anterior).
+  const {estados}=useFiltrosLiberados()
+  const efetiva=useMemo(()=>consulta&&aplicarLiberacao(consulta,estados),[consulta,estados])
+  const chaveResultado=JSON.stringify([efetiva,pagina]),salvo=lerResultadoSalvo(chaveResultado)
   const q=useQuery({
-    queryKey:['oportunidades-indexadas',consulta,pagina],enabled:!!consulta,retry:1,staleTime:VALIDADE_BUSCA,gcTime:30*60_000,
+    queryKey:['oportunidades-indexadas',efetiva,pagina],enabled:!!efetiva&&estados!==null,retry:1,staleTime:VALIDADE_BUSCA,gcTime:30*60_000,
     initialData:salvo?.data,initialDataUpdatedAt:salvo?.em,
     queryFn:async({signal})=>{
-      const r=await pesquisarIndice(consulta!,pagina,signal)
+      const r=await pesquisarIndice(efetiva!,pagina,signal)
       try{sessionStorage.setItem(CHAVE_RESULTADO,JSON.stringify({chave:chaveResultado,em:Date.now(),data:r}))}catch{/* armazenamento indisponível ou cheio */}
       return r
     },
@@ -72,7 +78,8 @@ export default function Oportunidades() {
   const totalPaginas=Math.max(1,q.data?.totalPaginas??1)
   const catalogo=q.data?.catalogo
   const set=(k:keyof Filtros)=>(e:{target:{value:string}})=>setF(x=>({...x,[k]:e.target.value}))
-  const extras=(f.portais.length!==PORTAIS.length?1:0)+(f.modalidades.length!==MODALIDADES.length?1:0)+[f.orgao,f.minimo,f.maximo,f.itemMinimo,f.itemMaximo,f.maxItens,f.naoDivulgado,f.exclusivo,f.excluirSrp,f.excluir.trim(),f.tipoItem,f.modosDisputa.length].filter(Boolean).length
+  const fv=aplicarLiberacao(f,estados)
+  const extras=(fv.portais.length!==PORTAIS.length?1:0)+(fv.modalidades.length!==MODALIDADES.length?1:0)+[fv.orgao,fv.minimo,fv.maximo,fv.itemMinimo,fv.itemMaximo,fv.maxItens,fv.naoDivulgado,fv.exclusivo,fv.excluirSrp,fv.excluir.trim(),fv.tipoItem,fv.modosDisputa.length].filter(Boolean).length
   function pesquisar(e:FormEvent) {
     e.preventDefault()
     try{validarFiltros(f)}catch(erro){toast.error((erro as Error).message);return}
@@ -95,17 +102,17 @@ export default function Oportunidades() {
     <Card className="mb-5 p-4">
       <form onSubmit={pesquisar} className="space-y-3">
         <div className="flex flex-col gap-2 sm:flex-row"><div className="relative min-w-0 flex-1"><Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input className="pl-9" aria-label="Pesquisar oportunidades" placeholder="O que sua empresa vende? Ex.: notebook; computador" value={f.busca} onChange={set('busca')} maxLength={300} /></div><Button type="submit" carregando={q.isFetching}>Buscar oportunidades</Button></div>
-        <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]"><Select aria-label="Situação dos editais" value={f.situacao} onChange={set('situacao')}><option value="abertas">Por data de abertura</option><option value="publicacoes">Por data de publicação</option></Select><Select aria-label="UF" value={f.uf} onChange={set('uf')}><option value="">Brasil inteiro</option>{'AC AL AP AM BA CE DF ES GO MA MT MS MG PA PB PR PE PI RJ RN RS RO RR SC SP SE TO'.split(' ').map(u=><option key={u}>{u}</option>)}</Select><Button type="button" variante="contorno" aria-expanded={avancados} aria-controls="mais-filtros" onClick={()=>setAvancados(v=>!v)}><SlidersHorizontal className="h-4 w-4" />Mais filtros{extras?` (${extras})`:''}<ChevronDown className={`h-4 w-4 transition-transform ${avancados?'rotate-180':''}`} /></Button></div>
-        {f.situacao==='abertas'&&<>
+        <div className="flex flex-col gap-2 sm:flex-row"><FiltroLiberado id="filtro-publicacao" className="min-w-0 flex-1"><Select aria-label="Situação dos editais" value={fv.situacao} onChange={set('situacao')}><option value="abertas">Por data de abertura</option><option value="publicacoes">Por data de publicação</option></Select></FiltroLiberado><FiltroLiberado id="filtro-uf" className="min-w-0 flex-1"><Select aria-label="UF" value={fv.uf} onChange={set('uf')}><option value="">Brasil inteiro</option>{'AC AL AP AM BA CE DF ES GO MA MT MS MG PA PB PR PE PI RJ RN RS RO RR SC SP SE TO'.split(' ').map(u=><option key={u}>{u}</option>)}</Select></FiltroLiberado><Button type="button" variante="contorno" aria-expanded={avancados} aria-controls="mais-filtros" onClick={()=>setAvancados(v=>!v)}><SlidersHorizontal className="h-4 w-4" />Mais filtros{extras?` (${extras})`:''}<ChevronDown className={`h-4 w-4 transition-transform ${avancados?'rotate-180':''}`} /></Button></div>
+        {fv.situacao==='abertas'&&<>
           <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Período de abertura">
             {PERIODOS_ABERTURA.map(([d,rotulo])=><button key={rotulo} type="button" onClick={()=>escolherPeriodo(d)} aria-pressed={periodoAtual===d}
               className={`h-9 rounded-full border px-4 text-sm font-semibold transition-colors ${periodoAtual===d?'border-primary bg-primary text-primary-foreground':'bg-card text-muted-foreground hover:text-foreground'}`}>{rotulo}</button>)}
-            <button type="button" onClick={()=>{const novo={...f,diasUteis:!f.diasUteis};setF(novo);setPagina(1);setConsulta(novo)}} aria-pressed={f.diasUteis}
-              className={`h-9 rounded-full border px-4 text-sm font-semibold transition-colors ${f.diasUteis?'border-emerald-500/60 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300':'bg-card text-muted-foreground hover:text-foreground'}`}>Só dias úteis</button>
+            <FiltroLiberado id="filtro-dias-uteis"><button type="button" onClick={()=>{const novo={...f,diasUteis:!f.diasUteis};setF(novo);setPagina(1);setConsulta(novo)}} aria-pressed={f.diasUteis}
+              className={`h-9 rounded-full border px-4 text-sm font-semibold transition-colors ${f.diasUteis?'border-emerald-500/60 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300':'bg-card text-muted-foreground hover:text-foreground'}`}>Só dias úteis</button></FiltroLiberado>
           </div>
           <div className="grid gap-3 sm:grid-cols-2"><Campo rotulo="Abertura a partir de" htmlFor="busca-abertura-de"><Input id="busca-abertura-de" type="date" value={f.aberturaDe} max={f.aberturaAte||undefined} onChange={set('aberturaDe')} /></Campo><Campo rotulo="Abertura até" htmlFor="busca-abertura-ate"><Input id="busca-abertura-ate" type="date" min={f.aberturaDe||undefined} value={f.aberturaAte} onChange={set('aberturaAte')} /></Campo></div>
         </>}
-        {f.situacao==='publicacoes'&&<div className="grid gap-3 sm:grid-cols-2"><Campo rotulo="Publicado desde" htmlFor="busca-inicio"><Input id="busca-inicio" type="date" required value={f.inicio} max={f.fim} onChange={set('inicio')} /></Campo><Campo rotulo="Publicado até" htmlFor="busca-fim"><Input id="busca-fim" type="date" required min={f.inicio} value={f.fim} onChange={set('fim')} /></Campo></div>}
+        {fv.situacao==='publicacoes'&&<div className="grid gap-3 sm:grid-cols-2"><Campo rotulo="Publicado desde" htmlFor="busca-inicio"><Input id="busca-inicio" type="date" required value={f.inicio} max={f.fim} onChange={set('inicio')} /></Campo><Campo rotulo="Publicado até" htmlFor="busca-fim"><Input id="busca-fim" type="date" required min={f.inicio} value={f.fim} onChange={set('fim')} /></Campo></div>}
         {avancados&&<div id="mais-filtros" className="border-t pt-3"><FiltrosOportunidades f={f} mudar={setF} compras={[]} orgaos={q.data?.orgaos??[]} /><Button className="mt-3 w-full sm:w-auto" type="submit" carregando={q.isFetching}>Aplicar filtros e buscar</Button></div>}
       </form>
     </Card>
