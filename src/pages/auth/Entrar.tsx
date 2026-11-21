@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase, mensagemErro } from '@/lib/supabase'
 import { Aviso, Button, Campo, Input } from '@/components/ui'
 import { AuthShell } from './AuthShell'
+import { masterSeparado } from '@/lib/pwa'
 
 export default function Entrar() {
   const [email, setEmail] = useState('')
@@ -23,6 +24,8 @@ export default function Entrar() {
       setEnviando(false)
       return setErro(mensagemErro(error))
     }
+    // Em produção o master tem endereço e login próprios; aqui a conta entra no app do usuário.
+    if (masterSeparado()) { setEnviando(false); return navigate(destino, { replace: true }) }
     // Conta de administração da plataforma vai direto para o console master
     const { data: admin } = await supabase.rpc('is_platform_admin')
     setEnviando(false)

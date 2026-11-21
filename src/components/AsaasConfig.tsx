@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { Copy, KeyRound } from 'lucide-react'
+import { URL_SITE, masterSeparado } from '@/lib/pwa'
 import { supabase, mensagemErro } from '@/lib/supabase'
 import { formatarDataHora, formatarMoeda } from '@/lib/format'
 import { pagamentoAPI } from '@/lib/pagamentos'
@@ -25,7 +26,7 @@ export function AsaasConfig() {
   const [ocupado, setOcupado] = useState('')
   const [teste, setTeste] = useState<{ saldo: number | null; conta: string | null; ambiente: string } | null>(null)
   const [tokenNovo, setTokenNovo] = useState('')
-  const urlWebhook = `${window.location.origin}/api/asaas-webhook`
+  const urlWebhook = `${masterSeparado() ? URL_SITE : window.location.origin}/api/asaas-webhook`
   useEffect(() => { if (q.data) setF(x => ({ ...x, ambiente: q.data.ambiente, dias: String(q.data.dias_tolerancia), bloquear: q.data.bloquear_inadimplente })) }, [q.data])
   const recarregar = () => Promise.all([qc.invalidateQueries({ queryKey: ['asaas-status'] }), qc.invalidateQueries({ queryKey: ['admin-financeiro'] }), qc.invalidateQueries({ queryKey: ['gateways-config'] })])
 

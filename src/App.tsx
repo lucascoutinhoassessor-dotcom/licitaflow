@@ -1,8 +1,9 @@
-import { lazy, Suspense, type ReactNode } from 'react'
+import { lazy, Suspense, useEffect, type ReactNode } from 'react'
 import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom'
 import { useAuth } from '@/providers/AuthProvider'
 import { OrgProvider, useOrg } from '@/providers/OrgProvider'
 import { supabaseNaoConfigurado } from '@/lib/supabase'
+import { enderecoCorreto } from '@/lib/pwa'
 import { useEhAdmin } from '@/hooks/useAdmin'
 import { Carregando } from '@/components/ui'
 import { AppLayout } from '@/components/layout/AppLayout'
@@ -96,6 +97,16 @@ function ExigeMaster() {
   )
 }
 
+/** Master e app do usuário moram em endereços diferentes em produção: navegação interna que cruza a fronteira recarrega no endereço certo. */
+function TrocaDeEndereco() {
+  const { pathname, search, hash } = useLocation()
+  useEffect(() => {
+    const destino = enderecoCorreto(window.location.hostname, pathname, search + hash)
+    if (destino) window.location.replace(destino)
+  }, [pathname, search, hash])
+  return null
+}
+
 function SoVisitante({ children }: { children: ReactNode }) {
   const { user, carregando } = useAuth()
   if (carregando) return <Carregando telaCheia />
@@ -108,6 +119,7 @@ export default function App() {
 
   return (
     <BrowserRouter>
+      <TrocaDeEndereco />
       <Suspense fallback={<Carregando telaCheia />}>
         <Routes>
           <Route path="/" element={<Landing />} />

@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils'
 import { useAuth } from '@/providers/AuthProvider'
 import { MenuLateral } from '@/components/layout/MenuLateral'
 import { useInstalacao } from '@/hooks/useInstalacao'
-import { usarAppDoPainel } from '@/lib/pwa'
+import { URL_SITE, masterSeparado, usarAppDoPainel } from '@/lib/pwa'
 
 const grupos: { titulo: string; abas: { rota: string; rotulo: string; icone: typeof Settings; end?: boolean }[] }[] = [
   { titulo: 'Painel', abas: [{ rota: '/master', rotulo: 'Visão geral', icone: LayoutDashboard, end: true }] },
@@ -87,7 +87,7 @@ export default function MasterLayout() {
         <div className="min-w-0 flex-1"><p className="truncate text-xs font-medium text-zinc-200">{user?.email}</p><p className="text-[11px] text-zinc-500">Administrador</p></div>
       </div>
       <div className="mt-1 grid grid-cols-2 gap-1">
-        <Link className="flex h-9 items-center justify-center gap-1.5 rounded-lg text-xs text-zinc-400 hover:bg-zinc-900 hover:text-white" to="/" target="_blank" rel="noopener noreferrer"><ExternalLink className="h-3.5 w-3.5"/>Site</Link>
+        <a className="flex h-9 items-center justify-center gap-1.5 rounded-lg text-xs text-zinc-400 hover:bg-zinc-900 hover:text-white" href={masterSeparado() ? URL_SITE : '/'} target="_blank" rel="noopener noreferrer"><ExternalLink className="h-3.5 w-3.5"/>Site</a>
         <button onClick={async () => { await sair(); navigate('/master/entrar', { replace: true }) }} className="flex h-9 items-center justify-center gap-1.5 rounded-lg text-xs text-zinc-400 hover:bg-zinc-900 hover:text-white"><LogOut className="h-3.5 w-3.5"/>Sair</button>
       </div>
     </div>

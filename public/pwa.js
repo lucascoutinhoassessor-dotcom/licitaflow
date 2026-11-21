@@ -1,8 +1,17 @@
-// Escolhe o aplicativo instalável antes do React carregar: o painel master é um app à parte
-// (ícone e nome próprios, abre direto em /master); o restante instala o app do usuário.
-// Arquivo próprio para permitir CSP sem 'unsafe-inline'. src/lib/pwa.ts repete a troca em navegações internas.
+// Roda antes do React. O painel master mora em licitaflow-master.vercel.app: é um app instalável
+// separado (ícone e nome próprios, abre em /master) e guarda um login independente do app do usuário.
+// Mesma regra de src/lib/pwa.ts (que cobre as navegações internas). Arquivo próprio por causa da CSP.
 (function () {
-  var master = /^\/master(\/|$)/.test(location.pathname);
+  var MASTER = 'licitaflow-master.vercel.app';
+  var SITE = 'https://licitaflow-prod.vercel.app';
+  var HOSTS_SITE = ['licitaflow-prod.vercel.app', 'licitaflow.com.br', 'www.licitaflow.com.br'];
+  var host = location.hostname, path = location.pathname, resto = location.search + location.hash;
+  var rotaMaster = /^\/master(\/|$)/.test(path);
+  if (host === MASTER && path === '/') return location.replace('/master' + resto);
+  if (host === MASTER && !rotaMaster) return location.replace(SITE + path + resto);
+  if (HOSTS_SITE.indexOf(host) >= 0 && rotaMaster) return location.replace('https://' + MASTER + path + resto);
+
+  var master = rotaMaster;
   var head = document.head;
   function link(rel, href) {
     var el = document.createElement('link');
