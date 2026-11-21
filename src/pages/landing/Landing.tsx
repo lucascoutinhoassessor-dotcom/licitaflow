@@ -38,7 +38,8 @@ import {
 } from 'lucide-react'
 import { useAuth } from '@/providers/AuthProvider'
 import { cn } from '@/lib/utils'
-import { DIAS_TESTE, PLANOS } from '@/lib/planos'
+import { PLANOS } from '@/lib/planos'
+import { useDiasTeste } from '@/hooks/useDiasTeste'
 import { HeroMockup } from './HeroMockup'
 
 const ease = [0.16, 1, 0.3, 1] as const
@@ -130,7 +131,7 @@ const SEGURANCA: { icone: LucideIcon; t: string; d: string }[] = [
 const FAQ = [
   { p: 'O que é o LicitaFlow?', r: 'Uma plataforma para fornecedores e assessorias controlarem licitações de ponta a ponta: encontrar oportunidades, organizar documentos e prazos, disputar e gerir contratos e pagamentos no pós-pregão.' },
   { p: 'Funciona para pregão eletrônico e dispensa eletrônica?', r: 'Sim. O LicitaFlow é focado nas modalidades eletrônicas da Lei 14.133, especialmente pregão eletrônico e dispensa eletrônica, e também permite cadastrar outras modalidades.' },
-  { p: 'Preciso de cartão de crédito para testar?', r: `Não. Você tem ${DIAS_TESTE} dias grátis com acesso completo, sem informar cartão.` },
+  { p: 'Preciso de cartão de crédito para testar?', r: 'Não. Você tem {dias} dias grátis com acesso completo, sem informar cartão.' },
   { p: 'Meus dados ficam seguros?', r: 'Sim. O banco fica no Brasil, cada empresa é isolada das demais por regras aplicadas no próprio banco de dados, as conexões são criptografadas e há histórico de alterações.' },
   { p: 'Sou assessoria. Consigo atender várias empresas?', r: 'Sim. No plano Assessoria você cadastra vários CNPJs, alterna entre eles em um clique e vê tudo consolidado, com permissões por pessoa da sua equipe.' },
   { p: 'O LicitaFlow dá lances automáticos?', r: 'Não. Robôs de lance exigem burlar as proteções dos portais e podem trazer sanções ao fornecedor. Em vez disso, oferecemos um assistente de lances com preço-limite por item, margem e histórico de preços, e você decide.' },
@@ -138,6 +139,7 @@ const FAQ = [
 ]
 
 function Navbar() {
+  const dias = useDiasTeste()
   const { user } = useAuth()
   const [aberto, setAberto] = useState(false)
   const [rolou, setRolou] = useState(false)
@@ -206,7 +208,7 @@ function Navbar() {
                 </a>
               ))}
               <Link to={user ? '/app' : '/cadastro'} className="mt-2 rounded-full bg-white px-4 py-3 text-center font-semibold text-slate-950">
-                {user ? 'Ir para o painel' : `Testar grátis por ${DIAS_TESTE} dias`}
+                {user ? 'Ir para o painel' : `Testar grátis por ${dias} dias`}
               </Link>
               {!user && (
                 <Link to="/entrar" className="px-4 py-2 text-center text-sm text-slate-300">
@@ -238,6 +240,7 @@ function BotaoPrincipal({ children, className }: { children: ReactNode; classNam
 }
 
 function Precos() {
+  const dias = useDiasTeste()
   const [anual, setAnual] = useState(true)
   const catalogo = useCatalogoPlanos(true)
   const planos = catalogo.data ? catalogo.data.filter(p=>!['trial','cancelado'].includes(p.id)).map(p=>({
@@ -247,7 +250,7 @@ function Precos() {
   })) : PLANOS
   return (
     <Secao id="planos">
-      <Titulo selo="Planos" titulo="Um plano para cada momento" texto={`Comece com ${DIAS_TESTE} dias grátis em qualquer plano. Sem cartão, sem fidelidade.`} />
+      <Titulo selo="Planos" titulo="Um plano para cada momento" texto={`Comece com ${dias} dias grátis em qualquer plano. Sem cartão, sem fidelidade.`} />
       <Revelar className="mb-10 flex justify-center">
         <div className="relative flex rounded-full border border-white/10 bg-white/5 p-1 text-sm">
           {[
@@ -311,7 +314,7 @@ function Precos() {
                   p.destaque ? 'bg-white text-slate-950 hover:bg-slate-200' : 'border border-white/15 text-white hover:bg-white/5',
                 )}
               >
-                Começar {DIAS_TESTE} dias grátis
+                Começar {dias} dias grátis
               </Link>
             </motion.div>
           </Revelar>
@@ -322,6 +325,7 @@ function Precos() {
 }
 
 function Faq() {
+  const dias = useDiasTeste()
   const [aberta, setAberta] = useState<number | null>(0)
   return (
     <Secao id="faq">
@@ -336,7 +340,7 @@ function Faq() {
             <AnimatePresence initial={false}>
               {aberta === i && (
                 <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.3, ease }} className="overflow-hidden">
-                  <p className="px-6 pb-5 text-sm leading-relaxed text-slate-400">{f.r}</p>
+                  <p className="px-6 pb-5 text-sm leading-relaxed text-slate-400">{f.r.replace('{dias}', String(dias))}</p>
                 </motion.div>
               )}
             </AnimatePresence>
@@ -348,6 +352,7 @@ function Faq() {
 }
 
 export default function Landing() {
+  const dias = useDiasTeste()
   const conteudoQ = useQuery({
     queryKey: ['site-publico'], staleTime: 60_000, retry: 1,
     queryFn: async () => {
@@ -580,7 +585,7 @@ export default function Landing() {
                 <div className="mt-10 flex justify-center">
                   <BotaoPrincipal className="px-9 py-4">{conteudo.botao}</BotaoPrincipal>
                 </div>
-                <p className="mt-4 text-sm text-slate-400">{DIAS_TESTE} dias grátis · sem cartão · cancele quando quiser</p>
+                <p className="mt-4 text-sm text-slate-400">{dias} dias grátis · sem cartão · cancele quando quiser</p>
               </div>
             </div>
           </Revelar>

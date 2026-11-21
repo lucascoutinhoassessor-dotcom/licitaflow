@@ -5,6 +5,7 @@ import { supabase,mensagemErro } from '@/lib/supabase'
 import { formatarMoeda } from '@/lib/format'
 import { useCatalogoPlanos,type PlanoCatalogo } from '@/hooks/useCatalogoPlanos'
 import { Aviso,Badge,Button,CabecalhoPagina,Campo,Card,Carregando,Input,Modal } from '@/components/ui'
+import { TesteGratisConfig } from '@/components/TesteGratisConfig'
 
 export default function Planos(){
   const q=useCatalogoPlanos()
@@ -33,6 +34,7 @@ export default function Planos(){
     catch(e){toast.error(mensagemErro(e))}finally{setOcupado(false)}
   }
   return <><CabecalhoPagina titulo="Planos e limites" descricao="Catálogo comercial e limites aplicados no banco. Preços de catálogo não geram cobranças nem renovam assinaturas automaticamente." acoes={<Button onClick={()=>editar('novo')}>Novo plano</Button>}/>
+    <TesteGratisConfig/>
     <Card className="mb-5 space-y-3 p-5"><h2 className="font-semibold">Política de limites</h2>{politica.isError?<Aviso>Política indisponível. Verifique a migração de planos.</Aviso>:<><p className="text-sm text-muted-foreground">{politica.isLoading?'Carregando…':politica.data?'Ativa: novas inserções respeitam os limites do plano.':'Desativada: limites são exibidos para acompanhamento, sem bloquear novas inserções.'}</p><Button variante="contorno" disabled={ocupado||politica.isLoading} onClick={alternar}>{politica.data?'Desativar limites':'Ativar limites'}</Button></>}</Card>
     {q.isLoading && <Carregando/>}{q.isError && <Aviso>Não foi possível carregar o catálogo. Verifique se a migração de planos foi aplicada.</Aviso>}
     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{q.data?.map(p=><Card key={p.id} className="space-y-3 p-5"><div className="flex flex-wrap items-center gap-2"><h2 className="flex-1 font-semibold">{p.nome}</h2><Badge cor={p.ativo?'verde':'neutro'}>{p.ativo?'Público':'Oculto'}</Badge></div><p className="text-xs text-muted-foreground">{p.id}</p><p>{formatarMoeda(p.mensal_centavos/100)}/mês · {formatarMoeda(p.anual_centavos/100)}/ano</p><ul className="text-sm text-muted-foreground"><li>Empresas: {p.limite_empresas ?? 'Ilimitado'}</li><li>Usuários: {p.limite_usuarios ?? 'Ilimitado'}</li><li>Processos: {p.limite_processos ?? 'Ilimitado'}</li></ul><Button tamanho="sm" variante="contorno" onClick={()=>editar(p)}>Editar plano</Button></Card>)}</div>

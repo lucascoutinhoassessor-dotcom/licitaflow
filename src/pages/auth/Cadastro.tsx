@@ -4,8 +4,10 @@ import { MailCheck } from 'lucide-react'
 import { supabase, mensagemErro } from '@/lib/supabase'
 import { Aviso, Button, Campo, Input } from '@/components/ui'
 import { AuthShell } from './AuthShell'
+import { useDiasTeste } from '@/hooks/useDiasTeste'
 
 export default function Cadastro() {
+  const dias = useDiasTeste()
   const [nome, setNome] = useState('')
   const [email, setEmail] = useState('')
   const [senha, setSenha] = useState('')
@@ -56,7 +58,7 @@ export default function Cadastro() {
   return (
     <AuthShell
       titulo="Criar sua conta"
-      subtitulo="14 dias grátis. Sem cartão de crédito."
+      subtitulo={`${dias} dias grátis. Sem cartão de crédito.`}
       rodape={
         <>
           Já tem conta?{' '}

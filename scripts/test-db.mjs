@@ -326,6 +326,33 @@ expect((await as(U1, `select * from public.assinatura_faturas`)).rows.length===2
 expect((await sistema(`select public.encerrar_assinatura_gateway('sub_teste','Excluída no Asaas') r`)).rows[0].r==='assinatura encerrada','assinatura excluída no Asaas é encerrada');
 await db.exec(`delete from public.assinatura_faturas; delete from public.assinaturas; update public.organizations set suspensa=false, motivo_suspensao=null where id='${o1}'`);
 
+// Teste grátis: prazo editável pelo master, público para a landing, bloqueio ao vencer sem plano.
+await db.exec(`set role anon;`);
+try { expect((await db.query(`select public.dias_teste_gratis() d`)).rows[0].d===14,'landing lê o prazo do teste sem login'); } finally { await db.exec('reset role;'); }
+blocked=false;try{await as(U1, `select public.admin_teste_gratis(60, true)`);}catch{blocked=true;}
+expect(blocked,'cliente não altera o prazo do teste grátis');
+blocked=false;try{await as(U2, `select public.admin_teste_gratis(0, true)`);}catch{blocked=true;}
+expect(blocked,'prazo do teste fica entre 1 e 90 dias');
+await as(U2, `select public.admin_teste_gratis(7, true)`);
+const o3=(await as(U1, `select public.criar_organizacao('Org Nova', 'fornecedor') as id`)).rows[0].id;
+expect((await db.query(`select trial_ate - current_date d from public.organizations where id='${o3}'`)).rows[0].d===7,'novo cadastro recebe o prazo definido pelo master');
+await sistema(`update public.organizations set plano='trial', trial_ate=current_date-1, suspensa=false, motivo_suspensao=null where id in ('${o1}','${o3}')`);
+await sistema(`insert into public.assinaturas(org_id,plano_id,ciclo,valor_centavos,status,gateway_assinatura_id) values('${o1}','essencial','mensal',19700,'ativa','sub_ativa')`);
+await sistema(`select public.rotina_cobranca()`);
+const st=(await db.query(`select id, suspensa, motivo_suspensao from public.organizations where id in ('${o1}','${o3}')`)).rows;
+expect(st.find(r=>r.id===o3).motivo_suspensao==='Teste grátis encerrado (automático)','teste vencido sem plano é bloqueado pela rotina');
+expect(st.find(r=>r.id===o1).suspensa===false,'teste vencido com assinatura ativa continua liberado');
+await as(U2, `select public.admin_atualizar_org('${o3}','trial',current_date+5,true,'Teste grátis encerrado (automático)','')`);
+expect((await db.query(`select suspensa from public.organizations where id='${o3}'`)).rows[0].suspensa===false,'master estende o teste e a conta volta na hora');
+await as(U2, `select public.admin_teste_gratis(14, false)`);
+expect((await as(U2, `select public.admin_teste_status() r`)).rows[0].r.dias===14,'master consulta o prazo e o bloqueio do teste');
+expect((await as(U2, `select public.admin_teste_gratis(30, false, true) n`)).rows[0].n>=1,'master recalcula os testes em andamento');
+await as(U2, `select public.admin_teste_gratis(14, false)`);
+await sistema(`update public.organizations set trial_ate=current_date-1 where id='${o3}'`);
+await sistema(`select public.rotina_cobranca()`);
+expect((await db.query(`select suspensa from public.organizations where id='${o3}'`)).rows[0].suspensa===false,'com o bloqueio desligado, teste vencido não é suspenso');
+await db.exec(`delete from public.assinaturas; delete from public.organizations where id='${o3}'`);
+
 // delete em cascata da org
 await as(U1, `delete from public.organizations where id = '${o1}'`);
 expect((await db.query(`select count(*)::int c from public.processos`)).rows[0].c === 0, 'excluir organização remove dados em cascata');
