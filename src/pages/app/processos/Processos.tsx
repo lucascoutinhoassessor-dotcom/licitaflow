@@ -160,7 +160,7 @@ export default function Processos() {
           <label className="mb-3 flex items-center gap-2 text-sm text-muted-foreground">
             <input type="checkbox" checked={mostrarFinais} onChange={(e) => setMostrarFinais(e.target.checked)} /> Mostrar ganhos, perdidos e desistências
           </label>
-          <div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-4 lg:-mx-8 lg:px-8">
+          <div className="rolagem-kanban -mx-4 flex gap-4 overflow-x-auto px-4 pb-4 lg:-mx-8 lg:px-8">
             {colunas.map((etapa) => {
               const itens = lista.filter((p) => p.etapa === etapa)
               const total = itens.reduce((a, p) => a + (p.valor_estimado ?? 0), 0)
@@ -173,17 +173,17 @@ export default function Processos() {
                   }}
                   onDragLeave={() => setSobre(null)}
                   onDrop={soltar(etapa)}
-                  className={cn('flex w-72 shrink-0 flex-col rounded-xl bg-muted/50 p-2 transition-colors', sobre === etapa && 'bg-primary/10 ring-2 ring-primary/40')}
+                  className={cn('flex min-h-[calc(100dvh-20rem)] w-[85vw] max-w-[22rem] shrink-0 flex-col rounded-xl bg-muted/50 p-3 transition-colors sm:w-80 xl:w-[22rem]', sobre === etapa && 'bg-primary/10 ring-2 ring-primary/40')}
                 >
                   <div className="flex items-center justify-between px-2 py-2">
-                    <div className="flex items-center gap-2 text-sm font-medium">
+                    <div className="flex items-center gap-2 text-base font-semibold">
                       <span className={cn('h-2.5 w-2.5 rounded-full', COR_ETAPA[etapa])} />
                       {ETAPAS[etapa]}
                       <span className="rounded-full bg-background px-1.5 text-xs tabular-nums text-muted-foreground">{itens.length}</span>
                     </div>
                     {total > 0 && <span className="text-[11px] tabular-nums text-muted-foreground">{formatarMoeda(total)}</span>}
                   </div>
-                  <div className="flex min-h-[80px] flex-col gap-2">
+                  <div className="flex flex-1 flex-col gap-3">
                     {itens.map((p) => (
                       <CartaoProcesso key={p.id} p={p} arrastavel={podeEditar} nomeEmpresa={mostrarEmpresa ? nomeEmpresa(p.empresa_id) : undefined} />
                     ))}
