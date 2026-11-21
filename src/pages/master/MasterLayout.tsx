@@ -1,11 +1,14 @@
+import { useEffect } from 'react'
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
-import { Settings, Wallet, Plug, CreditCard, Headphones, Megaphone, BarChart3, Activity, FileText, History, Building2, LayoutDashboard, LogOut, ShieldCheck, Users, Repeat, Receipt, Trophy, ExternalLink } from 'lucide-react'
+import { Settings, Wallet, Plug, CreditCard, Headphones, Megaphone, BarChart3, Activity, FileText, History, Building2, LayoutDashboard, LogOut, ShieldCheck, Users, Repeat, Receipt, Trophy, ExternalLink, Download } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { useFinanceiro } from './Financeiro'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/providers/AuthProvider'
 import { MenuLateral } from '@/components/layout/MenuLateral'
+import { useInstalacao } from '@/hooks/useInstalacao'
+import { usarAppDoPainel } from '@/lib/pwa'
 
 const grupos: { titulo: string; abas: { rota: string; rotulo: string; icone: typeof Settings; end?: boolean }[] }[] = [
   { titulo: 'Painel', abas: [{ rota: '/master', rotulo: 'Visão geral', icone: LayoutDashboard, end: true }] },
@@ -40,6 +43,9 @@ const grupos: { titulo: string; abas: { rota: string; rotulo: string; icone: typ
 export default function MasterLayout() {
   const { user, sair } = useAuth()
   const navigate = useNavigate()
+  const instalacao = useInstalacao()
+  // Enquanto estiver no master, o navegador oferece o app "LicitaFlow Master" (abre em /master).
+  useEffect(() => { usarAppDoPainel(true); return () => usarAppDoPainel(false) }, [])
 
   const fin = useFinanceiro()
   const chamados = useQuery({
@@ -75,6 +81,7 @@ export default function MasterLayout() {
       </div>)}
     </nav>
     <div className="shrink-0 border-t border-zinc-800 p-3">
+      {!instalacao.ocultar && <button onClick={() => { void instalacao.instalar() }} className="mb-2 flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 text-sm font-medium text-amber-300 hover:bg-amber-500/20"><Download className="h-4 w-4"/>Instalar app no celular</button>}
       <div className="flex items-center gap-3 rounded-lg px-2 py-2">
         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-zinc-800 text-sm font-semibold text-amber-300">{inicial}</div>
         <div className="min-w-0 flex-1"><p className="truncate text-xs font-medium text-zinc-200">{user?.email}</p><p className="text-[11px] text-zinc-500">Administrador</p></div>
@@ -91,6 +98,7 @@ export default function MasterLayout() {
         <MenuLateral titulo="LicitaFlow Console" console>{menu}</MenuLateral>
         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-amber-500/30 bg-amber-500/10 xl:hidden"><ShieldCheck className="h-5 w-5 text-amber-400"/></div>
         <div className="min-w-0 flex-1"><div className="truncate text-sm font-semibold">Administração da plataforma</div><p className="truncate text-xs text-zinc-500">{user?.email}</p></div>
+        {!instalacao.ocultar && <button onClick={() => { void instalacao.instalar() }} aria-label="Instalar aplicativo" className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 text-sm font-medium text-amber-300 hover:bg-amber-500/20"><Download className="h-4 w-4"/><span className="hidden sm:inline">Instalar app</span></button>}
       </header>
       <main id="conteudo-principal" className="min-h-0 min-w-0 flex-1 overflow-y-auto">
         <div className="painel-conteudo mx-auto w-full min-w-0 max-w-7xl p-4 lg:p-8"><Outlet /></div>

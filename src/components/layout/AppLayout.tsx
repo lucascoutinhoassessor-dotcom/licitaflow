@@ -2,12 +2,13 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import * as Menu from '@radix-ui/react-dropdown-menu'
 import * as Dialog from '@radix-ui/react-dialog'
-import { Bell, Building, Check, ChevronDown, ChevronsUpDown, CircleHelp, LayoutDashboard, LogOut, Menu as IconeMais, Moon, Sun, X } from 'lucide-react'
+import { Bell, Building, Check, ChevronDown, ChevronsUpDown, CircleHelp, Download, LayoutDashboard, LogOut, Menu as IconeMais, Moon, Sun, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { GRUPOS_NAV, IA, NAV_CONTA, rotaAtiva, type GrupoNav, type ItemNav } from '@/lib/navegacao'
 import { Logo } from '@/components/ui'
 import { useAuth } from '@/providers/AuthProvider'
 import { useOrg } from '@/providers/OrgProvider'
+import { useInstalacao } from '@/hooks/useInstalacao'
 
 function alternarTema() {
   const escuro = document.documentElement.classList.toggle('dark')
@@ -71,6 +72,7 @@ function iniciais(email?: string | null) {
 function MenuUsuario() {
   const { user, sair } = useAuth()
   const { org, organizacoes, trocarOrg } = useOrg()
+  const instalacao = useInstalacao()
   const navigate = useNavigate()
   return (
     <Menu.Root modal={false}>
@@ -98,6 +100,10 @@ function MenuUsuario() {
           <Menu.Separator className="my-1 h-px bg-white/10" />
           {NAV_CONTA.map((i) => <ItemDoMenu key={i.rota} item={i} />)}
           <Menu.Separator className="my-1 h-px bg-white/10" />
+          {!instalacao.ocultar && <Menu.Item className={itemMenu} onSelect={() => { void instalacao.instalar() }}>
+            <Download className="h-4 w-4 text-sidebar-muted" />
+            Instalar aplicativo
+          </Menu.Item>}
           <Menu.Item className={itemMenu} onSelect={(e) => { e.preventDefault(); alternarTema() }}>
             <Sun className="hidden h-4 w-4 text-sidebar-muted dark:block" />
             <Moon className="h-4 w-4 text-sidebar-muted dark:hidden" />
@@ -154,6 +160,7 @@ function Gaveta({ titulo, aberto, aoMudar, itens, extra }: { titulo: string; abe
 function BarraInferior() {
   const { pathname, search } = useLocation()
   const { sair } = useAuth()
+  const instalacao = useInstalacao()
   const navigate = useNavigate()
   const [aberta, setAberta] = useState<string | null>(null)
   useEffect(() => setAberta(null), [pathname, search])
@@ -183,6 +190,9 @@ function BarraInferior() {
       ))}
       <Gaveta titulo="Mais" itens={mais} aberto={aberta === 'mais'} aoMudar={(v) => setAberta(v ? 'mais' : null)}
         extra={<div className="mt-2 grid grid-cols-2 gap-2 border-t border-white/10 pt-3">
+          {!instalacao.ocultar && <button type="button" onClick={() => { setAberta(null); void instalacao.instalar() }} className="col-span-2 flex min-h-12 items-center justify-center gap-2 rounded-xl bg-accent text-sm font-medium text-accent-foreground active:opacity-90">
+            <Download className="h-4 w-4" />Instalar aplicativo no celular
+          </button>}
           <button type="button" onClick={alternarTema} className="flex min-h-12 items-center justify-center gap-2 rounded-xl bg-white/5 text-sm text-sidebar-foreground/90 active:bg-white/10">
             <Sun className="hidden h-4 w-4 dark:block" /><Moon className="h-4 w-4 dark:hidden" />
             <span className="dark:hidden">Tema escuro</span><span className="hidden dark:inline">Tema claro</span>
@@ -199,6 +209,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const { org, empresas, empresa, trocarEmpresa } = useOrg()
   const { pathname } = useLocation()
   const iaAtiva = rotaAtiva(IA.rota, pathname)
+  const instalacao = useInstalacao()
 
   return (
     <div className="flex h-dvh min-w-0 flex-col">
@@ -217,6 +228,9 @@ export function AppLayout({ children }: { children: ReactNode }) {
           {GRUPOS_NAV.map((g) => <GrupoSuspenso key={g.id} grupo={g} />)}
         </nav>
         <div className="ml-auto flex items-center gap-1 lg:ml-0">
+          {!instalacao.ocultar && <button type="button" onClick={() => { void instalacao.instalar() }} className="inline-flex h-9 items-center gap-1.5 rounded-full border border-white/15 px-3 text-sm font-medium text-white outline-none hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-white/40" aria-label="Instalar aplicativo">
+            <Download className="h-4 w-4" /><span className="hidden sm:inline">Instalar app</span>
+          </button>}
           <Link to="/app/avisos" className={botaoIcone} aria-label="Avisos"><Bell className="h-5 w-5" /></Link>
           <Link to="/suporte" className={cn(botaoIcone, 'hidden sm:inline-flex')} aria-label="Ajuda e suporte"><CircleHelp className="h-5 w-5" /></Link>
           <MenuUsuario />
