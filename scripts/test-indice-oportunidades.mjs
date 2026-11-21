@@ -20,6 +20,7 @@ await db.exec(readFileSync('supabase/migrations/20261120000014_pesquisa_avancada
 await db.exec(readFileSync('supabase/migrations/20261120000015_periodo_abertura.sql','utf8'))
 await db.exec(readFileSync('supabase/migrations/20261120000018_coletor_mais_barato.sql','utf8'))
 await db.exec(readFileSync('supabase/migrations/20261120000019_tipo_pelo_objeto.sql','utf8'))
+await db.exec(readFileSync('supabase/migrations/20261120000020_dias_uteis.sql','utf8'))
 await db.query('select licitaflow_coleta.registrar_compra($1::jsonb)',[JSON.stringify(c)])
 const buscar=async f=>(await como('authenticated','select public.buscar_oportunidades($1::jsonb,1,20) r',[JSON.stringify({situacao:'abertas',...f})])).rows[0].r
 ok((await buscar({busca:'microcomputador'})).totalRegistros===1,'stemming e prefixo encontram microcomputadores')
@@ -154,6 +155,12 @@ const rS=await buscar({busca:'limpeza',tipoItem:'S'}),rM=await buscar({busca:'li
 ok(rS.data.some(x=>x.numeroControlePNCP===servLimpeza.numeroControlePNCP)&&!rS.data.some(x=>x.numeroControlePNCP===cadeiras.numeroControlePNCP),'serviço identificado pelo objeto antes de coletar os itens')
 ok(rM.data.some(x=>x.numeroControlePNCP===cadeiras.numeroControlePNCP)&&!rM.data.some(x=>x.numeroControlePNCP===servLimpeza.numeroControlePNCP),'material identificado pelo objeto antes de coletar os itens')
 ok(rS.data.find(x=>x.numeroControlePNCP===servLimpeza.numeroControlePNCP).tipoEstimado===true,'resultado avisa quando o tipo é estimado pelo objeto')
+// Dias úteis (migration 20261120000020). O edital de teste abre em 31/12/2099, uma quinta-feira.
+const domingo={...c,numeroControlePNCP:'12345678000190-1-000701/2026',objetoCompra:'Aquisição de tablets escolares',dataEncerramentoProposta:'2099-12-27T10:00:00'}
+await db.query('select licitaflow_coleta.registrar_compra($1::jsonb)',[JSON.stringify(domingo)])
+ok((await buscar({busca:'tablets'})).totalRegistros===1,'sem a opção, aberturas no domingo aparecem')
+ok((await buscar({busca:'tablets',diasUteis:true})).totalRegistros===0&&(await buscar({busca:'microcomputador',diasUteis:true})).totalRegistros===1,'opção de dias úteis tira aberturas no domingo')
+ok((await db.query("select public.oportunidades_dia_util('2026-11-20 13:00+00') v")).rows[0].v===false,'feriado nacional de 20/11 não é dia útil')
 console.log('Preparando 50 mil editais de teste...')
 await db.exec(`insert into public.oportunidades_indice(controle,objeto,complemento,orgao_cnpj,orgao_nome,uf,modalidade,portal_id,publicacao,encerramento,situacao,valor,srp,compra)
 select 'benchmark-'||n,case when n%100=0 then 'Aquisição de microcomputadores para educação' else 'Aquisição de material de escritório e papelaria '||n end,'','12345678000190','Órgão público',case when n%3=0 then 'SP' else 'RJ' end,6,'comprasnet',now()-(n||' seconds')::interval,'2099-12-31',1,10000,false,jsonb_build_object('numeroControlePNCP','benchmark-'||n,'objetoCompra','Aquisição de bens públicos') from generate_series(1,50000) n;analyze public.oportunidades_indice;analyze public.oportunidades_itens_indice;`)

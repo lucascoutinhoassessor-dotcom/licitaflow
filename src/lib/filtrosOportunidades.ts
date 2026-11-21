@@ -19,14 +19,24 @@ export interface FiltrosOportunidades extends FiltrosPNCP {
   modosDisputa: string[]
   /** Período de abertura (sessão / fim das propostas), AAAA-MM-DD; vazio = sem limite. */
   aberturaDe: string; aberturaAte: string
+  /** Só sessões em dias úteis (seg. a sex., fora de feriados nacionais). */
+  diasUteis: boolean
 }
-export const filtrosExtras = { modalidades: MODALIDADES.map(m=>m[0]) as string[], portais: PORTAIS.map(p => p[0]) as string[], busca: '', orgao: '', minimo: '', maximo: '', itemMinimo: '', itemMaximo: '', maxItens: '', naoDivulgado: false, exclusivo: false, excluirSrp: false, excluir: '', tipoItem: '' as '' | 'M' | 'S', modosDisputa: [] as string[], aberturaDe: '', aberturaAte: '' }
+export const filtrosExtras = { modalidades: MODALIDADES.map(m=>m[0]) as string[], portais: PORTAIS.map(p => p[0]) as string[], busca: '', orgao: '', minimo: '', maximo: '', itemMinimo: '', itemMaximo: '', maxItens: '', naoDivulgado: false, exclusivo: false, excluirSrp: false, excluir: '', tipoItem: '' as '' | 'M' | 'S', modosDisputa: [] as string[], aberturaDe: '', aberturaAte: '', diasUteis: true }
 export interface ItemCompra {
   numeroItem: number; descricao?: string; quantidade?: number; unidadeMedida?: string
   valorUnitarioEstimado: number | null; valorTotal?: number | null; orcamentoSigiloso?: boolean
   tipoBeneficio?: number; tipoBeneficioNome?: string; criterioJulgamentoNome?: string; situacaoCompraItemNome?: string
   numeroGrupo?: string | number; numeroLote?: string | number; grupo?: string | number; lote?: string | number
   materialOuServico?: string; materialOuServicoNome?: string
+}
+/** Períodos rápidos de abertura: quantidade de dias a partir de hoje (null = todo o período). */
+export const PERIODOS_ABERTURA = [[7,'7 dias'],[15,'15 dias'],[30,'30 dias'],[null,'Todo o período']] as const
+export function periodoAbertura(dias: number | null, hoje = new Date()) {
+  if (dias === null) return { aberturaDe: '', aberturaAte: '' }
+  const fim = new Date(hoje); fim.setDate(fim.getDate() + dias)
+  const iso = (d: Date) => d.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
+  return { aberturaDe: iso(hoje), aberturaAte: iso(fim) }
 }
 export function validarFiltros(f: FiltrosOportunidades) {
   if (!f.modalidades.length || !f.portais.length) throw new Error('Selecione ao menos um portal e uma modalidade.')

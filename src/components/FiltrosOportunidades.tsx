@@ -1,14 +1,21 @@
+import type React from 'react'
 import { Button, Campo, Input, Select } from '@/components/ui'
 import { MODALIDADES, MODOS_DISPUTA, TIPOS_ITEM, filtrosExtras, type FiltrosOportunidades as Filtros } from '@/lib/filtrosOportunidades'
 import { PORTAIS } from '@/lib/portais'
 import IconePortal from '@/components/IconePortal'
 import type { CompraPNCP } from '@/lib/pncp'
 
+/** Botão que liga/desliga um filtro (no lugar da caixa de marcar). */
+function Pilula({ ativo, onClick, children }: { ativo: boolean; onClick: () => void; children: React.ReactNode }) {
+  return <button type="button" aria-pressed={ativo} onClick={onClick}
+    className={`inline-flex min-h-10 items-center gap-2 rounded-full border px-4 py-1.5 text-sm font-semibold transition-colors ${ativo ? 'border-emerald-600 bg-emerald-600 text-white shadow-[0_8px_20px_-12px_rgba(16,185,129,0.9)]' : 'bg-card text-muted-foreground hover:border-emerald-500/50 hover:text-foreground'}`}>{children}</button>
+}
+
 export default function FiltrosOportunidades({ f, mudar, compras, orgaos: opcoes }: { f: Filtros; mudar: (f: Filtros) => void; compras: CompraPNCP[]; orgaos?: {cnpj:string;razaoSocial:string}[] }) {
   const set = (k: keyof Filtros, value: string | boolean | string[]) => mudar({...f,[k]:value})
   const marcar = (k: 'portais' | 'modalidades', id: string) => set(k,f[k].includes(id)?f[k].filter(x=>x!==id):[...f[k],id])
   const orgaos=opcoes??[...new Map(compras.map(c=>[c.orgaoEntidade.cnpj,c.orgaoEntidade])).values()].sort((a,b)=>a.razaoSocial.localeCompare(b.razaoSocial))
-  const checkbox = (k: 'naoDivulgado' | 'exclusivo' | 'excluirSrp', texto: string) => <label className="flex items-start gap-2 text-sm"><input type="checkbox" className="mt-1 accent-primary" checked={f[k]} onChange={e=>set(k,e.target.checked)} />{texto}</label>
+  const checkbox = (k: 'naoDivulgado' | 'exclusivo' | 'excluirSrp', texto: string) => <Pilula ativo={f[k]} onClick={()=>set(k,!f[k])}>{texto}</Pilula>
   const alternarModo = (id: string) => set('modosDisputa', f.modosDisputa.includes(id) ? f.modosDisputa.filter(x=>x!==id) : [...f.modosDisputa,id])
   return <div className="col-span-full space-y-3">
     <details open className="rounded-lg border p-3"><summary className="cursor-pointer font-medium">Palavras, tipo e modo de disputa</summary>
@@ -19,16 +26,16 @@ export default function FiltrosOportunidades({ f, mudar, compras, orgaos: opcoes
         </Campo>
       </div>
       <p className="mt-3 text-sm font-medium">Modo de disputa</p>
-      <div className="mt-2 flex flex-wrap gap-2">{MODOS_DISPUTA.map(([id,nome])=><label key={id} className={`flex min-h-10 cursor-pointer items-center gap-2 rounded-full border px-3.5 py-1.5 text-sm ${f.modosDisputa.includes(id)?'border-primary bg-primary/10':''}`}><input type="checkbox" className="accent-primary" checked={f.modosDisputa.includes(id)} onChange={()=>alternarModo(id)} />{nome}</label>)}</div>
+      <div className="mt-2 flex flex-wrap gap-2">{MODOS_DISPUTA.map(([id,nome])=><Pilula key={id} ativo={f.modosDisputa.includes(id)} onClick={()=>alternarModo(id)}>{nome}</Pilula>)}</div>
       <p className="mt-2 text-xs text-muted-foreground">Nenhum modo marcado = todos. Na busca principal, separe termos por ";" para encontrar editais com qualquer um deles (ex.: notebook; computador).</p>
     </details>
     <details className="rounded-lg border p-3"><summary className="cursor-pointer font-medium">Portais de compras</summary>
       <p className="mt-2 text-xs text-muted-foreground">Filtra os registros publicados nas fontes oficiais pela identificação do portal de origem. A disponibilidade depende do que cada portal publica; esta seleção não representa conexão direta com suas contas.</p>
-      <div className="my-3 flex flex-wrap gap-2">{PORTAIS.map(([id,nome])=><label key={id} className={`flex min-h-10 cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm ${f.portais.includes(id)?'border-primary bg-primary/10':''}`}><input type="checkbox" className="accent-primary" checked={f.portais.includes(id)} onChange={()=>marcar('portais',id)} /><IconePortal id={id} nome={nome} />{nome}</label>)}</div>
+      <div className="my-3 flex flex-wrap gap-2">{PORTAIS.map(([id,nome])=><Pilula key={id} ativo={f.portais.includes(id)} onClick={()=>marcar('portais',id)}><IconePortal id={id} nome={nome} />{nome}</Pilula>)}</div>
       <div className="flex flex-wrap gap-4 text-sm"><button type="button" className="text-primary underline" onClick={()=>set('portais',PORTAIS.map(p=>p[0]))}>Marcar todos os portais</button><button type="button" className="text-primary underline" onClick={()=>set('portais',[])}>Desmarcar todos os portais</button></div>
     </details>
     <details className="rounded-lg border p-3"><summary className="cursor-pointer font-medium">Modalidades</summary>
-      <div className="my-3 flex flex-wrap gap-3">{MODALIDADES.map(([id,nome])=><label key={id} className="flex min-h-10 items-center gap-2 text-sm"><input type="checkbox" className="accent-primary" checked={f.modalidades.includes(id)} onChange={()=>marcar('modalidades',id)} />{nome}</label>)}</div>
+      <div className="my-3 flex flex-wrap gap-3">{MODALIDADES.map(([id,nome])=><Pilula key={id} ativo={f.modalidades.includes(id)} onClick={()=>marcar('modalidades',id)}>{nome}</Pilula>)}</div>
       <p className="mb-3 text-xs text-muted-foreground">Dispensa inclui os registros divulgados nessa modalidade; confirme no edital se há disputa eletrônica.</p>
       <div className="flex flex-wrap gap-4 text-sm"><button type="button" className="text-primary underline" onClick={()=>set('modalidades',MODALIDADES.map(m=>m[0]))}>Marcar todas as modalidades</button><button type="button" className="text-primary underline" onClick={()=>set('modalidades',[])}>Desmarcar todas as modalidades</button></div>
     </details>

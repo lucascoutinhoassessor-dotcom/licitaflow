@@ -8,7 +8,7 @@ import { SeletorEmpresa, useEmpresaPadrao } from '@/components/Situacoes'
 import { useOrg } from '@/providers/OrgProvider'
 import { useLista, useSalvar } from '@/hooks/useDados'
 import { dadosProcesso, rotaOportunidade, type CompraPNCP } from '@/lib/pncp'
-import { filtrosExtras, MODALIDADES, nomeModoDisputa, validarFiltros, type FiltrosOportunidades as Filtros } from '@/lib/filtrosOportunidades'
+import { filtrosExtras, MODALIDADES, nomeModoDisputa, PERIODOS_ABERTURA, periodoAbertura, validarFiltros, type FiltrosOportunidades as Filtros } from '@/lib/filtrosOportunidades'
 import {pesquisarIndice} from '@/lib/buscaIndice'
 import FiltrosOportunidades from '@/components/FiltrosOportunidades'
 import { portalCompra, PORTAIS } from '@/lib/portais'
@@ -23,13 +23,13 @@ export default function Oportunidades() {
   const { podeEditar }=useOrg(),padrao=useEmpresaPadrao()
   const [empresaId,setEmpresaId]=useState(padrao)
   useEffect(()=>setEmpresaId(padrao),[padrao])
-  const [f,setF]=useState<Filtros>(()=>{
+  // Padrão: sessões dos próximos 15 dias, em dias úteis; a lista já abre carregada.
+  const [inicial]=useState<Filtros>(()=>{
     const hoje=new Date(),inicio=new Date();inicio.setDate(inicio.getDate()-30)
-    // Padrão: sessões de hoje até daqui a 14 dias, como na referência de mercado.
-    const limite=new Date();limite.setDate(limite.getDate()+14)
-    return {...filtrosExtras,inicio:dataLocal(inicio),fim:dataLocal(hoje),situacao:'abertas',modalidade:'6',uf:'',aberturaDe:dataLocal(hoje),aberturaAte:dataLocal(limite)}
+    return {...filtrosExtras,inicio:dataLocal(inicio),fim:dataLocal(hoje),situacao:'abertas',modalidade:'6',uf:'',...periodoAbertura(15)}
   })
-  const [consulta,setConsulta]=useState<Filtros|null>(null),[avancados,setAvancados]=useState(false)
+  const [f,setF]=useState<Filtros>(inicial)
+  const [consulta,setConsulta]=useState<Filtros|null>(inicial),[avancados,setAvancados]=useState(false)
   const [pagina,setPagina]=useState(1)
   const navigate=useNavigate()
   const processos=useLista<Processo>('processos',{porEmpresa:false})
@@ -50,6 +50,12 @@ export default function Oportunidades() {
     if(consulta&&JSON.stringify(f)===JSON.stringify(consulta)&&pagina===1)void q.refetch()
     else setConsulta({...f})
   }
+  /** Período rápido: troca as datas e já pesquisa. */
+  function escolherPeriodo(dias:number|null) {
+    const novo={...f,situacao:'abertas' as const,...periodoAbertura(dias)}
+    setF(novo);setPagina(1);setConsulta(novo)
+  }
+  const periodoAtual=PERIODOS_ABERTURA.find(([d])=>{const p=periodoAbertura(d);return p.aberturaDe===f.aberturaDe&&p.aberturaAte===f.aberturaAte})?.[0]
   async function importar(c:CompraPNCP) {
     if(!empresaId){toast.error('Selecione a empresa para importar.');return}
     try{const p=await salvar.mutateAsync({dados:dadosProcesso(c,empresaId)});toast.success('Oportunidade importada.');navigate(`/app/processos/${p.id}`)}catch{/* useSalvar apresenta o erro */}
@@ -60,7 +66,15 @@ export default function Oportunidades() {
       <form onSubmit={pesquisar} className="space-y-3">
         <div className="flex flex-col gap-2 sm:flex-row"><div className="relative min-w-0 flex-1"><Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input className="pl-9" aria-label="Pesquisar oportunidades" placeholder="O que sua empresa vende? Ex.: notebook; computador" value={f.busca} onChange={set('busca')} maxLength={300} /></div><Button type="submit" carregando={q.isFetching}>Buscar oportunidades</Button></div>
         <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]"><Select aria-label="Situação dos editais" value={f.situacao} onChange={set('situacao')}><option value="abertas">Por data de abertura</option><option value="publicacoes">Por data de publicação</option></Select><Select aria-label="UF" value={f.uf} onChange={set('uf')}><option value="">Brasil inteiro</option>{'AC AL AP AM BA CE DF ES GO MA MT MS MG PA PB PR PE PI RJ RN RS RO RR SC SP SE TO'.split(' ').map(u=><option key={u}>{u}</option>)}</Select><Button type="button" variante="contorno" aria-expanded={avancados} aria-controls="mais-filtros" onClick={()=>setAvancados(v=>!v)}><SlidersHorizontal className="h-4 w-4" />Mais filtros{extras?` (${extras})`:''}<ChevronDown className={`h-4 w-4 transition-transform ${avancados?'rotate-180':''}`} /></Button></div>
-        {f.situacao==='abertas'&&<div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end"><Campo rotulo="Abertura a partir de" htmlFor="busca-abertura-de"><Input id="busca-abertura-de" type="date" value={f.aberturaDe} max={f.aberturaAte||undefined} onChange={set('aberturaDe')} /></Campo><Campo rotulo="Abertura até" htmlFor="busca-abertura-ate"><Input id="busca-abertura-ate" type="date" min={f.aberturaDe||undefined} value={f.aberturaAte} onChange={set('aberturaAte')} /></Campo><Button type="button" variante="fantasma" tamanho="sm" className="mb-1" onClick={()=>setF(x=>({...x,aberturaDe:'',aberturaAte:''}))}>Todas as datas</Button></div>}
+        {f.situacao==='abertas'&&<>
+          <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Período de abertura">
+            {PERIODOS_ABERTURA.map(([d,rotulo])=><button key={rotulo} type="button" onClick={()=>escolherPeriodo(d)} aria-pressed={periodoAtual===d}
+              className={`h-9 rounded-full border px-4 text-sm font-semibold transition-colors ${periodoAtual===d?'border-primary bg-primary text-primary-foreground':'bg-card text-muted-foreground hover:text-foreground'}`}>{rotulo}</button>)}
+            <button type="button" onClick={()=>{const novo={...f,diasUteis:!f.diasUteis};setF(novo);setPagina(1);setConsulta(novo)}} aria-pressed={f.diasUteis}
+              className={`h-9 rounded-full border px-4 text-sm font-semibold transition-colors ${f.diasUteis?'border-emerald-500/60 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300':'bg-card text-muted-foreground hover:text-foreground'}`}>Só dias úteis</button>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2"><Campo rotulo="Abertura a partir de" htmlFor="busca-abertura-de"><Input id="busca-abertura-de" type="date" value={f.aberturaDe} max={f.aberturaAte||undefined} onChange={set('aberturaDe')} /></Campo><Campo rotulo="Abertura até" htmlFor="busca-abertura-ate"><Input id="busca-abertura-ate" type="date" min={f.aberturaDe||undefined} value={f.aberturaAte} onChange={set('aberturaAte')} /></Campo></div>
+        </>}
         {f.situacao==='publicacoes'&&<div className="grid gap-3 sm:grid-cols-2"><Campo rotulo="Publicado desde" htmlFor="busca-inicio"><Input id="busca-inicio" type="date" required value={f.inicio} max={f.fim} onChange={set('inicio')} /></Campo><Campo rotulo="Publicado até" htmlFor="busca-fim"><Input id="busca-fim" type="date" required min={f.inicio} value={f.fim} onChange={set('fim')} /></Campo></div>}
         {avancados&&<div id="mais-filtros" className="border-t pt-3"><FiltrosOportunidades f={f} mudar={setF} compras={[]} orgaos={q.data?.orgaos??[]} /><Button className="mt-3 w-full sm:w-auto" type="submit" carregando={q.isFetching}>Aplicar filtros e buscar</Button></div>}
       </form>
