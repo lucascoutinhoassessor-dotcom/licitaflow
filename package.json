@@ -8,7 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "vitest run && node scripts/test-db.mjs supabase/migrations && npm run test:indice && node scripts/test-desertas.mjs && node scripts/test-deploy-enxugar.mjs && node scripts/test-catalogo.mjs && node scripts/test-fornecedores.mjs",
+    "test": "vitest run && node scripts/test-db.mjs supabase/migrations && npm run test:indice && node scripts/test-push.mjs && node scripts/test-deploy-enxugar.mjs && node scripts/test-catalogo.mjs && node scripts/test-fornecedores.mjs",
     "test:watch": "vitest",
     "test:indice": "node scripts/test-indice-oportunidades.mjs"
   },
@@ -64,6 +64,7 @@
     "tailwindcss-animate": "^1.0.7",
     "unpdf": "^0.12.1",
     "vaul": "^1.1.2",
+    "web-push": "^3.6.7",
     "zod": "^3.24.1"
   },
   "devDependencies": {

@@ -1,0 +1,127 @@
+// Notificações push (Web Push) dos avisos do LicitaFlow.
+// GET                      → chave pública VAPID (o aparelho precisa dela para se inscrever)
+// POST {acao:'inscrever'}  → grava a inscrição deste aparelho para o usuário logado
+// POST {acao:'cancelar'}   → remove a inscrição deste aparelho
+// POST {acao:'enviar'}     → (só master) manda o push de um aviso recém-publicado, uma vez só
+// As chaves VAPID são geradas no primeiro uso e guardadas em push_vapid (só a chave de serviço lê).
+import webpushPadrao from 'web-push'
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const CONTATO = 'https://licitaflow-prod.vercel.app'
+
+/** Texto curto para caber na notificação do celular. */
+export function resumo(texto, max = 180) {
+  const t = String(texto ?? '').replace(/\s+/g, ' ').trim()
+  return t.length > max ? t.slice(0, max - 1).trimEnd() + '…' : t
+}
+
+/** Confere o formato da inscrição que o navegador devolveu (PushSubscription.toJSON()). */
+export function inscricaoValida(s) {
+  return !!s && typeof s.endpoint === 'string' && /^https:\/\/\S+$/.test(s.endpoint) && s.endpoint.length <= 1000
+    && typeof s.keys?.p256dh === 'string' && s.keys.p256dh.length > 0 && s.keys.p256dh.length <= 200
+    && typeof s.keys?.auth === 'string' && s.keys.auth.length > 0 && s.keys.auth.length <= 100
+}
+
+export function criarHandler({ webpush = webpushPadrao, fetcher = fetch } = {}) {
+  return async function handler(req, res) {
+    res.setHeader('Cache-Control', 'no-store')
+    const env = process.env
+    const base = env.SUPABASE_URL || env.VITE_SUPABASE_URL
+    const anon = env.SUPABASE_ANON_KEY || env.VITE_SUPABASE_ANON_KEY
+    const servico = env.SUPABASE_SERVICE_ROLE_KEY
+    if (!base || !anon || !servico) return res.status(503).json({ error: 'Configuração Supabase ausente no servidor' })
+    const token = req.headers.authorization
+
+    async function chamar(path, options = {}, comServico = true) {
+      const h = comServico ? { apikey: servico, Authorization: `Bearer ${servico}` } : { apikey: anon, Authorization: token }
+      const r = await fetcher(base + path, { ...options, headers: { 'Content-Type': 'application/json', ...h, ...options.headers }, signal: AbortSignal.timeout(15000) })
+      let json = null
+      try { json = await r.json() } catch { /* resposta sem corpo */ }
+      if (!r.ok) { const e = new Error(json?.message || json?.msg || 'Falha no banco'); e.status = r.status; throw e }
+      return json
+    }
+
+    async function chaves() {
+      const [linha] = await chamar('/rest/v1/push_vapid?select=publica,privada&id=eq.true')
+      if (linha) return linha
+      const k = webpush.generateVAPIDKeys()
+      // Se duas chamadas gerarem ao mesmo tempo, vale a que gravou primeiro.
+      await chamar('/rest/v1/push_vapid?on_conflict=id', { method: 'POST', headers: { Prefer: 'resolution=ignore-duplicates,return=minimal' }, body: JSON.stringify({ id: true, publica: k.publicKey, privada: k.privateKey }) })
+      const [gravada] = await chamar('/rest/v1/push_vapid?select=publica,privada&id=eq.true')
+      return gravada
+    }
+
+    try {
+      if (req.method === 'GET') return res.status(200).json({ chave: (await chaves()).publica })
+      if (req.method !== 'POST') return res.status(405).json({ error: 'Método não permitido' })
+      if (!/^Bearer \S+$/.test(token ?? '')) return res.status(401).json({ error: 'Entre na sua conta' })
+      const eu = await chamar('/auth/v1/user', {}, false)
+      if (!eu?.id) return res.status(401).json({ error: 'Entre na sua conta' })
+      const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : req.body ?? {}
+
+      if (body.acao === 'inscrever') {
+        const s = body.inscricao
+        if (!inscricaoValida(s)) return res.status(400).json({ error: 'Inscrição inválida' })
+        // O mesmo aparelho pode trocar de conta: a inscrição passa a ser de quem está logado agora.
+        await chamar('/rest/v1/push_inscricoes?on_conflict=endpoint', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+          body: JSON.stringify({ user_id: eu.id, endpoint: s.endpoint, p256dh: s.keys.p256dh, auth: s.keys.auth, aparelho: String(req.headers['user-agent'] ?? '').slice(0, 300) }) })
+        return res.status(200).json({ ok: true })
+      }
+
+      if (body.acao === 'cancelar') {
+        if (typeof body.endpoint !== 'string' || body.endpoint.length > 1000) return res.status(400).json({ error: 'Aparelho inválido' })
+        await chamar(`/rest/v1/push_inscricoes?user_id=eq.${eu.id}&endpoint=eq.${encodeURIComponent(body.endpoint)}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } })
+        return res.status(200).json({ ok: true })
+      }
+
+      if (body.acao === 'enviar') {
+        const admin = await chamar('/rest/v1/rpc/is_platform_admin', { method: 'POST', body: '{}' }, false)
+        if (admin !== true) return res.status(403).json({ error: 'Acesso restrito ao master' })
+        if (!UUID.test(String(body.aviso ?? ''))) return res.status(400).json({ error: 'Aviso inválido' })
+        // Reserva o envio: só uma chamada consegue marcar push_enviado_em.
+        const reservados = await chamar(`/rest/v1/plataforma_avisos?id=eq.${body.aviso}&ativo=eq.true&push_enviado_em=is.null&select=id,titulo,texto,org_id`,
+          { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ push_enviado_em: new Date().toISOString() }) })
+        const aviso = reservados?.[0]
+        if (!aviso) return res.status(200).json({ enviados: 0, falhas: 0, motivo: 'já enviado ou arquivado' })
+
+        // Destinatários: membros da organização do aviso (ou de qualquer organização ativa, se for para todos).
+        const membros = await chamar(`/rest/v1/memberships?select=user_id,organizations!inner(suspensa)&organizations.suspensa=eq.false${aviso.org_id ? `&org_id=eq.${aviso.org_id}` : ''}`)
+        const usuarios = [...new Set((membros ?? []).map(m => m.user_id))]
+        if (!usuarios.length) return res.status(200).json({ enviados: 0, falhas: 0 })
+        let inscricoes = []
+        for (let i = 0; i < usuarios.length; i += 100) {
+          const lote = usuarios.slice(i, i + 100).join(',')
+          inscricoes = inscricoes.concat(await chamar(`/rest/v1/push_inscricoes?select=id,endpoint,p256dh,auth&user_id=in.(${lote})`))
+        }
+        if (!inscricoes.length) return res.status(200).json({ enviados: 0, falhas: 0 })
+
+        const k = await chaves()
+        webpush.setVapidDetails(CONTATO, k.publica, k.privada)
+        const payload = JSON.stringify({ id: aviso.id, titulo: aviso.titulo, texto: resumo(aviso.texto), url: '/app/avisos', tag: aviso.id })
+        let enviados = 0, falhas = 0
+        const mortas = []
+        for (let i = 0; i < inscricoes.length; i += 25) {
+          await Promise.all(inscricoes.slice(i, i + 25).map(async s => {
+            try {
+              // urgency high: o Android/Chrome entrega na hora, sem esperar o aparelho "acordar" (modo soneca).
+              await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, payload, { TTL: 86400, urgency: 'high', timeout: 10000 })
+              enviados++
+            } catch (e) {
+              falhas++
+              if (e?.statusCode === 404 || e?.statusCode === 410) mortas.push(s.id)
+            }
+          }))
+        }
+        // Aparelhos que desinstalaram ou revogaram a permissão: some da lista.
+        if (mortas.length) await chamar(`/rest/v1/push_inscricoes?id=in.(${mortas.join(',')})`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } }).catch(() => undefined)
+        return res.status(200).json({ enviados, falhas })
+      }
+
+      return res.status(400).json({ error: 'Ação inválida' })
+    } catch (e) {
+      return res.status(e?.status === 401 ? 401 : 500).json({ error: e?.status === 401 ? 'Entre na sua conta' : 'Não foi possível concluir agora' })
+    }
+  }
+}
+
+export default criarHandler()
