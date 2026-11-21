@@ -33,4 +33,11 @@ describe('liberação de módulos', () => {
     const g = filtrarGrupos([{ id: 'x', rotulo: 'X', icone: Radar, itens: [item('/app/a')] }], { a: 'oculto' })
     expect(g).toHaveLength(0)
   })
+  it('itens de uma mesma área viram um módulo só', () => {
+    const juridico = CATALOGO_MODULOS.filter((m) => m.id === 'juridico')
+    expect(juridico).toHaveLength(1)
+    expect(juridico[0].rotulo).toBe('Jurídico')
+    expect(new Set(CATALOGO_MODULOS.map((m) => m.id)).size).toBe(CATALOGO_MODULOS.length)
+    expect(idModulo('/app/juridico/recurso')).toBe('juridico')
+  })
 })

@@ -38,6 +38,7 @@ const Documentos = lazy(() => import('@/pages/app/Documentos'))
 const Contratos = lazy(() => import('@/pages/app/contratos/Contratos'))
 const ContratoDetalhe = lazy(() => import('@/pages/app/contratos/ContratoDetalhe'))
 const Financeiro = lazy(() => import('@/pages/app/Financeiro'))
+const Juridico = lazy(() => import('@/pages/app/Juridico'))
 const MasterEntrar = lazy(() => import('@/pages/master/MasterEntrar'))
 const MasterLayout = lazy(() => import('@/pages/master/MasterLayout'))
 const MasterVisaoGeral = lazy(() => import('@/pages/master/VisaoGeral'))
@@ -154,6 +155,8 @@ export default function App() {
             <Route path="contratos" element={<Contratos />} />
             <Route path="contratos/:id" element={<ContratoDetalhe />} />
             <Route path="financeiro" element={<Financeiro />} />
+            <Route path="juridico" element={<Navigate to="/app/juridico/impugnacao" replace />} />
+            <Route path="juridico/:tipo" element={<Juridico />} />
             <Route path="avisos" element={<Avisos />} />
             <Route path="relatorios" element={<RelatoriosCliente />} />
             <Route path="plano" element={<MeuPlano />} />

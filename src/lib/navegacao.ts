@@ -19,6 +19,8 @@ import {
   SearchCheck,
   Tag,
   MapPinned,
+  Scale,
+  FileText,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -47,6 +49,8 @@ export const IA: ItemNav = {
   fase: 'F2–F5',
   descricao: 'Radar, Leitor de editais, Cotador, Jurídico, Sentinela e Termômetro de Pagamento trabalhando por você todos os dias.',
 }
+
+const JURIDICO = 'Minutas de impugnação, esclarecimento, intenção de recurso, recurso e contrarrazões com base na Lei 14.133, preenchidas com os dados do processo e com o prazo legal calculado.'
 
 /** Menus agrupados da barra superior (computador) e da barra inferior (celular). */
 export const GRUPOS_NAV: GrupoNav[] = [
@@ -118,6 +122,18 @@ export const GRUPOS_NAV: GrupoNav[] = [
         descricao: 'Preços homologados nas compras públicas, com marca, fornecedor e órgão.',
       },
       { rota: '/app/relatorios', rotulo: 'Relatórios', icone: BarChart3 },
+    ],
+  },
+  {
+    id: 'juridico',
+    rotulo: 'Jurídico',
+    icone: Scale,
+    itens: [
+      { rota: '/app/juridico/impugnacao', rotulo: 'Impugnação', icone: FileText, descricao: JURIDICO },
+      { rota: '/app/juridico/esclarecimento', rotulo: 'Esclarecimento', icone: FileText, descricao: JURIDICO },
+      { rota: '/app/juridico/intencao-recurso', rotulo: 'Intenção de recurso', icone: FileText, descricao: JURIDICO },
+      { rota: '/app/juridico/recurso', rotulo: 'Recurso', icone: FileText, descricao: JURIDICO },
+      { rota: '/app/juridico/contrarrazoes', rotulo: 'Contrarrazões', icone: FileText, descricao: JURIDICO },
     ],
   },
 ]

@@ -27,6 +27,13 @@ export const CATALOGO_MODULOS: ModuloCatalogo[] = [
 ]
   .filter(({ i }) => moduloControlavel(i.rota))
   .map(({ i, grupo }) => ({ id: idModulo(i.rota)!, rotulo: i.rotulo, grupo, descricao: i.descricao, icone: i.icone }))
+  // Vários itens do menu na mesma área (/app/juridico/recurso, /app/juridico/impugnacao…) = um módulo só, com o nome do grupo.
+  .reduce<ModuloCatalogo[]>((lista, m) => {
+    const igual = lista.find((x) => x.id === m.id)
+    if (igual) igual.rotulo = igual.grupo
+    else lista.push(m)
+    return lista
+  }, [])
 
 /** Estados recebidos do banco; null = ainda carregando (esconde o controlável); undefined = indisponível (mostra tudo). */
 export type Estados = Record<string, string> | null | undefined
