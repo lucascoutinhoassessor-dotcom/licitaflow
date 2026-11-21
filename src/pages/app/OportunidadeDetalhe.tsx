@@ -9,6 +9,7 @@ import ItensAcordeao from '@/components/ItensAcordeao'
 import IconePortal from '@/components/IconePortal'
 import CodigoComprasnet from '@/components/CodigoComprasnet'
 import EmpresasDisputa from '@/components/EmpresasDisputa'
+import CategoriasObjeto from '@/components/CategoriasObjeto'
 import { useOrg } from '@/providers/OrgProvider'
 import { useLista, useSalvar } from '@/hooks/useDados'
 import { dadosProcesso, linkCompra, type CompraPNCP } from '@/lib/pncp'
@@ -75,6 +76,7 @@ export default function OportunidadeDetalhe() {
         <CodigoComprasnet compra={compra} className="mt-2 justify-center" />
         <p className="mt-1 text-sm font-semibold uppercase text-muted-foreground">{compra.orgaoEntidade.razaoSocial} · {compra.unidadeOrgao.municipioNome}/{compra.unidadeOrgao.ufSigla}</p>
         <p className="mx-auto mt-4 max-w-4xl whitespace-pre-wrap break-words text-sm font-medium sm:text-base">{compra.objetoCompra}</p>
+        <CategoriasObjeto objeto={compra.objetoCompra} className="mt-3 justify-center" />
         <div className="mt-4 flex flex-wrap justify-center gap-2">
           <Badge cor="verde">{compra.valorTotalEstimado ? `Valor total estimado: ${formatarMoeda(compra.valorTotalEstimado)}` : 'Valor não divulgado'}</Badge>
           {compra.srp && <Badge cor="amarelo">Registro de preço</Badge>}
