@@ -7,6 +7,7 @@ import { enderecoCorreto } from '@/lib/pwa'
 import { useEhAdmin } from '@/hooks/useAdmin'
 import { Carregando } from '@/components/ui'
 import { AppLayout } from '@/components/layout/AppLayout'
+import { GuardaModulo } from '@/components/GuardaModulo'
 import { ConfiguracaoPendente } from '@/pages/ConfiguracaoPendente'
 import { ContaSuspensa } from '@/pages/ContaSuspensa'
 import { AcessoNegadoMaster } from '@/pages/master/AcessoNegado'
@@ -57,6 +58,7 @@ const MasterAtividade = lazy(() => import('@/pages/master/Atividade'))
 const MasterFinanceiro = lazy(() => import('@/pages/master/Financeiro'))
 const MasterAssinaturas = lazy(() => import('@/pages/master/Assinaturas'))
 const MasterRanking = lazy(() => import('@/pages/master/Ranking'))
+const MasterModulos = lazy(() => import('@/pages/master/Modulos'))
 const NaoEncontrada = lazy(() => import('@/pages/NaoEncontrada'))
 
 function ExigeLogin({ children }: { children: ReactNode }) {
@@ -76,7 +78,7 @@ function ExigeOrganizacao() {
   return (
     <AppLayout>
       <Suspense fallback={<Carregando />}>
-        <Outlet />
+        <GuardaModulo><Outlet /></GuardaModulo>
       </Suspense>
     </AppLayout>
   )
@@ -172,6 +174,7 @@ export default function App() {
             <Route path="assinaturas" element={<MasterAssinaturas />} />
             <Route path="cobrancas" element={<Cobrancas master />} />
             <Route path="ranking" element={<MasterRanking />} />
+            <Route path="funcionalidades" element={<MasterModulos />} />
             <Route path="integracoes" element={<Integracoes />} />
             <Route path="configuracoes" element={<ConfiguracoesMaster />} />
             <Route path="atividade" element={<MasterAtividade />} />

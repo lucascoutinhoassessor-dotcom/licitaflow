@@ -4,7 +4,8 @@ import * as Menu from '@radix-ui/react-dropdown-menu'
 import * as Dialog from '@radix-ui/react-dialog'
 import { Bell, Building, Check, ChevronDown, ChevronsUpDown, CircleHelp, Download, LayoutDashboard, LogOut, Menu as IconeMais, Moon, Sun, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { GRUPOS_NAV, IA, NAV_CONTA, rotaAtiva, type GrupoNav, type ItemNav } from '@/lib/navegacao'
+import { IA, rotaAtiva, type GrupoNav, type ItemNav } from '@/lib/navegacao'
+import { useNavegacao } from '@/hooks/useModulos'
 import { Logo } from '@/components/ui'
 import { useAuth } from '@/providers/AuthProvider'
 import { useOrg } from '@/providers/OrgProvider'
@@ -70,6 +71,7 @@ function iniciais(email?: string | null) {
 
 /** Menu do usuário: conta, organização, tema e sair. */
 function MenuUsuario() {
+  const nav = useNavegacao()
   const { user, sair } = useAuth()
   const { org, organizacoes, trocarOrg } = useOrg()
   const instalacao = useInstalacao()
@@ -98,7 +100,7 @@ function MenuUsuario() {
             ))}
           </>}
           <Menu.Separator className="my-1 h-px bg-white/10" />
-          {NAV_CONTA.map((i) => <ItemDoMenu key={i.rota} item={i} />)}
+          {nav.conta.map((i) => <ItemDoMenu key={i.rota} item={i} />)}
           <Menu.Separator className="my-1 h-px bg-white/10" />
           {!instalacao.ocultar && <Menu.Item className={itemMenu} onSelect={() => { void instalacao.instalar() }}>
             <Download className="h-4 w-4 text-sidebar-muted" />
@@ -164,7 +166,8 @@ function BarraInferior() {
   const navigate = useNavigate()
   const [aberta, setAberta] = useState<string | null>(null)
   useEffect(() => setAberta(null), [pathname, search])
-  const mais: ItemNav[] = [IA, ...NAV_CONTA]
+  const nav = useNavegacao()
+  const mais: ItemNav[] = [...(nav.ia ? [nav.ia] : []), ...nav.conta]
   const botao = (ativo: boolean) => cn('flex min-w-0 flex-1 flex-col items-center justify-center gap-1 text-[10px] font-medium tracking-tight outline-none focus-visible:bg-white/10', ativo ? 'text-white' : 'text-sidebar-muted')
   const marca = (ativo: boolean) => cn('flex h-7 w-12 items-center justify-center rounded-full transition-colors', ativo && 'bg-white/15')
   return (
@@ -173,7 +176,7 @@ function BarraInferior() {
         <NavLink to="/app" end className={({ isActive }) => botao(isActive)}>
           {({ isActive }) => <><span className={marca(isActive)}><LayoutDashboard className="h-5 w-5" /></span>Painel</>}
         </NavLink>
-        {GRUPOS_NAV.map((g) => {
+        {nav.grupos.map((g) => {
           const ativo = g.itens.some((i) => rotaAtiva(i.rota, pathname))
           const Icone = g.icone
           const conteudo = <><span className={marca(ativo)}><Icone className="h-5 w-5" /></span><span className="max-w-full truncate">{g.rotulo}</span></>
@@ -185,7 +188,7 @@ function BarraInferior() {
           <span className={marca(mais.some((i) => rotaAtiva(i.rota, pathname)))}><IconeMais className="h-5 w-5" /></span>Mais
         </button>
       </nav>
-      {GRUPOS_NAV.filter((g) => g.itens.length > 1).map((g) => (
+      {nav.grupos.filter((g) => g.itens.length > 1).map((g) => (
         <Gaveta key={g.id} titulo={g.rotulo} itens={g.itens} aberto={aberta === g.id} aoMudar={(v) => setAberta(v ? g.id : null)} />
       ))}
       <Gaveta titulo="Mais" itens={mais} aberto={aberta === 'mais'} aoMudar={(v) => setAberta(v ? 'mais' : null)}
@@ -209,6 +212,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const { org, empresas, empresa, trocarEmpresa } = useOrg()
   const { pathname } = useLocation()
   const iaAtiva = rotaAtiva(IA.rota, pathname)
+  const nav = useNavegacao()
   const instalacao = useInstalacao()
 
   return (
@@ -219,13 +223,13 @@ export function AppLayout({ children }: { children: ReactNode }) {
           <Logo claro />
         </Link>
         <nav aria-label="Módulos do usuário" className="hidden flex-1 items-center justify-center gap-1 lg:flex">
-          <Link to={IA.rota} className={cn('mr-2 inline-flex h-9 items-center gap-2 rounded-full border px-3.5 text-sm font-semibold outline-none transition-colors hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-white/40', iaAtiva ? 'border-accent/60 bg-white/10 text-white' : 'border-white/15 text-white')}>
+          {nav.ia && <Link to={IA.rota} className={cn('mr-2 inline-flex h-9 items-center gap-2 rounded-full border px-3.5 text-sm font-semibold outline-none transition-colors hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-white/40', iaAtiva ? 'border-accent/60 bg-white/10 text-white' : 'border-white/15 text-white')}>
             <span className="grid h-3.5 w-3.5 grid-cols-2 gap-[2px]" aria-hidden>
               <span className="rounded-[1px] bg-sky-400" /><span className="rounded-[1px] bg-emerald-400" /><span className="rounded-[1px] bg-amber-400" /><span className="rounded-[1px] bg-rose-400" />
             </span>
             IA
-          </Link>
-          {GRUPOS_NAV.map((g) => <GrupoSuspenso key={g.id} grupo={g} />)}
+          </Link>}
+          {nav.grupos.map((g) => <GrupoSuspenso key={g.id} grupo={g} />)}
         </nav>
         <div className="ml-auto flex items-center gap-1 lg:ml-0">
           {!instalacao.ocultar && <button type="button" onClick={() => { void instalacao.instalar() }} className="inline-flex h-9 items-center gap-1.5 rounded-full border border-white/15 px-3 text-sm font-medium text-white outline-none hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-white/40" aria-label="Instalar aplicativo">

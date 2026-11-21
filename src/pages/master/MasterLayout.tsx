@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
-import { Settings, Wallet, Plug, CreditCard, Headphones, Megaphone, BarChart3, Activity, FileText, History, Building2, LayoutDashboard, LogOut, ShieldCheck, Users, Repeat, Receipt, Trophy, ExternalLink, Download } from 'lucide-react'
+import { Settings, Wallet, Plug, CreditCard, Headphones, Megaphone, BarChart3, Activity, FileText, History, Building2, LayoutDashboard, LogOut, ShieldCheck, Users, Repeat, Receipt, Trophy, ExternalLink, Download, ToggleRight } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { useFinanceiro } from './Financeiro'
@@ -24,6 +24,7 @@ const grupos: { titulo: string; abas: { rota: string; rotulo: string; icone: typ
     { rota: '/master/planos', rotulo: 'Planos e limites', icone: CreditCard },
   ] },
   { titulo: 'Operação', abas: [
+    { rota: '/master/funcionalidades', rotulo: 'Funcionalidades', icone: ToggleRight },
     { rota: '/master/integracoes', rotulo: 'Asaas e integrações', icone: Plug },
     { rota: '/master/relatorios', rotulo: 'Relatórios', icone: BarChart3 },
     { rota: '/master/atividade', rotulo: 'Atividade', icone: Activity },

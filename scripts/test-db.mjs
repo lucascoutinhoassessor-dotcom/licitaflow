@@ -353,6 +353,21 @@ await sistema(`select public.rotina_cobranca()`);
 expect((await db.query(`select suspensa from public.organizations where id='${o3}'`)).rows[0].suspensa===false,'com o bloqueio desligado, teste vencido não é suspenso');
 await db.exec(`delete from public.assinaturas; delete from public.organizations where id='${o3}'`);
 
+// Liberação de funcionalidades: master decide; cliente recebe só o estado efetivo da própria org.
+expect((await as(U1, `select public.modulos_da_org('${o1}') r`)).rows[0].r.agentes==='em_breve','cliente recebe os estados dos módulos');
+blocked=false;try{await as(U1, `select public.modulos_da_org('${o2}')`);}catch{blocked=true;}
+await db.exec(`delete from public.platform_admins where user_id='${U2}'`);
+blocked=false;try{await as(U2, `select public.modulos_da_org('${o1}')`);}catch{blocked=true;}
+expect(blocked,'cliente não consulta módulos de outra organização');
+blocked=false;try{await as(U2, `select public.admin_salvar_modulo('processos','oculto')`);}catch{blocked=true;}
+expect(blocked,'cliente não altera a liberação de módulos');
+expect((await as(U2, `select * from public.plataforma_modulos`)).rows.length===0,'cliente não lê a lista de organizações de teste');
+await db.exec(`insert into public.platform_admins(user_id) values('${U2}')`);
+await as(U2, `select public.admin_salvar_modulo('mercado','teste',array['${o1}']::uuid[])`);
+expect((await as(U1, `select public.modulos_da_org('${o1}') r`)).rows[0].r.mercado==='liberado','organização de teste vê o módulo em teste');
+expect((await as(U2, `select public.modulos_da_org('${o2}') r`)).rows[0].r.mercado==='oculto','demais organizações não veem o módulo em teste');
+expect(Object.keys((await as(U2, `select public.admin_modulos() r`)).rows[0].r).includes('mercado'),'master lista as liberações');
+
 // delete em cascata da org
 await as(U1, `delete from public.organizations where id = '${o1}'`);
 expect((await db.query(`select count(*)::int c from public.processos`)).rows[0].c === 0, 'excluir organização remove dados em cascata');
