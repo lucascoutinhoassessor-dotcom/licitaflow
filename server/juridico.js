@@ -91,8 +91,16 @@ export function lerChat(frases = []) {
 
 const chaveEmpresa = (s) => sem(s).replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter((p) => p.length >= 3 && !['ltda', 'eireli', 'epp'].includes(p)).slice(0, 2).join(' ')
 
-/** Junta arquivos e andamento nas peças de um processo. */
-export function pecasDoProcesso(documentos = [], frases = [], sessao = null) {
+/** Nome do arquivo sem o prefixo padrão do portal e sem extensão (distingue peças iguais e às vezes traz a empresa). */
+export function nomeDoArquivo(nome) {
+  return limpar(String(nome ?? '')
+    .replace(/^(pedidos? de impugna\S*|julgamento da impugna\S*|resposta de esclarecimento|esclarecimentos?)\s*-\s*/i, '')
+    .replace(/\.(pdf|docx?|odt|zip|rar|jpe?g|png)$/i, '')
+    .replace(/[_]+/g, ' ')).slice(0, 90)
+}
+
+/** Junta arquivos e andamento nas peças de um processo. Sem data conhecida, a peça fica sem data (a tela mostra a da sessão). */
+export function pecasDoProcesso(documentos = [], frases = []) {
   const { intencoes, enviados } = lerChat(frases)
   const pecas = []
   for (const d of documentos) {
@@ -100,13 +108,13 @@ export function pecasDoProcesso(documentos = [], frases = [], sessao = null) {
     const c = classificarDocumento(d)
     if (!c) continue
     const envio = enviados.find((e) => e.tipo === c.tipo && e.item === c.item && c.empresa && chaveEmpresa(e.empresa) === chaveEmpresa(c.empresa))
-    pecas.push({ ...c, arquivo_url: d.url, trecho: null, data: dataDoPortal(d.dataHora) ?? envio?.data ?? null })
+    const arquivo = c.empresa || /^julgamento do/i.test(c.titulo) ? '' : nomeDoArquivo(d.nome)
+    const titulo = arquivo && sem(arquivo) !== sem(c.titulo) ? `${c.titulo} · ${arquivo}` : c.titulo
+    pecas.push({ ...c, titulo, arquivo_url: d.url, trecho: null, data: dataDoPortal(d.dataHora) ?? envio?.data ?? null })
   }
   // "Julgamento do item N" só conta como decisão de recurso quando houve recurso no processo.
   const temRecurso = pecas.some((p) => p.tipo === 'recurso' && p.papel === 'pedido') || enviados.some((e) => e.tipo === 'recurso')
-  const lista = pecas.filter((p) => temRecurso || p.titulo !== 'Julgamento do recurso').concat(intencoes)
-  const fallback = sessao ? `${sessao}T12:00:00-03:00` : null
-  return lista.map((p) => ({ ...p, data: p.data ?? fallback }))
+  return pecas.filter((p) => temRecurso || p.titulo !== 'Julgamento do recurso').concat(intencoes)
 }
 
 async function pedir(fetcher, url, tentativas = 2) {
@@ -143,7 +151,7 @@ export async function coletarPagina({ dia, pagina }, fetcher = fetch) {
       ehDisputa(r) ? pedir(fetcher, `${PCP}/v1/licitacao/${codigo}/chat?pagina=1&texto=recurso`).catch(() => null) : null,
     ])
     if (docs === null && chat === null) return { codigo, pecas: [] }
-    const pecas = pecasDoProcesso(Array.isArray(docs) ? docs : [], chat?.frasesChat ?? [], dia)
+    const pecas = pecasDoProcesso(Array.isArray(docs) ? docs : [], chat?.frasesChat ?? [])
     let lei14133 = null
     if (pecas.length && r.urlReferencia) {
       const det = await pedir(fetcher, `${PCP}/v2/licitacao${r.urlReferencia}`).catch(() => null)

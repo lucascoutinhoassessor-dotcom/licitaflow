@@ -5,7 +5,7 @@ const db = new PGlite()
 await db.exec(`create role anon nologin;create role authenticated nologin;create role service_role nologin bypassrls;create schema auth;
  create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.sub',true),'')::uuid$$;
  grant usage on schema auth,public to authenticated,anon,service_role;`)
-for (const f of ['20261117035403_indice_oportunidades', '20261121000032_pecas_juridicas']) await db.exec(readFileSync(`supabase/migrations/${f}.sql`, 'utf8'))
+for (const f of ['20261117035403_indice_oportunidades', '20261121000032_pecas_juridicas', '20261121000033_pecas_data_sessao']) await db.exec(readFileSync(`supabase/migrations/${f}.sql`, 'utf8'))
 await db.exec(`create schema net;create table net.pedidos(id bigint generated always as identity,url text,headers jsonb);
  create function net.http_get(url text,params jsonb default '{}',headers jsonb default '{}',timeout_milliseconds integer default 2000) returns bigint language plpgsql as $$declare v bigint;begin insert into net.pedidos(url,headers) values(url,headers) returning id into v;return v;end$$;`)
 

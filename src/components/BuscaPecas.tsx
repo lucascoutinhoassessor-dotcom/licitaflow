@@ -133,7 +133,7 @@ function CartaoPeca({ p, aoUsarModelo }: { p: PecaPublicada; aoUsarModelo: (p: P
         <Badge>{rotuloPapel(p)}</Badge>
         {pr.lei14133 === true && <Badge cor="verde">Lei 14.133</Badge>}
         {pr.lei14133 === false && <Badge>Lei anterior</Badge>}
-        {p.data && <span className="ml-auto text-xs text-muted-foreground">{formatarData(p.data)}</span>}
+        <span className="ml-auto text-xs text-muted-foreground">{p.data ? `Enviada em ${formatarData(p.data)} · ` : ''}{pr.sessao ? `Sessão em ${formatarData(pr.sessao)}` : ''}</span>
       </div>
       <h2 className="mt-2 break-words text-sm font-semibold sm:text-base">
         {p.titulo}{p.empresa ? <> · <span className="text-sky-700 dark:text-sky-300">{p.empresa}</span></> : null}{p.item ? <span className="font-normal text-muted-foreground"> · {p.item}</span> : null}

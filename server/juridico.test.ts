@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { arrumarTexto, classificarDocumento, coletarPagina, criarHandler, dataDoPortal, lerChat, pecasDoProcesso } from './juridico.js'
+import { arrumarTexto, classificarDocumento, coletarPagina, criarHandler, dataDoPortal, lerChat, nomeDoArquivo, pecasDoProcesso } from './juridico.js'
 import { limparProtecoes } from './protecao.js'
 
 const ARQ = (n: number) => `https://arquivos.portaldecompraspublicas.com.br/v1/download/${String(n).padStart(2, '0').repeat(32)}`
@@ -64,15 +64,23 @@ describe('andamento do processo (chat)', () => {
       { nome: 'Pedidos de Impugnação - x.pdf', tipo: 'Documento Anexo', url: ARQ(3), dataHora: '10/07/2026-09:00' },
       { nome: 'Pedidos de Esclarecimento', tipo: 'Relatorio', url: null },
       { nome: 'Recurso item 0002 - OUTRA LTDA', tipo: 'Documento Anexo', url: 'https://exemplo.com/recurso.pdf' },
-    ], frases, '2026-07-24')
-    expect(pecas.map((p) => p.titulo)).toEqual(['Recurso', 'Julgamento do recurso', 'Impugnação', 'Intenção de recurso', 'Intenção de recurso'])
+    ], frases)
+    expect(pecas.map((p) => p.titulo)).toEqual(['Recurso', 'Julgamento do recurso', 'Impugnação · x', 'Intenção de recurso', 'Intenção de recurso'])
     expect(pecas[0].data).toBe('2026-07-29T23:27:30Z')
-    expect(pecas[1].data).toBe('2026-07-24T12:00:00-03:00')
+    expect(pecas[1].data).toBeNull() // sem data conhecida: a tela mostra a data da sessão
     expect(pecas[2].data).toBe('2026-07-10T09:00:00-03:00')
   })
 
   it('"Julgamento do item" sem recurso no processo é julgamento comum, não entra', () => {
-    expect(pecasDoProcesso([{ nome: 'Julgamento do item 0001', tipo: 'Documento Anexo', url: ARQ(2) }], [], '2026-07-24')).toEqual([])
+    expect(pecasDoProcesso([{ nome: 'Julgamento do item 0001', tipo: 'Documento Anexo', url: ARQ(2) }], [])).toEqual([])
+  })
+})
+
+describe('nome do arquivo no título', () => {
+  it('tira o prefixo do portal e a extensão', () => {
+    expect(nomeDoArquivo('Pedidos de Impugnação - IMPUGNACAO_EMPRESA_ALFA.pdf')).toBe('IMPUGNACAO EMPRESA ALFA')
+    expect(nomeDoArquivo('Resposta de Esclarecimento - resposta 02.docx')).toBe('resposta 02')
+    expect(nomeDoArquivo('DECISÃO SOBRE RECURSO.pdf')).toBe('DECISÃO SOBRE RECURSO')
   })
 })
 
