@@ -13,7 +13,7 @@ export const MODALIDADE_NOME: Record<number, string> = { 1: 'Convite', 2: 'Tomad
 
 interface Soma { itens: number; valor: number }
 export interface AnaliseMercado {
-  de: string; ate: string; uf: string; incompleto: boolean; descartadas: number
+  de: string; ate: string; uf: string; incompleto: boolean; limitePorItem?: number; descartadas: number
   itens: number; compras: number; valorTotal: number
   porUf: (Soma & { uf: string })[]
   porMes: (Soma & { mes: string })[]

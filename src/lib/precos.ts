@@ -1,6 +1,6 @@
 import { supabase } from './supabase'
 
-export interface ItemCatalogo { tipo: 'M' | 'S'; codigo: number; nome: string; classe: string }
+export interface ItemCatalogo { tipo: 'M' | 'S'; codigo: number; nome: string; classe: string; sinonimo?: boolean }
 export interface EstatisticaUnidade { unidade: string; n: number; minimo: number; maximo: number; media: number; mediana: number }
 export interface CompraPreco {
   data: string | null; preco: number; quantidade: number | null; unidade: string; descricao: string
@@ -13,6 +13,25 @@ export interface HistoricoPrecos {
   unidades: EstatisticaUnidade[]; marcas: { marca: string; n: number }[]; compras: CompraPreco[]
 }
 
+/**
+ * Nomes do dia a dia que o catálogo do governo chama de outro jeito (ex.: o papel A4 é "PAPEL PARA IMPRESSÃO
+ * FORMATADO"; "A4" é só uma característica do item). Esses itens vêm primeiro na busca, marcados como sinônimo.
+ */
+const SINONIMOS: { termo: RegExp; itens: ItemCatalogo[] }[] = [
+  {
+    termo: /\b(a4|sulfite|resma|chamex|papel (oficio|para impressao|de impressao|de copia|xerox))\b/,
+    itens: [
+      { tipo: 'M', codigo: 19746, nome: 'PAPEL PARA IMPRESSÃO FORMATADO', classe: 'PAPEL A4, SULFITE E OFÍCIO' },
+      { tipo: 'M', codigo: 126, nome: 'PAPEL CÓPIA', classe: 'PAPEL A4 (MODELO ANTIGO DO CATÁLOGO)' },
+    ],
+  },
+]
+const semAcento = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+export function sinonimosDoCatalogo(termo: string, tipo: '' | 'M' | 'S'): ItemCatalogo[] {
+  const t = semAcento(termo)
+  return SINONIMOS.filter((s) => s.termo.test(t)).flatMap((s) => s.itens).filter((i) => !tipo || i.tipo === tipo).map((i) => ({ ...i, sinonimo: true }))
+}
+
 export async function buscarCatalogo(termo: string, tipo: '' | 'M' | 'S', signal?: AbortSignal): Promise<{ data: ItemCatalogo[]; catalogo: { itens: number } }> {
   const p = supabase.rpc('buscar_catalogo', { p_termo: termo, p_tipo: tipo })
   const { data, error } = await (signal ? p.abortSignal(signal) : p)
@@ -20,7 +39,10 @@ export async function buscarCatalogo(termo: string, tipo: '' | 'M' | 'S', signal
     if (['PGRST202', 'PGRST205', '42883'].includes(error.code)) throw new Error('O catálogo de preços está sendo preparado. Tente novamente em instantes.')
     throw new Error('Não foi possível pesquisar o catálogo. Tente novamente.')
   }
-  return data
+  const extras = sinonimosDoCatalogo(termo, tipo)
+  if (!extras.length) return data
+  const chaves = new Set(extras.map((i) => `${i.tipo}${i.codigo}`))
+  return { ...data, data: [...extras, ...(data.data as ItemCatalogo[]).filter((i) => !chaves.has(`${i.tipo}${i.codigo}`))] }
 }
 
 export async function historicoPrecos(item: Pick<ItemCatalogo, 'tipo' | 'codigo'>, filtros: { uf: string; de: string; ate: string }, signal?: AbortSignal): Promise<HistoricoPrecos> {

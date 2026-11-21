@@ -112,12 +112,13 @@ function resumirLinhas(linhas) {
   }
 }
 
-async function buscarCodigo({ tipo, codigo }, { uf, de, ate }) {
+/** Páginas de 500 compras lidas por item do catálogo: com poucos itens escolhidos, lê mais de cada um. */
+export const paginasPorCodigo = (n) => (n <= 2 ? 4 : MAX_PAGINAS)
+
+async function buscarCodigo({ tipo, codigo }, { uf, de, ate }, maxPaginas = MAX_PAGINAS) {
   const caminho = tipo === 'M' ? '1_consultarMaterial' : '3_consultarServico'
-  const todas = []
-  let paginas = 1
-  for (let pagina = 1; pagina <= Math.min(paginas, MAX_PAGINAS); pagina++) {
-    const p = new URLSearchParams({ pagina: String(pagina), tamanhoPagina: '500' })
+  const pagina = async (n) => {
+    const p = new URLSearchParams({ pagina: String(n), tamanhoPagina: '500' })
     if (tipo === 'M') { p.set('tipo', 'codigoPdm'); p.set('codigo', String(codigo)) } else p.set('codigoItemCatalogo', String(codigo))
     if (uf) p.set('estado', uf)
     if (de) p.set('dataCompraInicio', de)
@@ -126,10 +127,14 @@ async function buscarCodigo({ tipo, codigo }, { uf, de, ate }) {
     if (!r.ok) throw Object.assign(new Error('A consulta de compras não respondeu. Tente novamente em instantes.'), { status: 502 })
     const j = await r.json()
     if (!Array.isArray(j.resultado)) throw Object.assign(new Error('A consulta de compras respondeu em formato inesperado.'), { status: 502 })
-    for (const c of j.resultado) todas.push({ ...c, _codigo: `${tipo}${codigo}` })
-    paginas = Number(j.totalPaginas) || 1
+    return j
   }
-  return { todas, incompleto: paginas > MAX_PAGINAS }
+  // A primeira página diz quantas existem; as seguintes vêm em paralelo.
+  const primeira = await pagina(1)
+  const paginas = Number(primeira.totalPaginas) || 1
+  const resto = await Promise.all(Array.from({ length: Math.min(paginas, maxPaginas) - 1 }, (_, i) => pagina(i + 2)))
+  const todas = [primeira, ...resto].flatMap((j) => j.resultado.map((c) => ({ ...c, _codigo: `${tipo}${codigo}` })))
+  return { todas, incompleto: paginas > maxPaginas, limite: maxPaginas * 500 }
 }
 
 export default async function handler(req, res) {
@@ -153,10 +158,11 @@ export default async function handler(req, res) {
     const usuario = await usuarioLogado(base, anon, token)
     if (!usuario) return res.status(401).json({ error: 'Entre na sua conta' })
     if (excedeuLimite('mercado', usuario, 20)) return res.status(429).json({ error: 'Muitas consultas em pouco tempo. Aguarde um minuto e tente de novo.' })
-    const partes = await Promise.all(codigos.map((c) => emCache('mercado', `${c.tipo}${c.codigo}|${uf}|${de}|${ate}`, 15 * 60_000, () => buscarCodigo(c, { uf, de, ate }), 120)))
+    const maxPaginas = paginasPorCodigo(codigos.length)
+    const partes = await Promise.all(codigos.map((c) => emCache('mercado', `${c.tipo}${c.codigo}|${uf}|${de}|${ate}|${maxPaginas}`, 15 * 60_000, () => buscarCodigo(c, { uf, de, ate }, maxPaginas), 120)))
     const todas = partes.flatMap((p) => p.todas)
     guardarNoNavegador(res, 900)
-    return res.json({ de, ate, uf, ...filtros, incompleto: partes.some((p) => p.incompleto), ...resumirMercado(todas, filtros) })
+    return res.json({ de, ate, uf, ...filtros, incompleto: partes.some((p) => p.incompleto), limitePorItem: maxPaginas * 500, ...resumirMercado(todas, filtros) })
   } catch (e) {
     return res.status(e.status ?? 500).json({ error: e.status ? e.message : 'Não foi possível montar a análise de mercado agora.' })
   }

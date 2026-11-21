@@ -48,10 +48,10 @@ export default function AnaliseMercado() {
   // O catálogo devolve parecidos (ex.: "pneu" traz "LONA PNEU" antes de "PNEU BICICLETA"):
   // sobem os itens cujo nome é o termo ou começa por ele, e só esses entram na análise por padrão.
   const termoN = normalizar(q.trim()).replace(/\s+/g, ' '), primeira = termoN.split(' ')[0]
-  const nivel = (nome: string) => { const n = normalizar(nome).replace(/\s+/g, ' '); return n === termoN ? 3 : n.startsWith(termoN) ? 2 : primeira && n.startsWith(primeira) ? 1 : 0 }
-  const opcoes = useMemo(() => (catalogo.data?.data ?? []).map((c, i) => ({ c, i, n: nivel(c.nome) })).sort((a, b) => b.n - a.n || a.i - b.i).map((x) => x.c), [catalogo.data, termoN]) // eslint-disable-line react-hooks/exhaustive-deps
-  const melhorNivel = opcoes.length ? nivel(opcoes[0].nome) : 0
-  const padrao = melhorNivel > 0 ? opcoes.filter((c) => nivel(c.nome) === melhorNivel).slice(0, PADRAO_CODIGOS) : opcoes.slice(0, 1)
+  const nivel = (c: ItemCatalogo) => { if (c.sinonimo) return 4; const n = normalizar(c.nome).replace(/\s+/g, ' '); return n === termoN ? 3 : n.startsWith(termoN) ? 2 : primeira && n.startsWith(primeira) ? 1 : 0 }
+  const opcoes = useMemo(() => (catalogo.data?.data ?? []).map((c, i) => ({ c, i, n: nivel(c) })).sort((a, b) => b.n - a.n || a.i - b.i).map((x) => x.c), [catalogo.data, termoN]) // eslint-disable-line react-hooks/exhaustive-deps
+  const melhorNivel = opcoes.length ? nivel(opcoes[0]) : 0
+  const padrao = melhorNivel > 0 ? opcoes.filter((c) => nivel(c) === melhorNivel).slice(0, PADRAO_CODIGOS) : opcoes.slice(0, 1)
   const [todasOpcoes, setTodasOpcoes] = useState(false)
   const chave = (c: Pick<ItemCatalogo, 'tipo' | 'codigo'>) => `${c.tipo}${c.codigo}`
   const nomes = useMemo(() => Object.fromEntries(opcoes.map((c) => [chave(c), c])), [opcoes])
@@ -217,7 +217,7 @@ function Resultado({ a, nomes, uf, atualizando, aoFiltrarUf, aoAbrir }: { a: Ana
 
     <p className="mt-5 text-xs text-muted-foreground">
       Compras homologadas, com o vencedor de cada item.
-      {a.incompleto ? ' Há muitas compras no período; para cada item do catálogo a análise considera as 1.000 mais recentes.' : ''}
+      {a.incompleto ? ` Há muitas compras no período: a análise considera até ${numero(a.limitePorItem ?? 1000)} compras por item do catálogo, então os totais reais são maiores. Reduza o período ou escolha menos itens para ver mais.` : ''}
       {a.descartadas ? ` ${numero(a.descartadas)} ${a.descartadas === 1 ? 'compra com preço fora do padrão foi descartada' : 'compras com preço fora do padrão foram descartadas'} (mais de 50 vezes acima ou abaixo da mediana, quase sempre erro de digitação).` : ''}
       {' '}Itens do catálogo: {a.catalogo.map((c) => nomes[c.codigo]?.nome ?? c.codigo).join(', ')}.
     </p>
