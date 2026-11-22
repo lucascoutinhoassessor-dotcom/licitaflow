@@ -9,7 +9,7 @@ import { SeletorEmpresa, useEmpresaPadrao } from '@/components/Situacoes'
 import { useOrg } from '@/providers/OrgProvider'
 import { useLista, useSalvar } from '@/hooks/useDados'
 import { dadosProcesso, rotaOportunidade, type CompraPNCP } from '@/lib/pncp'
-import { filtrosExtras, MODALIDADES, nomeModoDisputa, PERIODOS_ABERTURA, periodoAbertura, periodoEntre, validarFiltros, type FiltrosOportunidades as Filtros } from '@/lib/filtrosOportunidades'
+import { filtrosExtras, MODALIDADES, nomeModoDisputa, PERIODOS_ABERTURA, periodoAbertura, periodoEntre, resumoFiltros, validarFiltros, type FiltrosOportunidades as Filtros } from '@/lib/filtrosOportunidades'
 import {pesquisarIndice,type ResultadoIndice} from '@/lib/buscaIndice'
 import CategoriasObjeto from '@/components/CategoriasObjeto'
 import FiltrosOportunidades from '@/components/FiltrosOportunidades'
@@ -149,6 +149,7 @@ export default function Oportunidades() {
       </form>
     </Card>
     {!consulta?<Vazio icone={Radar} titulo="Encontre sua próxima oportunidade" texto="Pesquise o produto ou serviço. Por padrão, a busca inclui o Brasil inteiro e editais recebendo propostas." />:<>
+      {efetiva&&<div className="mb-2 flex flex-wrap items-center gap-1.5" aria-label="Filtros aplicados"><span className="mr-1 text-xs font-medium text-muted-foreground">Filtros aplicados:</span>{resumoFiltros(efetiva,modalidadesLiberadas(estados).length,PORTAIS.length).map(t=><span key={t} className="max-w-full truncate rounded-full border bg-card px-2.5 py-0.5 text-xs">{t}</span>)}</div>}
       <div role="status" aria-live="polite" className="mb-4 space-y-2">
         {q.isFetching?<p className="text-sm text-muted-foreground">Pesquisando...</p>:q.isError?<div role="alert" className="flex flex-wrap items-center gap-3 text-sm text-destructive"><p>{q.error.message}</p><Button tamanho="sm" variante="contorno" onClick={()=>q.refetch()}>Tentar novamente</Button></div>:<div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm font-medium">{q.data?.totalRegistros??0} {(q.data?.totalRegistros??0)===1?'oportunidade encontrada':'oportunidades encontradas'}</p>
           <BotaoInverterOrdem invertido={!!consulta.inverter} aoMudar={inverter=>{const novo={...consulta,inverter};setF(v=>({...v,inverter}));setPagina(1);setConsulta(novo)}}

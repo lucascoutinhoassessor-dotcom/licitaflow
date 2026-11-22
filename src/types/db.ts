@@ -95,6 +95,10 @@ export interface Processo {
   responsavel_id: string | null
   motivo_perda: string | null
   observacoes: string | null
+  /** Arquivado sai do Kanban e da lista (não apaga nada). */
+  arquivado_em: string | null
+  /** Sentinela ligada neste processo (padrão ligado; o cliente desliga pelo cartão do Kanban). */
+  monitorar: boolean
   created_at: string
   updated_at: string
 }

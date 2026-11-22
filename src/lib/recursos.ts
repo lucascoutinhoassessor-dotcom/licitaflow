@@ -21,6 +21,7 @@ export const CATALOGO_RECURSOS: RecursoCatalogo[] = [
   { id: 'recurso-importar-oportunidade', tela: 'Oportunidades', rotulo: 'Adicionar aos processos', descricao: 'Importar um edital da busca para a lista de processos da empresa.' },
   { id: 'recurso-codigo-comprasnet', tela: 'Oportunidades', rotulo: 'Copiar UASG e número da compra', descricao: 'Botões que copiam a UASG e o número da compra do Compras.gov.' },
   { id: 'recurso-inverter-ordem', tela: 'Listas', rotulo: 'Inverter ordem', descricao: 'Botão que inverte a ordem das listas (mais recentes/mais antigas, mais próximas/mais distantes).' },
+  { id: 'recurso-monitorar-processo', tela: 'Processos', rotulo: 'Monitorar com IA', descricao: 'Opção no cartão do Kanban para ligar ou desligar a Sentinela naquele processo.' },
   { id: 'recurso-exportar-csv', tela: 'Relatórios', rotulo: 'Exportar CSV', descricao: 'Baixar o funil de processos em planilha CSV.' },
 ]
 

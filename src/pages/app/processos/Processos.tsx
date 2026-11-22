@@ -1,15 +1,18 @@
-import { useMemo, useState, type DragEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type DragEvent, type TouchEvent as EventoToque } from 'react'
+import { createPortal } from 'react-dom'
 import { Link, useNavigate } from 'react-router-dom'
-import { CalendarClock, Gavel, KanbanSquare, List, Plus, Search } from 'lucide-react'
+import * as Menu from '@radix-ui/react-dropdown-menu'
+import { Archive, ArchiveRestore, CalendarClock, Check, Gavel, KanbanSquare, List, MoreHorizontal, Plus, Radar, Search, Trash2 } from 'lucide-react'
 import MenuFiltros, { ChipFiltro, SecaoFiltro } from '@/components/MenuFiltros'
 import { AnimatePresence, LayoutGroup, motion } from 'framer-motion'
 import { toast } from 'sonner'
 import { Badge, Button, CabecalhoPagina, Card, Carregando, Input, Modal, Select, Vazio } from '@/components/ui'
 import { BadgeEtapa } from '@/components/Situacoes'
-import { COR_ETAPA, ETAPAS, ETAPAS_ATIVAS, ETAPAS_FINAIS, MODALIDADES, type Etapa } from '@/lib/dominio'
+import { ETAPAS, ETAPAS_ATIVAS, ETAPAS_FINAIS, MODALIDADES, type Etapa } from '@/lib/dominio'
 import { formatarDataHora, formatarMoeda } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useLista, useNomeEmpresa, useSalvar } from '@/hooks/useDados'
+import { useRecursos } from '@/hooks/useModulos'
 import { useOrg } from '@/providers/OrgProvider'
 import type { Processo } from '@/types/db'
 import { ProcessoForm } from './ProcessoForm'
@@ -35,31 +38,28 @@ const HEX_ETAPA: Record<Etapa, string> = {
   desistencia: '#a1a1aa',
 }
 
-function CartaoProcesso({ p, cor, arrastavel, nomeEmpresa }: { p: Processo; cor: string; arrastavel?: boolean; nomeEmpresa?: string }) {
-  const [arrastando, setArrastando] = useState(false)
+/** Tempo segurando o dedo no cartão até ele "descolar" e começar a arrastar (no celular). */
+const SEGURAR_MS = 320
+/** Quanto o dedo pode mexer enquanto segura; mais que isso é rolagem, não arraste. */
+const TOLERANCIA_PX = 8
+
+const finalizada = (e: Etapa) => (ETAPAS_FINAIS as readonly Etapa[]).includes(e)
+
+/** A Sentinela vigia este processo agora (edital do PNCP vinculado, não encerrado, não arquivado, ligado). */
+const vigiado = (p: Processo) => !!p.pncp_controle && p.monitorar !== false && !p.arquivado_em && !finalizada(p.etapa)
+
+function ConteudoCartao({ p, nomeEmpresa, monitorVisivel }: { p: Processo; nomeEmpresa?: string; monitorVisivel?: boolean }) {
   return (
-    <Link
-      to={`/app/processos/${p.id}`}
-      draggable={arrastavel}
-      onDragStart={(e) => {
-        e.dataTransfer.setData('text/processo', p.id)
-        e.dataTransfer.effectAllowed = 'move'
-        setArrastando(true)
-      }}
-      onDragEnd={() => setArrastando(false)}
-      style={{ borderLeftColor: cor }}
-      className={cn(
-        'block rounded-lg border border-l-4 bg-card p-3 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-lg',
-        arrastavel && 'cursor-grab active:cursor-grabbing',
-        arrastando && 'rotate-2 scale-95 opacity-40',
-      )}
-    >
-      <div className="flex items-start justify-between gap-2">
+    <>
+      <div className="flex items-start justify-between gap-2 pr-7">
         <div className="text-xs text-muted-foreground">
           {MODALIDADES[p.modalidade]}
           {p.numero ? ` · ${p.numero}` : ''}
         </div>
-        {p.prioridade === 'alta' && <Badge cor="vermelho">Alta</Badge>}
+        <div className="flex shrink-0 gap-1">
+          {p.arquivado_em && <Badge>Arquivado</Badge>}
+          {p.prioridade === 'alta' && <Badge cor="vermelho">Alta</Badge>}
+        </div>
       </div>
       <div className="mt-1 line-clamp-2 text-sm font-medium">{p.objeto}</div>
       {p.orgao_nome && <div className="mt-1 truncate text-xs text-muted-foreground">{p.orgao_nome}</div>}
@@ -71,10 +71,180 @@ function CartaoProcesso({ p, cor, arrastavel, nomeEmpresa }: { p: Processo; cor:
         ) : (
           <span />
         )}
-        {p.valor_estimado != null && <span className="tabular-nums">{formatarMoeda(p.valor_estimado)}</span>}
+        <span className="flex items-center gap-2">
+          {monitorVisivel && vigiado(p) && (
+            <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400" title="Monitorado pela Sentinela">
+              <Radar className="h-3 w-3" /> IA
+            </span>
+          )}
+          {p.valor_estimado != null && <span className="tabular-nums">{formatarMoeda(p.valor_estimado)}</span>}
+        </span>
       </div>
       {nomeEmpresa && <div className="mt-2 truncate border-t pt-2 text-[11px] text-muted-foreground">{nomeEmpresa}</div>}
-    </Link>
+    </>
+  )
+}
+
+const itemMenu =
+  'flex min-h-10 cursor-pointer select-none items-center gap-2.5 rounded-lg px-3 text-sm outline-none data-[disabled]:cursor-not-allowed data-[highlighted]:bg-muted data-[disabled]:opacity-50'
+
+function MenuCartao({
+  p,
+  estadoMonitor,
+  aoMonitorar,
+  aoArquivar,
+  aoExcluir,
+}: {
+  p: Processo
+  estadoMonitor: string
+  aoMonitorar: (ligar: boolean) => void
+  aoArquivar: (arquivar: boolean) => void
+  aoExcluir: () => void
+}) {
+  const semEdital = !p.pncp_controle
+  const encerrado = finalizada(p.etapa)
+  const ligado = p.monitorar !== false
+  const motivo = semEdital ? 'Sem edital do PNCP vinculado' : encerrado ? 'Processo encerrado' : p.arquivado_em ? 'Processo arquivado' : null
+  return (
+    <Menu.Root modal={false}>
+      <Menu.Trigger
+        aria-label="Opções do processo"
+        className="absolute right-1.5 top-1.5 z-10 rounded-md p-1.5 text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:bg-muted"
+      >
+        <MoreHorizontal className="h-4 w-4" />
+      </Menu.Trigger>
+      <Menu.Portal>
+        <Menu.Content align="end" sideOffset={4} collisionPadding={8} className="z-50 min-w-[15rem] rounded-xl border bg-card p-1.5 text-card-foreground shadow-xl">
+          {(estadoMonitor === 'liberado' || estadoMonitor === 'em_breve') && (
+            <Menu.CheckboxItem
+              className={itemMenu}
+              checked={ligado}
+              disabled={estadoMonitor === 'em_breve' || !!motivo}
+              onCheckedChange={(v) => aoMonitorar(v === true)}
+            >
+              <Radar className="h-4 w-4" />
+              <span className="flex-1">
+                Monitorar com IA
+                {estadoMonitor === 'em_breve' ? (
+                  <span className="block text-[11px] text-muted-foreground">Em breve</span>
+                ) : motivo ? (
+                  <span className="block text-[11px] text-muted-foreground">{motivo}</span>
+                ) : null}
+              </span>
+              <Menu.ItemIndicator>
+                <Check className="h-4 w-4 text-primary" />
+              </Menu.ItemIndicator>
+            </Menu.CheckboxItem>
+          )}
+          <Menu.Item className={itemMenu} onSelect={() => aoArquivar(!p.arquivado_em)}>
+            {p.arquivado_em ? <ArchiveRestore className="h-4 w-4" /> : <Archive className="h-4 w-4" />}
+            {p.arquivado_em ? 'Desarquivar' : 'Arquivar'}
+          </Menu.Item>
+          <Menu.Separator className="my-1 h-px bg-border" />
+          <Menu.Item className={cn(itemMenu, 'text-destructive data-[highlighted]:bg-destructive/10')} onSelect={aoExcluir}>
+            <Trash2 className="h-4 w-4" /> Excluir
+          </Menu.Item>
+        </Menu.Content>
+      </Menu.Portal>
+    </Menu.Root>
+  )
+}
+
+interface Segurado {
+  p: Processo
+  cor: string
+  /** Onde o dedo pegou o cartão, relativo ao canto do cartão. */
+  dx: number
+  dy: number
+  largura: number
+  x: number
+  y: number
+}
+
+function CartaoProcesso({
+  p,
+  cor,
+  arrastavel,
+  nomeEmpresa,
+  monitorVisivel,
+  fantasma,
+  menu,
+  aoSegurar,
+  cliqueBloqueado,
+}: {
+  p: Processo
+  cor: string
+  arrastavel?: boolean
+  nomeEmpresa?: string
+  monitorVisivel?: boolean
+  fantasma?: boolean
+  menu?: React.ReactNode
+  aoSegurar?: (s: Segurado) => void
+  cliqueBloqueado?: () => boolean
+}) {
+  const [arrastando, setArrastando] = useState(false)
+  const timer = useRef<number>()
+  const dedo = useRef<{ x0: number; y0: number; x: number; y: number } | null>(null)
+
+  const cancelar = () => {
+    window.clearTimeout(timer.current)
+    dedo.current = null
+  }
+  useEffect(() => cancelar, [])
+
+  const tocar = (e: EventoToque<HTMLAnchorElement>) => {
+    if (!arrastavel || !aoSegurar || e.touches.length !== 1) return
+    const t = e.touches[0]
+    dedo.current = { x0: t.clientX, y0: t.clientY, x: t.clientX, y: t.clientY }
+    const el = e.currentTarget
+    window.clearTimeout(timer.current)
+    timer.current = window.setTimeout(() => {
+      const d = dedo.current
+      if (!d) return
+      const r = el.getBoundingClientRect()
+      navigator.vibrate?.(15)
+      aoSegurar({ p, cor, dx: d.x - r.left, dy: d.y - r.top, largura: r.width, x: d.x, y: d.y })
+      dedo.current = null
+    }, SEGURAR_MS)
+  }
+
+  return (
+    <div className="relative">
+      <Link
+        to={`/app/processos/${p.id}`}
+        draggable={arrastavel}
+        onDragStart={(e) => {
+          e.dataTransfer.setData('text/processo', p.id)
+          e.dataTransfer.effectAllowed = 'move'
+          setArrastando(true)
+        }}
+        onDragEnd={() => setArrastando(false)}
+        onTouchStart={tocar}
+        onTouchMove={(e) => {
+          const d = dedo.current
+          if (!d) return
+          const t = e.touches[0]
+          d.x = t.clientX
+          d.y = t.clientY
+          if (Math.hypot(t.clientX - d.x0, t.clientY - d.y0) > TOLERANCIA_PX) cancelar()
+        }}
+        onTouchEnd={cancelar}
+        onTouchCancel={cancelar}
+        // Segurar o dedo num link abre o menu do navegador; aqui segurar é para arrastar.
+        onContextMenu={(e) => arrastavel && e.preventDefault()}
+        onClick={(e) => cliqueBloqueado?.() && e.preventDefault()}
+        style={{ borderLeftColor: cor, WebkitTouchCallout: 'none' }}
+        className={cn(
+          'block select-none rounded-lg border border-l-4 bg-card p-3 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-lg',
+          arrastavel && 'cursor-grab active:cursor-grabbing',
+          (arrastando || fantasma) && 'rotate-2 scale-95 opacity-40',
+          p.arquivado_em && !fantasma && 'opacity-70',
+        )}
+      >
+        <ConteudoCartao p={p} nomeEmpresa={nomeEmpresa} monitorVisivel={monitorVisivel} />
+      </Link>
+      {menu}
+    </div>
   )
 }
 
@@ -82,15 +252,22 @@ export default function Processos() {
   const navigate = useNavigate()
   const { podeEditar, empresa, empresas } = useOrg()
   const nomeEmpresa = useNomeEmpresa()
+  const { estado: estadoRecurso } = useRecursos()
+  const estadoMonitor = estadoRecurso('recurso-monitorar-processo')
   const [visao, setVisao] = useState(lerVisao)
   const [novo, setNovo] = useState(false)
   const [busca, setBusca] = useState('')
   const [modalidade, setModalidade] = useState('')
   const [mostrarFinais, setMostrarFinais] = useState(false)
+  const [mostrarArquivados, setMostrarArquivados] = useState(false)
   const [sobre, setSobre] = useState<Etapa | null>(null)
   const [movidos, setMovidos] = useState<Record<string, Etapa>>({})
+  const [segurado, setSegurado] = useState<Segurado | null>(null)
+  const trilho = useRef<HTMLDivElement>(null)
+  const fantasmaRef = useRef<HTMLDivElement>(null)
+  const fimDoArraste = useRef(0)
   const q = useLista<Processo>('processos', { ordem: ['data_abertura', true] })
-  const { salvar } = useSalvar('processos', ['processo_eventos'])
+  const { salvar, excluir } = useSalvar('processos', ['processo_eventos'])
   const mostrarEmpresa = !empresa && empresas.length > 1
 
   const trocarVisao = (v: 'kanban' | 'lista') => {
@@ -102,14 +279,16 @@ export default function Processos() {
     }
   }
 
+  const arquivados = (q.data ?? []).filter((p) => p.arquivado_em).length
   const lista = useMemo(() => {
     const t = busca.trim().toLowerCase()
     return (q.data ?? []).filter(
       (p) =>
+        (mostrarArquivados || !p.arquivado_em) &&
         (!modalidade || p.modalidade === modalidade) &&
         (!t || `${p.objeto} ${p.orgao_nome} ${p.numero} ${p.uasg}`.toLowerCase().includes(t)),
     )
-  }, [q.data, busca, modalidade])
+  }, [q.data, busca, modalidade, mostrarArquivados])
 
   const colunas = mostrarFinais ? [...ETAPAS_ATIVAS, ...ETAPAS_FINAIS] : ETAPAS_ATIVAS
 
@@ -130,6 +309,8 @@ export default function Processos() {
       setMovidos(({ [id]: _, ...resto }) => resto)
     }
   }
+  const moverRef = useRef(mover)
+  moverRef.current = mover
 
   const soltar = (etapa: Etapa) => (e: DragEvent) => {
     e.preventDefault()
@@ -137,6 +318,117 @@ export default function Processos() {
     const id = e.dataTransfer.getData('text/processo')
     if (id && podeEditar) mover(id, etapa)
   }
+
+  // Arraste pelo dedo (o arrastar nativo do navegador não funciona no toque): o cartão segue o dedo,
+  // a coluna sob o dedo acende e a tela rola sozinha quando o dedo chega perto da borda.
+  const idSegurado = segurado?.p.id
+  useEffect(() => {
+    if (!segurado) return
+    const pos = { x: segurado.x, y: segurado.y }
+    let alvo: Etapa | null = null
+    let quadro = 0
+    const posicionar = () => {
+      const el = fantasmaRef.current
+      if (el) el.style.transform = `translate3d(${pos.x - segurado.dx}px, ${pos.y - segurado.dy}px, 0)`
+    }
+    const procurarColuna = () => {
+      const col = document.elementFromPoint(pos.x, pos.y)?.closest<HTMLElement>('[data-etapa]')
+      const etapa = (col?.dataset.etapa as Etapa | undefined) ?? null
+      if (etapa !== alvo) {
+        alvo = etapa
+        setSobre(etapa)
+        if (etapa) navigator.vibrate?.(5)
+      }
+    }
+    const rolar = () => {
+      const borda = 56
+      const h = trilho.current
+      if (h) {
+        if (pos.x < borda) h.scrollLeft -= Math.ceil((borda - pos.x) / 3)
+        else if (pos.x > window.innerWidth - borda) h.scrollLeft += Math.ceil((pos.x - (window.innerWidth - borda)) / 3)
+      }
+      const v = document.getElementById('conteudo-principal')
+      if (v) {
+        const r = v.getBoundingClientRect()
+        if (pos.y < r.top + borda) v.scrollTop -= Math.ceil((r.top + borda - pos.y) / 4)
+        else if (pos.y > r.bottom - borda) v.scrollTop += Math.ceil((pos.y - (r.bottom - borda)) / 4)
+      }
+      procurarColuna()
+      quadro = requestAnimationFrame(rolar)
+    }
+    const aoMover = (e: TouchEvent) => {
+      e.preventDefault() // segura a rolagem da página enquanto arrasta
+      const t = e.touches[0]
+      if (!t) return
+      pos.x = t.clientX
+      pos.y = t.clientY
+      posicionar()
+    }
+    const terminar = (cancelado: boolean) => () => {
+      cancelAnimationFrame(quadro)
+      fimDoArraste.current = Date.now()
+      setSegurado(null)
+      setSobre(null)
+      if (!cancelado && alvo && podeEditar) void moverRef.current(segurado.p.id, alvo)
+    }
+    const fim = terminar(false)
+    const cancelamento = terminar(true)
+    posicionar()
+    procurarColuna()
+    quadro = requestAnimationFrame(rolar)
+    document.addEventListener('touchmove', aoMover, { passive: false })
+    document.addEventListener('touchend', fim)
+    document.addEventListener('touchcancel', cancelamento)
+    return () => {
+      cancelAnimationFrame(quadro)
+      document.removeEventListener('touchmove', aoMover)
+      document.removeEventListener('touchend', fim)
+      document.removeEventListener('touchcancel', cancelamento)
+    }
+    // O arraste dura enquanto o mesmo cartão estiver segurado.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [idSegurado])
+
+  async function monitorar(p: Processo, ligar: boolean) {
+    try {
+      await salvar.mutateAsync({ id: p.id, dados: { monitorar: ligar } })
+      toast.success(ligar ? 'A Sentinela vai monitorar este processo.' : 'Monitoramento desligado neste processo.')
+    } catch {
+      /* useSalvar mostra o erro */
+    }
+  }
+
+  async function arquivar(p: Processo, arquivar: boolean) {
+    try {
+      await salvar.mutateAsync({ id: p.id, dados: { arquivado_em: arquivar ? new Date().toISOString() : null } })
+      toast.success(arquivar ? 'Processo arquivado.' : 'Processo desarquivado.', {
+        action: { label: 'Desfazer', onClick: () => void salvar.mutateAsync({ id: p.id, dados: { arquivado_em: arquivar ? null : p.arquivado_em } }).catch(() => {}) },
+      })
+    } catch {
+      /* useSalvar mostra o erro */
+    }
+  }
+
+  async function apagar(p: Processo) {
+    if (!confirm(`Excluir o processo "${p.objeto.slice(0, 80)}"? Itens, prazos, documentos anexados e histórico serão apagados. Esta ação não pode ser desfeita.`)) return
+    try {
+      await excluir.mutateAsync(p.id)
+      toast.success('Processo excluído.')
+    } catch {
+      /* useSalvar mostra o erro */
+    }
+  }
+
+  const menuDe = (p: Processo) =>
+    podeEditar ? (
+      <MenuCartao
+        p={p}
+        estadoMonitor={estadoMonitor}
+        aoMonitorar={(v) => monitorar(p, v)}
+        aoArquivar={(v) => arquivar(p, v)}
+        aoExcluir={() => apagar(p)}
+      />
+    ) : undefined
 
   return (
     <>
@@ -175,7 +467,7 @@ export default function Processos() {
               <button
                 key={v as string}
                 onClick={() => trocarVisao(v as 'kanban' | 'lista')}
-                className={cn('flex items-center gap-1.5 rounded px-3 py-1.5 text-sm', visao === v ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}
+                className={cn('flex flex-1 items-center justify-center gap-1.5 rounded px-3 py-1.5 text-sm', visao === v ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}
               >
                 <Icone className="h-4 w-4" /> {r as string}
               </button>
@@ -193,104 +485,154 @@ export default function Processos() {
           texto="Cadastre um processo ou busque publicações em Oportunidades para importar os editais de interesse."
           acao={podeEditar && <Button onClick={() => setNovo(true)}><Plus className="h-4 w-4" /> Novo processo</Button>}
         />
-      ) : visao === 'kanban' ? (
-        <>
-          <label className="mb-3 flex items-center gap-2 text-sm text-muted-foreground">
-            <input type="checkbox" checked={mostrarFinais} onChange={(e) => setMostrarFinais(e.target.checked)} /> Mostrar ganhos, perdidos e desistências
-          </label>
-          <LayoutGroup>
-          <motion.div layoutScroll className="rolagem-kanban -mx-4 flex gap-4 overflow-x-auto px-4 pb-4 lg:-mx-8 lg:px-8">
-            {colunas.map((etapa) => {
-              const itens = lista.filter((p) => etapaDe(p) === etapa)
-              const total = itens.reduce((a, p) => a + (p.valor_estimado ?? 0), 0)
-              const cor = HEX_ETAPA[etapa]
-              const ativa = sobre === etapa
-              return (
-                <div
-                  key={etapa}
-                  onDragOver={(e) => {
-                    e.preventDefault()
-                    setSobre(etapa)
-                  }}
-                  onDragLeave={(e) => {
-                    if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setSobre(null)
-                  }}
-                  onDrop={soltar(etapa)}
-                  style={{
-                    borderColor: ativa ? cor : `${cor}40`,
-                    backgroundImage: `linear-gradient(to bottom, ${cor}${ativa ? '2e' : '17'}, ${cor}05 45%, transparent)`,
-                    boxShadow: ativa ? `0 0 0 3px ${cor}33, 0 12px 32px -12px ${cor}66` : undefined,
-                  }}
-                  className={cn(
-                    'relative flex min-h-[calc(100dvh-20rem)] w-[85vw] max-w-[22rem] shrink-0 flex-col overflow-hidden rounded-2xl border bg-muted/30 p-3 pt-4 transition-all duration-200 sm:w-80 xl:w-[22rem]',
-                    ativa && 'scale-[1.01]',
-                  )}
-                >
-                  <span className="absolute inset-x-0 top-0 h-1" style={{ backgroundColor: cor }} />
-                  <div className="mb-1 flex items-center justify-between border-b px-1 pb-3" style={{ borderColor: `${cor}33` }}>
-                    <div className="flex items-center gap-2 text-base font-semibold">
-                      <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: cor, boxShadow: `0 0 8px ${cor}` }} />
-                      {ETAPAS[etapa]}
-                      <span className="rounded-full px-2 text-xs tabular-nums" style={{ backgroundColor: `${cor}26`, color: cor }}>
-                        {itens.length}
-                      </span>
-                    </div>
-                    {total > 0 && <span className="text-[11px] tabular-nums text-muted-foreground">{formatarMoeda(total)}</span>}
-                  </div>
-                  <div className="flex flex-1 flex-col gap-3 pt-2">
-                    <AnimatePresence initial={false} mode="popLayout">
-                      {itens.map((p) => (
-                        <motion.div
-                          key={p.id}
-                          layout
-                          layoutId={`processo-${p.id}`}
-                          initial={{ opacity: 0, scale: 0.9 }}
-                          animate={{ opacity: 1, scale: 1 }}
-                          exit={{ opacity: 0, scale: 0.9 }}
-                          transition={{ type: 'spring', stiffness: 380, damping: 30 }}
-                        >
-                          <CartaoProcesso p={p} cor={cor} arrastavel={podeEditar} nomeEmpresa={mostrarEmpresa ? nomeEmpresa(p.empresa_id) : undefined} />
-                        </motion.div>
-                      ))}
-                    </AnimatePresence>
-                    {itens.length === 0 && (
-                      <div
-                        className="flex flex-1 items-center justify-center rounded-xl border-2 border-dashed p-4 text-center text-xs text-muted-foreground transition-colors"
-                        style={{ borderColor: ativa ? cor : `${cor}30`, color: ativa ? cor : undefined }}
-                      >
-                        {ativa ? 'Solte aqui' : 'Nenhum processo nesta etapa'}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )
-            })}
-          </motion.div>
-          </LayoutGroup>
-          <p className="text-xs text-muted-foreground">Dica: arraste os cartões entre as colunas para mudar a etapa (no celular, mude pela página do processo).</p>
-        </>
       ) : (
-        <Card className="divide-y">
-          {lista.map((p) => (
-            <Link key={p.id} to={`/app/processos/${p.id}`} className="flex flex-col gap-2 p-4 hover:bg-muted/40 sm:flex-row sm:items-center">
-              <div className="min-w-0 flex-1">
-                <div className="text-xs text-muted-foreground">
-                  {MODALIDADES[p.modalidade]}
-                  {p.numero ? ` · ${p.numero}` : ''}
-                  {p.orgao_nome ? ` · ${p.orgao_nome}` : ''}
-                  {mostrarEmpresa ? ` · ${nomeEmpresa(p.empresa_id)}` : ''}
+        <>
+          <div className="mb-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-muted-foreground">
+            {visao === 'kanban' && (
+              <label className="flex items-center gap-2">
+                <input type="checkbox" checked={mostrarFinais} onChange={(e) => setMostrarFinais(e.target.checked)} /> Mostrar ganhos, perdidos e desistências
+              </label>
+            )}
+            {arquivados > 0 && (
+              <label className="flex items-center gap-2">
+                <input type="checkbox" checked={mostrarArquivados} onChange={(e) => setMostrarArquivados(e.target.checked)} /> Mostrar arquivados ({arquivados})
+              </label>
+            )}
+          </div>
+          {visao === 'kanban' ? (
+            <>
+              <LayoutGroup>
+                <motion.div
+                  ref={trilho}
+                  layoutScroll
+                  className={cn('rolagem-kanban -mx-4 flex gap-4 overflow-x-auto px-4 pb-4 lg:-mx-8 lg:px-8', segurado ? 'snap-none' : 'snap-x snap-mandatory sm:snap-none')}
+                >
+                  {colunas.map((etapa) => {
+                    const itens = lista.filter((p) => etapaDe(p) === etapa)
+                    const total = itens.reduce((a, p) => a + (p.valor_estimado ?? 0), 0)
+                    const cor = HEX_ETAPA[etapa]
+                    const ativa = sobre === etapa
+                    return (
+                      <div
+                        key={etapa}
+                        data-etapa={etapa}
+                        onDragOver={(e) => {
+                          e.preventDefault()
+                          setSobre(etapa)
+                        }}
+                        onDragLeave={(e) => {
+                          if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setSobre(null)
+                        }}
+                        onDrop={soltar(etapa)}
+                        style={{
+                          borderColor: ativa ? cor : `${cor}40`,
+                          backgroundImage: `linear-gradient(to bottom, ${cor}${ativa ? '2e' : '17'}, ${cor}05 45%, transparent)`,
+                          boxShadow: ativa ? `0 0 0 3px ${cor}33, 0 12px 32px -12px ${cor}66` : undefined,
+                        }}
+                        className={cn(
+                          'relative flex min-h-[calc(100dvh-20rem)] w-[85vw] max-w-[22rem] shrink-0 snap-center flex-col overflow-hidden rounded-2xl border bg-muted/30 p-3 pt-4 transition-all duration-200 sm:w-80 xl:w-[22rem]',
+                          ativa && 'scale-[1.01]',
+                        )}
+                      >
+                        <span className="absolute inset-x-0 top-0 h-1" style={{ backgroundColor: cor }} />
+                        <div className="mb-1 flex items-center justify-between border-b px-1 pb-3" style={{ borderColor: `${cor}33` }}>
+                          <div className="flex items-center gap-2 text-base font-semibold">
+                            <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: cor, boxShadow: `0 0 8px ${cor}` }} />
+                            {ETAPAS[etapa]}
+                            <span className="rounded-full px-2 text-xs tabular-nums" style={{ backgroundColor: `${cor}26`, color: cor }}>
+                              {itens.length}
+                            </span>
+                          </div>
+                          {total > 0 && <span className="text-[11px] tabular-nums text-muted-foreground">{formatarMoeda(total)}</span>}
+                        </div>
+                        <div className="flex flex-1 flex-col gap-3 pt-2">
+                          <AnimatePresence initial={false} mode="popLayout">
+                            {itens.map((p) => (
+                              <motion.div
+                                key={p.id}
+                                layout
+                                layoutId={`processo-${p.id}`}
+                                initial={{ opacity: 0, scale: 0.9 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                exit={{ opacity: 0, scale: 0.9 }}
+                                transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+                              >
+                                <CartaoProcesso
+                                  p={p}
+                                  cor={cor}
+                                  arrastavel={podeEditar}
+                                  nomeEmpresa={mostrarEmpresa ? nomeEmpresa(p.empresa_id) : undefined}
+                                  monitorVisivel={estadoMonitor === 'liberado'}
+                                  fantasma={idSegurado === p.id}
+                                  menu={menuDe(p)}
+                                  aoSegurar={setSegurado}
+                                  cliqueBloqueado={() => Date.now() - fimDoArraste.current < 500}
+                                />
+                              </motion.div>
+                            ))}
+                          </AnimatePresence>
+                          {itens.length === 0 && (
+                            <div
+                              className="flex flex-1 items-center justify-center rounded-xl border-2 border-dashed p-4 text-center text-xs text-muted-foreground transition-colors"
+                              style={{ borderColor: ativa ? cor : `${cor}30`, color: ativa ? cor : undefined }}
+                            >
+                              {ativa ? 'Solte aqui' : 'Nenhum processo nesta etapa'}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </motion.div>
+              </LayoutGroup>
+              <p className="text-xs text-muted-foreground">
+                Dica: arraste os cartões entre as colunas para mudar a etapa. No celular, segure o cartão um instante e arraste.
+              </p>
+              {segurado &&
+                createPortal(
+                  <div ref={fantasmaRef} className="pointer-events-none fixed left-0 top-0 z-[60]" style={{ width: segurado.largura }}>
+                    <motion.div
+                      initial={{ scale: 1, rotate: 0 }}
+                      animate={{ scale: 1.05, rotate: 3 }}
+                      transition={{ type: 'spring', stiffness: 500, damping: 28 }}
+                      style={{ borderLeftColor: segurado.cor }}
+                      className="rounded-lg border border-l-4 bg-card p-3 shadow-2xl ring-2 ring-primary/30"
+                    >
+                      <ConteudoCartao p={segurado.p} monitorVisivel={estadoMonitor === 'liberado'} />
+                    </motion.div>
+                  </div>,
+                  document.body,
+                )}
+            </>
+          ) : (
+            <Card className="divide-y">
+              {lista.map((p) => (
+                <div key={p.id} className="relative">
+                  <Link to={`/app/processos/${p.id}`} className={cn('flex flex-col gap-2 p-4 pr-12 hover:bg-muted/40 sm:flex-row sm:items-center', p.arquivado_em && 'opacity-70')}>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs text-muted-foreground">
+                        {MODALIDADES[p.modalidade]}
+                        {p.numero ? ` · ${p.numero}` : ''}
+                        {p.orgao_nome ? ` · ${p.orgao_nome}` : ''}
+                        {mostrarEmpresa ? ` · ${nomeEmpresa(p.empresa_id)}` : ''}
+                      </div>
+                      <div className="truncate font-medium">{p.objeto}</div>
+                    </div>
+                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                      {p.data_abertura && <span>{formatarDataHora(p.data_abertura)}</span>}
+                      {p.valor_estimado != null && <span className="tabular-nums">{formatarMoeda(p.valor_estimado)}</span>}
+                      {estadoMonitor === 'liberado' && vigiado(p) && <Radar className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" aria-label="Monitorado pela Sentinela" />}
+                      {p.arquivado_em && <Badge>Arquivado</Badge>}
+                      <BadgeEtapa etapa={p.etapa} />
+                    </div>
+                  </Link>
+                  {menuDe(p)}
                 </div>
-                <div className="truncate font-medium">{p.objeto}</div>
-              </div>
-              <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                {p.data_abertura && <span>{formatarDataHora(p.data_abertura)}</span>}
-                {p.valor_estimado != null && <span className="tabular-nums">{formatarMoeda(p.valor_estimado)}</span>}
-                <BadgeEtapa etapa={p.etapa} />
-              </div>
-            </Link>
-          ))}
-          {lista.length === 0 && <div className="p-8 text-center text-sm text-muted-foreground">Nenhum processo encontrado com esses filtros.</div>}
-        </Card>
+              ))}
+              {lista.length === 0 && <div className="p-8 text-center text-sm text-muted-foreground">Nenhum processo encontrado com esses filtros.</div>}
+            </Card>
+          )}
+        </>
       )}
 
       <Modal aberto={novo} aoFechar={() => setNovo(false)} titulo="Novo processo">

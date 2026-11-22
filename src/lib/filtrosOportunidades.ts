@@ -71,3 +71,38 @@ export async function consultarItens(c: CompraPNCP, signal?: AbortSignal): Promi
   }
   throw new Error('O edital excede o limite de verificação de itens. Consulte seu detalhamento original.')
 }
+
+/**
+ * Filtros aplicados numa busca, em rótulos curtos para mostrar acima da contagem de resultados.
+ * `modalidadesPossiveis` é quantas modalidades o cliente pode usar (todas marcadas = não mostra).
+ */
+export function resumoFiltros(f: FiltrosOportunidades, modalidadesPossiveis: number, portaisPossiveis: number): string[] {
+  const r: string[] = []
+  const data = (iso: string) => iso.split('-').reverse().join('/')
+  const moeda = (v: string) => Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })
+  const faixa = (min: string, max: string) => min && max ? `${moeda(min)} a ${moeda(max)}` : min ? `a partir de ${moeda(min)}` : `até ${moeda(max)}`
+  if (f.busca.trim()) r.push(`Busca: ${f.busca.trim()}`)
+  r.push(f.uf ? `UF: ${f.uf}` : 'Brasil inteiro')
+  if (f.situacao === 'publicacoes') {
+    if (f.inicio || f.fim) r.push(`Publicação: ${f.inicio ? data(f.inicio) : '…'} a ${f.fim ? data(f.fim) : '…'}`)
+  } else if (f.aberturaDe || f.aberturaAte) {
+    r.push(f.aberturaDe === f.aberturaAte ? `Abertura em ${data(f.aberturaDe)}` : `Abertura: ${f.aberturaDe ? data(f.aberturaDe) : '…'} a ${f.aberturaAte ? data(f.aberturaAte) : '…'}`)
+  } else r.push('Abertura: todo o período')
+  if (f.diasUteis) r.push('Só dias úteis')
+  if (f.modalidades.length && f.modalidades.length < modalidadesPossiveis) {
+    const nomes = f.modalidades.map((m) => MODALIDADES.find((x) => x[0] === m)?.[1] ?? m)
+    r.push(nomes.length <= 2 ? nomes.join(' e ') : `${nomes.length} modalidades`)
+  }
+  if (f.portais.length && f.portais.length < portaisPossiveis) r.push(f.portais.length === 1 ? '1 portal' : `${f.portais.length} portais`)
+  if (f.orgao) r.push(`Órgão: ${f.orgao}`)
+  if (f.minimo || f.maximo) r.push(`Valor do edital ${faixa(f.minimo, f.maximo)}`)
+  if (f.itemMinimo || f.itemMaximo) r.push(`Valor do item ${faixa(f.itemMinimo, f.itemMaximo)}`)
+  if (f.maxItens) r.push(`Até ${f.maxItens} ${f.maxItens === '1' ? 'item' : 'itens'}`)
+  if (f.tipoItem) r.push(TIPOS_ITEM.find((t) => t[0] === f.tipoItem)?.[1] ?? f.tipoItem)
+  if (f.modosDisputa.length) r.push(`Disputa: ${f.modosDisputa.map((m) => MODOS_DISPUTA.find((x) => x[0] === m)?.[1] ?? m).join(', ')}`)
+  if (f.naoDivulgado) r.push('Valor não divulgado')
+  if (f.exclusivo) r.push('Item exclusivo ME/EPP')
+  if (f.excluirSrp) r.push('Sem registro de preços')
+  if (f.excluir.trim()) r.push(`Sem: ${f.excluir.trim()}`)
+  return r
+}
