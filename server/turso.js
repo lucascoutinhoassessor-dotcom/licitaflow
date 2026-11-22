@@ -182,14 +182,14 @@ export function pncpComLimite(fetcher, maximo = 20, intervaloMs = 300) {
 }
 
 /**
- * Uma rodada (até ~40 s e no máximo 20 consultas ao PNCP):
+ * Uma rodada (até ~40 s e no máximo 30 consultas ao PNCP, espaçadas):
  * 1. carga completa dos editais com proposta aberta, uma vez por dia, continuando de onde parou (é ela que libera a busca);
  * 2. editais atualizados hoje, 3 modalidades por rodada em rodízio (a última página fica aberta para pegar o que entrou depois);
  * 3. itens dos editais que abrem em até 30 dias, os mais próximos primeiro;
  * 4. limpeza dos encerrados há mais de 2 dias.
  * Uma falha do PNCP numa etapa não derruba as outras; um 429 pausa a coleta por 3 minutos.
  */
-export async function coletarRodada(turso, { prazo = Date.now() + 40_000, fetcher = fetch, hoje = new Date(), maxConsultas = 20, intervaloMs = 300 } = {}) {
+export async function coletarRodada(turso, { prazo = Date.now() + 40_000, fetcher = fetch, hoje = new Date(), maxConsultas = 30, intervaloMs = 300 } = {}) {
   let estadoLinhas
   try { estadoLinhas = await turso.consultar('select chave, valor from coleta_estado') } catch { estadoLinhas = [] }
   let estado = Object.fromEntries(estadoLinhas.map((l) => [l.chave, l.valor]))
@@ -327,7 +327,7 @@ export function montarFiltros(f, agora = agoraIso()) {
       onde.push(`exists (select 1 from itens i where ${cond.join(' and ')})`)
     }
   }
-  return { onde, args, base, porItem, inverter: f.inverter === true }
+  return { onde, args, base, porItem, comTermo: !!q, inverter: f.inverter === true }
 }
 
 /** Situação da base para a tela (mesmo formato do status do catálogo do Postgres). */
@@ -345,7 +345,7 @@ export async function situacaoTurso(turso) {
 /** Busca no Turso no formato de resposta do buscar_oportunidades (ResultadoIndice). */
 export async function buscarTurso(turso, filtros, pagina = 1, tamanho = 20) {
   if (!Number.isInteger(pagina) || pagina < 1 || pagina > 100000) throw new FiltroInvalido('Filtros inválidos')
-  const { onde, args, base, porItem, inverter } = montarFiltros(filtros ?? {})
+  const { onde, args, base, porItem, comTermo, inverter } = montarFiltros(filtros ?? {})
   const ordem = inverter ? 'e.encerramento desc, e.controle' : 'e.encerramento asc, e.controle'
   const comandos = [
     [`select e.compra, e.modo_disputa, e.tipo_itens, e.tipo_objeto from editais e where ${onde.join(' and ')} order by ${ordem} limit ? offset ?`, [...args, tamanho, (pagina - 1) * tamanho]],
@@ -354,8 +354,11 @@ export async function buscarTurso(turso, filtros, pagina = 1, tamanho = 20) {
     ['select chave, valor from coleta_estado'],
     ['select count(*) as n from editais'],
   ]
+  // Cobertura dos itens nos editais que abrem em até 30 dias (a palavra-chave também procura nos itens).
+  const agora = agoraIso(), ate30 = new Date(Date.now() + 30 * 86400_000).toISOString()
+  comandos.push(['select count(*) as total, sum(itens_completos) as com from editais where encerramento >= ? and encerramento <= ?', [agora, ate30]])
   if (porItem) comandos.push([`select count(*) as n from editais e where ${base.onde.join(' and ')} and e.itens_completos = 0`, base.args])
-  const [paginaLinhas, [total], orgaos, estado, [indexados], pendentes] = await turso.lote(comandos)
+  const [paginaLinhas, [total], orgaos, estado, [indexados], [cobertura], pendentes] = await turso.lote(comandos)
   const e = Object.fromEntries(estado.map((l) => [l.chave, l.valor]))
   const n = total?.n ?? 0
   return {
@@ -370,5 +373,6 @@ export async function buscarTurso(turso, filtros, pagina = 1, tamanho = 20) {
       pausado_ate: e.pausado_ate ?? null, aviso: null, fonte: 'turso',
     },
     detalhesPendentes: porItem ? (pendentes?.[0]?.n ?? 0) : 0,
+    coberturaItens: cobertura?.total ? (cobertura.com ?? 0) / cobertura.total : 0, comTermo,
   }
 }
