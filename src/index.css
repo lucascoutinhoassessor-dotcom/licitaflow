@@ -241,3 +241,16 @@
 @media (prefers-reduced-motion: reduce) {
   .lf-ia, .lf-ia-icone, .lf-ia-icone > span, .lf-ia-texto { animation: none; }
 }
+
+/* Ícone grande das telas de login (AuthShell): brilho que respira e anel que pulsa em volta. */
+.lf-icone-destaque { position: relative; display: inline-flex; border-radius: 15px; animation: lf-destaque-brilho 2.8s ease-in-out .6s infinite; }
+.lf-icone-destaque::before {
+  content: ''; position: absolute; inset: 0; border-radius: inherit; border: 2px solid rgba(59, 130, 246, .6);
+  opacity: 0; animation: lf-destaque-anel 2.8s cubic-bezier(.2, .7, .3, 1) .8s infinite;
+}
+@keyframes lf-destaque-brilho {
+  0%, 100% { box-shadow: 0 8px 24px -8px rgba(37, 99, 235, .5); }
+  50% { box-shadow: 0 10px 34px -6px rgba(16, 185, 129, .55); }
+}
+@keyframes lf-destaque-anel { 0% { opacity: .9; transform: scale(1); } 100% { opacity: 0; transform: scale(1.45); } }
+@media (prefers-reduced-motion: reduce) { .lf-icone-destaque, .lf-icone-destaque::before { animation: none; } }
