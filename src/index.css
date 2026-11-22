@@ -109,6 +109,24 @@
     @apply border-border;
   }
 
+  /* Barras de rolagem do app inteiro: finas, na cor do tema e sem trilho claro.
+     color-scheme faz o navegador desenhar os controles nativos (canto de redimensionar, setas) no tema certo. */
+  :root { color-scheme: light; }
+  .dark { color-scheme: dark; }
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--muted-foreground) / 0.28) transparent;
+  }
+  *:hover {
+    scrollbar-color: hsl(var(--muted-foreground) / 0.5) transparent;
+  }
+  /* Navegadores sem scrollbar-color (Safari): mesmo visual pelo ::-webkit-scrollbar. */
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: hsl(var(--muted-foreground) / 0.28); border-radius: 9999px; border: 3px solid transparent; background-clip: padding-box; }
+  ::-webkit-scrollbar-thumb:hover { background: hsl(var(--muted-foreground) / 0.5); background-clip: padding-box; }
+  ::-webkit-scrollbar-button { display: none; height: 0; width: 0; }
+
   html,
   body,
   #root {
