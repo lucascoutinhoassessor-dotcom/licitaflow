@@ -165,10 +165,27 @@ try {
 blocked = false;
 try { await as(U2, `select public.admin_salvar_site('{"titulo":"Teste","botao":"Entrar","html":"<script>"}'::jsonb,2,true)`); } catch { blocked = true; }
 expect(blocked, 'servidor rejeita campos fora do contrato de conteúdo');
+const landing2 = (extra = {}) => JSON.stringify({ versao_schema: 2, seo: {}, tema: {}, marca: {}, menu: {}, rodape: { contato: '' }, secoes: [{ tipo: 'livre', titulo: 'Página nova' }], ...extra }).replace(/'/g, "''");
+for (const [rotulo, extra] of [
+  ['link javascript:', { secoes: [{ tipo: 'livre', botao: { texto: 'x', link: 'javascript:alert(1)' } }] }],
+  ['tag de script', { secoes: [{ tipo: 'livre', texto: '<script>alert(1)</script>' }] }],
+  ['campo extra no topo', { html: '<b>' }],
+  ['sem seções', { secoes: [] }],
+  ['contato que não é e-mail', { rodape: { contato: 'javascript:x' } }],
+]) {
+  blocked = false;
+  try { await as(U2, `select public.admin_salvar_site('${landing2(extra)}'::jsonb,2,true)`); } catch { blocked = true; }
+  expect(blocked, `landing completa rejeita ${rotulo}`);
+}
+blocked = false;
+try { await as(U1, `select public.admin_salvar_site('${landing2()}'::jsonb,2,true)`); } catch { blocked = true; }
+expect(blocked, 'cliente comum não publica a landing completa');
+await as(U2, `select public.admin_salvar_site('${landing2()}'::jsonb,2,true)`);
+expect((await as(U1, `select public.site_publico() r`)).rows[0].r.secoes[0].titulo === 'Página nova', 'landing completa (formato 2) é publicada');
 blocked = false;
 try { await as(U2, `delete from public.admin_audit`); } catch { blocked = true; }
 expect((await as(U2, `select * from public.admin_audit`)).rows.length > 0, 'master não apaga histórico pela API');
-expect((await as(U2, `select * from public.site_content_history`)).rows.length === 2, 'histórico guarda rascunho e publicação');
+expect((await as(U2, `select * from public.site_content_history`)).rows.length === 3, 'histórico guarda rascunho e publicações');
 
 await as(U2, `select public.admin_atualizar_org('${o1}', 'profissional', current_date, false, null, 'Nota confidencial de atendimento')`);
 expect((await as(U1, `select notas_admin from public.organizations where id='${o1}'`)).rows[0].notas_admin === null, 'notas internas não vazam pela organização do cliente');
