@@ -5,12 +5,14 @@ import { InstalarApp } from '@/components/InstalarApp'
 import { pagamentoAPI, NOMES_GATEWAY } from '@/lib/pagamentos'
 import { AsaasConfig } from '@/components/AsaasConfig'
 import { EmailConfig } from '@/components/EmailConfig'
+import TursoStatus from '@/components/TursoStatus'
 
 export default function Integracoes() {
   const q=useQuery({queryKey:['gateways-config'],queryFn:()=>pagamentoAPI({acao:'configuracao'}),retry:false})
   return <><CabecalhoPagina titulo="Integrações e aplicativo" descricao="Gateway de assinaturas, links avulsos, coletor de editais e aplicativo. Credenciais ficam só no servidor."/>
     <div className="mb-6"><AsaasConfig/></div>
     <div className="mb-6"><EmailConfig/></div>
+    <TursoStatus/>
     <h2 className="mb-3 font-semibold">Links de cobrança avulsa</h2>
     {q.isLoading && <Carregando/>}{q.isError && <Aviso>{q.error.message} <button className="underline" onClick={()=>q.refetch()}>Consultar novamente</button></Aviso>}
     <div className="grid gap-4 sm:grid-cols-2">{q.data?.gateways.map((g:{id:string;credenciais:boolean;habilitado:boolean;configurado:boolean})=><Card key={g.id} className="space-y-3 p-5"><h2 className="font-semibold">{NOMES_GATEWAY[g.id]}</h2><Badge cor={g.credenciais && g.habilitado && g.configurado?'verde':'amarelo'}>{g.credenciais && g.habilitado && g.configurado?'Configuração disponível':'Ativação pendente'}</Badge><ul className="space-y-1 text-sm text-muted-foreground"><li>Credenciais: {g.credenciais?'Presentes':'Ausentes'}</li><li>Gateway: {g.habilitado?'Habilitado':'Desabilitado'}</li><li>Servidor: {g.configurado?'Configurado':'Configuração pendente'}</li></ul><p className="text-xs text-muted-foreground">A presença das variáveis não comprova autorização da conta. Valide uma transação no ambiente de teste antes de habilitar cobranças reais.</p></Card>)}</div>

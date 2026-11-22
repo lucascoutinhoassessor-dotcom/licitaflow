@@ -1,8 +1,25 @@
 import type { ItemCompra } from './filtrosOportunidades'
 import { formatarMoeda } from './format'
+// "LOTE 01 - ...", "Grupo nº 2:", "LOTE: 3" no começo da descrição ou na informação complementar.
+const MARCA_GRUPO = {
+  lote: /(?:^|[\s([-])LOTE\s*(?:N[º°O.]*\s*)?[:\-–]?\s*0*(\d{1,3})(?![\d,.]\d)/i,
+  grupo: /(?:^|[\s([-])GRUPO\s*(?:N[º°O.]*\s*)?[:\-–]?\s*0*(\d{1,3})(?![\d,.]\d)/i,
+}
+/** Número do lote/grupo escrito no item (só no começo da descrição, para não pegar "lote de fabricação 123"). */
+export function grupoNoTexto(item: Pick<ItemCompra, 'descricao' | 'informacaoComplementar'>, por: 'grupo'|'lote') {
+  const re = MARCA_GRUPO[por]
+  return re.exec((item.descricao ?? '').slice(0, 40))?.[1] ?? re.exec(item.informacaoComplementar ?? '')?.[1] ?? null
+}
 export function identificacaoGrupo(item: ItemCompra, por: 'grupo'|'lote') {
   const valor=por==='grupo' ? item.numeroGrupo??item.grupo : item.numeroLote??item.lote
-  return (typeof valor==='number' && Number.isFinite(valor)) || (typeof valor==='string' && valor.trim()) ? String(valor).trim() : null
+  // O Compras.gov usa 0 para "sem grupo".
+  if ((typeof valor==='number' && Number.isFinite(valor) && valor>0) || (typeof valor==='string' && valor.trim() && valor.trim()!=='0')) return String(valor).trim()
+  return grupoNoTexto(item, por)
+}
+/** Junta o número do grupo do Compras.gov (por número do item) aos itens do PNCP. */
+export function comGrupos(itens: ItemCompra[], grupos: Record<string, number> | null | undefined) {
+  if (!grupos || !Object.keys(grupos).length) return itens
+  return itens.map((i) => (grupos[i.numeroItem] ? { ...i, numeroGrupo: grupos[i.numeroItem] } : i))
 }
 export function agruparItens(itens: ItemCompra[], por: 'grupo'|'lote') {
   const grupos=new Map<string,ItemCompra[]>()

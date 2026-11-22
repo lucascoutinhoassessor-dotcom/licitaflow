@@ -1,10 +1,10 @@
 import {configuracao,criarCheckout,consultarPagamento} from '../server/gateways.js'
 import {asaas,cifrar,corpoAssinatura,ErroAsaas,hojeSP,montarConfig} from '../server/asaas.js'
-import {emailTeste,enviarEmail,montarSmtp} from '../server/email.js'
+import {emailCupomAcesso,emailTeste,enviarEmail,montarSmtp} from '../server/email.js'
 
 const UUID=/^[0-9a-f-]{36}$/i
 // Ações que dono/administrador da organização pode pedir; o restante é exclusivo do master.
-const ACOES_CLIENTE=['assinar','trocar_plano','cancelar_assinatura']
+const ACOES_CLIENTE=['assinar','trocar_plano','cancelar_assinatura','conferir_cupom','resgatar_cupom']
 
 export default async function handler(req,res) {
   res.setHeader('Cache-Control','no-store')
@@ -94,14 +94,49 @@ export default async function handler(req,res) {
       return res.json({ok:true,para})
     }
 
+    // ------------------------------------------------------------------ Cupons
+    if(body.acao==='conferir_cupom') {
+      if(!UUID.test(body.org ?? '')) return res.status(400).json({error:'Organização inválida'})
+      try { return res.json(await rpc('conferir_cupom',{p_codigo:String(body.codigo ?? ''),p_org:body.org,p_plano:body.plano?String(body.plano):null})) }
+      catch(e) { return res.status(400).json({error:e.message}) }
+    }
+    if(body.acao==='resgatar_cupom') {
+      if(!UUID.test(body.org ?? '')) return res.status(400).json({error:'Organização inválida'})
+      let r
+      try { r=await rpc('resgatar_cupom_dias',{p_codigo:String(body.codigo ?? ''),p_org:body.org}) }
+      catch(e) { return res.status(400).json({error:e.message}) }
+      // Confirma o acesso no e-mail cadastrado. Sem SMTP configurado, o cupom vale do mesmo jeito.
+      let emailEnviado=false
+      try {
+        const [[linha],eu]=await Promise.all([sv('/rest/v1/plataforma_email?select=*&id=eq.smtp'),banco('/auth/v1/user')])
+        const cfg=montarSmtp(linha,env)
+        if(cfg?.ativo && eu?.email) {
+          await enviarEmail(cfg,{para:eu.email,...emailCupomAcesso({nome:eu.user_metadata?.nome,email:eu.email,organizacao:r.organizacao,codigo:r.codigo,dias:r.valor,ate:r.ate})})
+          emailEnviado=true
+        }
+      } catch { /* e-mail é complemento */ }
+      return res.json({...r,emailEnviado})
+    }
+
     // ------------------------------------------------------------------ Assinaturas recorrentes
     if(body.acao==='assinar') {
       if(!UUID.test(body.org ?? '')) return res.status(400).json({error:'Organização inválida'})
       const {cfg}=await carregarAsaas()
       if(!cfg?.ativo) return res.status(503).json({error:'Pagamentos ainda não ativados pela plataforma. Fale com o atendimento.'})
+      // Cupom de desconto: confere antes de preparar o pedido (código errado não deixa pedido pela metade).
+      let cupom=null
+      if(String(body.cupom ?? '').trim()) {
+        try { cupom=await rpc('conferir_cupom',{p_codigo:String(body.cupom),p_org:body.org,p_plano:String(body.plano ?? '')}) }
+        catch(e) { return res.status(400).json({error:e.message}) }
+        if(cupom.tipo==='dias') return res.status(400).json({error:'Este cupom é de dias de acesso: use-o em “Tenho um cupom”.'})
+      }
       const id=await rpc('preparar_assinatura',{p_org:body.org,p_plano:String(body.plano ?? ''),p_ciclo:String(body.ciclo ?? ''),p_forma:String(body.forma ?? 'UNDEFINED'),p_documento:String(body.documento ?? '')})
-      const [a]=await patchSv(`/rest/v1/assinaturas?id=eq.${id}&reservado_em=is.null`,{reservado_em:new Date().toISOString()})
+      let [a]=await patchSv(`/rest/v1/assinaturas?id=eq.${id}&reservado_em=is.null`,{reservado_em:new Date().toISOString()})
       if(!a) return res.status(409).json({error:'Pedido em processamento em outra sessão'})
+      if(cupom) {
+        const desconto=cupom.tipo==='percentual'?Math.round(a.valor_centavos*cupom.valor/100):cupom.valor
+        ;[a]=await patchSv(`/rest/v1/assinaturas?id=eq.${a.id}`,{valor_centavos:Math.max(100,a.valor_centavos-desconto)})
+      }
       let criada=null
       try {
         const [[org],[plano],anteriores,usuario]=await Promise.all([
@@ -120,7 +155,8 @@ export default async function handler(req,res) {
         const primeiro=(pagamentos.data ?? []).sort((x,y)=>String(x.dueDate).localeCompare(String(y.dueDate)))[0]
         await patchSv(`/rest/v1/assinaturas?id=eq.${a.id}`,{gateway_cliente_id:cliente,gateway_assinatura_id:criada.id,proximo_vencimento:criada.nextDueDate ?? hojeSP(),link_pagamento:primeiro?.invoiceUrl?.startsWith('https://')?primeiro.invoiceUrl:null,erro:null})
         for(const p of pagamentos.data ?? []) await rpc('processar_pagamento_asaas',{p_evento:'SYNC',p_pagamento:p},true)
-        return res.json({id:a.id,url:primeiro?.invoiceUrl ?? null})
+        if(cupom) await rpc('registrar_cupom_desconto',{p_codigo:cupom.codigo,p_org:a.org_id,p_usuario:usuario?.id ?? null,p_assinatura:a.id},true).catch(()=>{})
+        return res.json({id:a.id,url:primeiro?.invoiceUrl ?? null,valor_centavos:a.valor_centavos})
       } catch(e) {
         // Sem assinatura criada no Asaas, o pedido é descartado e pode ser refeito; com assinatura criada fica para revisão.
         await patchSv(`/rest/v1/assinaturas?id=eq.${a.id}`,criada?{gateway_assinatura_id:criada.id,erro:String(e.message).slice(0,300)}:{status:'cancelada',cancelada_em:new Date().toISOString(),motivo_cancelamento:'Falha ao criar no gateway',erro:String(e.message).slice(0,300)}).catch(()=>{})

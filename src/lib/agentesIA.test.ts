@@ -13,6 +13,7 @@ describe('limites dos agentes de IA', () => {
     expect(textoLimite(10)).toBe('10 por mês')
     expect(textoLimite(null)).toBe('Sem limite')
     expect(textoLimite(0)).toBe('Não incluído')
+    expect(textoLimite(20, 'simultaneo')).toBe('20 ao mesmo tempo')
     expect(lerLimite('')).toBeNull()
     expect(lerLimite(' 15 ')).toBe(15)
     expect(lerLimite('0')).toBe(0)

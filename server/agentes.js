@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { jsonSchemaOutputFormat } from '@anthropic-ai/sdk/helpers/json-schema'
 import { excedeuLimite } from './protecao.js'
+import { rodadaSentinela } from './sentinela.js'
 // Agentes de IA (Claude API). Uma rota só para todos os agentes, por causa do limite de funções da Vercel.
 //
 // Leitor de editais (?agente=leitor):
@@ -10,11 +11,26 @@ import { excedeuLimite } from './protecao.js'
 // A leitura de um edital público é a mesma para todos: fica guardada e é reaproveitada sem novo custo.
 // Exige o módulo "agentes" liberado para a organização (painel master → Funcionalidades).
 // O limite mensal de cada agente vem do plano, ou da exceção do cliente (master → Planos / ficha do cliente).
+//
+// Sentinela (?agente=sentinela&acao=verificar, header x-coleta): rodada do pg_cron que vigia os editais
+// dos processos no PNCP (server/sentinela.js). Não usa IA.
 
 const PNCP = 'https://pncp.gov.br/api/pncp/v1/orgaos'
 const CONSULTA = 'https://pncp.gov.br/api/consulta/v1/orgaos'
-export const MODELO = 'claude-opus-5-5'
-const PRECO = { entrada: 4 / 1e6, saida: 20 / 1e6 } // US$ por token (Claude Opus 5.5)
+
+/**
+ * Modelo de IA de cada agente (decisão de 21/11/2026): Opus onde a precisão pesa (leitura de edital e peças
+ * jurídicas); Haiku nas tarefas curtas e repetitivas (nota de aderência do Radar, casamento de itens do Cotador).
+ * A Sentinela não usa IA. Preços em US$ por milhão de tokens (Haiku: até 100 mil tokens por pedido).
+ */
+export const MODELOS = {
+  'leitor-editais': { modelo: 'claude-opus-5-5', entrada: 4, saida: 20 },
+  juridico: { modelo: 'claude-opus-5-5', entrada: 4, saida: 20 },
+  radar: { modelo: 'claude-haiku-5-5', entrada: 0.1, saida: 0.5 },
+  cotador: { modelo: 'claude-haiku-5-5', entrada: 0.1, saida: 0.5 },
+}
+export const MODELO = MODELOS['leitor-editais'].modelo
+const PRECO = { entrada: MODELOS['leitor-editais'].entrada / 1e6, saida: MODELOS['leitor-editais'].saida / 1e6 } // US$ por token
 export const AGENTE_LEITOR = 'leitor-editais'
 const MAX_DOCS = 6
 const MAX_BYTES = 20 * 1024 * 1024
@@ -213,7 +229,7 @@ export async function lerEdital(controle, { fetcher = fetch, cliente } = {}) {
 }
 
 
-export function criarHandler({ fetcher = fetch, cliente } = {}) {
+export function criarHandler({ fetcher = fetch, cliente, webpush } = {}) {
   return async function handler(req, res) {
     res.setHeader('Cache-Control', 'no-store')
     if (req.method !== 'GET' && req.method !== 'POST') return res.status(405).json({ error: 'Método não permitido' })
@@ -223,8 +239,27 @@ export function criarHandler({ fetcher = fetch, cliente } = {}) {
     const servico = env.SUPABASE_SERVICE_ROLE_KEY
     const token = req.headers.authorization
     if (!base || !anon || !servico) return res.status(503).json({ error: 'Configuração Supabase ausente no servidor' })
-    if (!/^Bearer \S+$/.test(token ?? '')) return res.status(401).json({ error: 'Entre na sua conta' })
     const q = req.query ?? {}
+
+    // Sentinela: rodada chamada pelo pg_cron (sem login; o token x-coleta é conferido pelo banco).
+    if (q.agente === 'sentinela' && q.acao === 'verificar') {
+      const coleta = String(req.headers['x-coleta'] ?? '')
+      if (!/^[0-9a-f]{32,128}$/.test(coleta)) return res.status(401).json({ error: 'Não autorizado' })
+      const chamar = async (caminho, opcoes = {}) => {
+        const r = await fetcher(`${base}${caminho}`, { ...opcoes, headers: { apikey: servico, Authorization: `Bearer ${servico}`, 'Content-Type': 'application/json', ...opcoes.headers }, signal: AbortSignal.timeout(20000) })
+        const j = await r.json().catch(() => null)
+        if (!r.ok) { const e = new Error(j?.message || 'Falha no banco'); e.status = /token/i.test(j?.message ?? '') ? 401 : 502; throw e }
+        return j
+      }
+      const rpc = (nome, corpo) => chamar(`/rest/v1/rpc/${nome}`, { method: 'POST', body: JSON.stringify(corpo) })
+      try {
+        return res.status(200).json(await rodadaSentinela({ token: coleta, rpc, chamar, fetcher, ...(webpush ? { webpush } : {}) }))
+      } catch (e) {
+        return res.status(e.status ?? 500).json({ error: e.status ? e.message : 'Falha na rodada da Sentinela' })
+      }
+    }
+
+    if (!/^Bearer \S+$/.test(token ?? '')) return res.status(401).json({ error: 'Entre na sua conta' })
     if (q.agente !== 'leitor') return res.status(400).json({ error: 'Agente inválido' })
     const org = String(q.org ?? '')
     const controle = String(q.controle ?? '').trim()

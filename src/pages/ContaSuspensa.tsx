@@ -3,6 +3,7 @@ import { Lock, Sparkles } from 'lucide-react'
 import { useAuth } from '@/providers/AuthProvider'
 import { useOrg } from '@/providers/OrgProvider'
 import { AssinaturaPainel } from '@/components/AssinaturaPainel'
+import ResgatarCupom from '@/components/ResgatarCupom'
 import { Button, Card, Logo, Select } from '@/components/ui'
 
 const TESTE_VENCIDO = 'Teste grátis encerrado (automático)'
@@ -53,6 +54,7 @@ export function ContaSuspensa() {
           </Button>
         </Card>
         {regularizar && <AssinaturaPainel org={org.id} />}
+        {regularizar && teste && <ResgatarCupom org={org.id} />}
       </div>
     </div>
   )

@@ -3,20 +3,27 @@
  * plataforma_planos.limites_ia. Para criar um agente novo, acrescente-o aqui: ele aparece nos planos,
  * na ficha do cliente, no consumo do master e em "Meu plano".
  */
-export interface AgenteIA { id: string; nome: string; unidade: string }
+/**
+ * tipo 'mensal': o limite é de usos novos por mês (renova no dia 1º).
+ * tipo 'simultaneo': o limite é de itens acompanhados ao mesmo tempo (ex.: processos vigiados pela Sentinela).
+ * O modelo de IA de cada agente fica no servidor (MODELOS em server/agentes.js).
+ */
+export interface AgenteIA { id: string; nome: string; unidade: string; tipo: 'mensal' | 'simultaneo' }
 export const AGENTES_IA: AgenteIA[] = [
-  { id: 'leitor-editais', nome: 'Leitor de editais', unidade: 'leituras' },
+  { id: 'leitor-editais', nome: 'Leitor de editais', unidade: 'leituras', tipo: 'mensal' },
+  { id: 'sentinela', nome: 'Sentinela', unidade: 'processos vigiados', tipo: 'simultaneo' },
 ]
 export const nomeAgente = (id: string) => AGENTES_IA.find((a) => a.id === id)?.nome ?? id
+export const agente = (id: string) => AGENTES_IA.find((a) => a.id === id)
 
-/** Limite efetivo de um agente: número por mês, null = sem limite, 0 = fora do plano. */
+/** Limite efetivo de um agente: número, null = sem limite, 0 = fora do plano. */
 export interface LimiteIA { limite: number | null; origem: 'plano' | 'cliente'; usadas?: number }
 
-/** Texto curto do limite: "10 por mês", "Sem limite" ou "Não incluído". */
-export function textoLimite(limite: number | null | undefined) {
+/** Texto curto do limite: "10 por mês", "20 ao mesmo tempo", "Sem limite" ou "Não incluído". */
+export function textoLimite(limite: number | null | undefined, tipo: AgenteIA['tipo'] = 'mensal') {
   if (limite === null) return 'Sem limite'
   if (!limite) return 'Não incluído'
-  return `${limite} por mês`
+  return tipo === 'simultaneo' ? `${limite} ao mesmo tempo` : `${limite} por mês`
 }
 
 /** Limite do plano para o agente (chave ausente = 0). */

@@ -86,7 +86,7 @@ function CartaoDeserta({c}:{c:CompraDeserta}) {
     <ul className="mt-3 divide-y rounded-lg border text-sm">
       {itens.map(i=><li key={i.numeroItem} className="flex flex-col gap-1 p-2.5 sm:flex-row sm:items-start sm:gap-3">
         <span className={`w-fit shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${i.situacao===4?'bg-amber-500/15 text-amber-800 dark:text-amber-200':'bg-red-500/15 text-red-700 dark:text-red-300'}`}>Item {i.numeroItem} · {nomeSituacao(i.situacao)}</span>
-        <span className="min-w-0 flex-1 break-words">{i.descricao||'Sem descrição'}</span>
+        <span title={i.descricao||undefined} className="line-clamp-3 min-w-0 flex-1 break-words sm:line-clamp-none">{i.descricao||'Sem descrição'}</span>
         <span className="shrink-0 text-xs text-muted-foreground">{i.quantidade!=null&&`${i.quantidade.toLocaleString('pt-BR')} ${i.unidadeMedida??''}`}{i.orcamentoSigiloso?' · valor sigiloso':i.valorUnitarioEstimado?` · ${formatarMoeda(i.valorUnitarioEstimado)} un.`:''}{i.tipoBeneficio===1?' · exclusivo ME/EPP':''}</span>
       </li>)}
     </ul>

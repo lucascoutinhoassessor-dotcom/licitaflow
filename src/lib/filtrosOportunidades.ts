@@ -30,7 +30,7 @@ export interface ItemCompra {
   valorUnitarioEstimado: number | null; valorTotal?: number | null; orcamentoSigiloso?: boolean
   tipoBeneficio?: number; tipoBeneficioNome?: string; criterioJulgamentoNome?: string; situacaoCompraItemNome?: string
   numeroGrupo?: string | number; numeroLote?: string | number; grupo?: string | number; lote?: string | number
-  materialOuServico?: string; materialOuServicoNome?: string
+  materialOuServico?: string; materialOuServicoNome?: string; informacaoComplementar?: string | null; temResultado?: boolean
 }
 /** Períodos rápidos de abertura: quantidade de dias a partir de hoje (null = todo o período). */
 export const PERIODOS_ABERTURA = [[7,'7 dias'],[15,'15 dias'],[30,'30 dias'],[null,'Todo o período']] as const
@@ -39,6 +39,13 @@ export function periodoAbertura(dias: number | null, hoje = new Date()) {
   const fim = new Date(hoje); fim.setDate(fim.getDate() + dias)
   const iso = (d: Date) => d.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
   return { aberturaDe: iso(hoje), aberturaAte: iso(fim) }
+}
+/** Atalhos de "Próximas disputas": dia inicial e final contados a partir de hoje (0 = hoje). */
+export const PROXIMAS_DISPUTAS = [[0,0,'Hoje'],[1,1,'Amanhã'],[0,7,'7 dias'],[0,30,'30 dias']] as const
+/** Período de abertura entre hoje+de e hoje+ate (datas de Brasília). */
+export function periodoEntre(de: number, ate: number, hoje = new Date()) {
+  const iso = (n: number) => { const d = new Date(hoje); d.setDate(d.getDate() + n); return d.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }) }
+  return { aberturaDe: iso(de), aberturaAte: iso(ate) }
 }
 export function validarFiltros(f: FiltrosOportunidades) {
   if (!f.modalidades.length || !f.portais.length) throw new Error('Selecione ao menos um portal e uma modalidade.')

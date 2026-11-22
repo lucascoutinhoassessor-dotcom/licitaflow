@@ -1,3 +1,4 @@
+import ArquivosEdital from '@/components/ArquivosEdital'
 import { rotuloPortal } from '@/lib/portais'
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
@@ -317,7 +318,7 @@ function Historico({ processoId, podeEditar }: { processoId: string; podeEditar:
         <ol className="relative space-y-4 border-l pl-6">
           {q.data!.map((ev) => (
             <li key={ev.id} className="relative">
-              <span className={`absolute -left-[1.85rem] top-1 h-3 w-3 rounded-full border-2 border-background ${ev.tipo === 'etapa' ? 'bg-primary' : 'bg-muted-foreground'}`} />
+              <span className={`absolute -left-[1.85rem] top-1 h-3 w-3 rounded-full border-2 border-background ${ev.tipo === 'etapa' ? 'bg-primary' : ev.tipo === 'sentinela' ? ((ev.dados as { nivel?: string })?.nivel === 'alto' ? 'bg-red-500' : 'bg-amber-500') : 'bg-muted-foreground'}`} />
               <div className="text-xs text-muted-foreground">{formatarDataHora(ev.created_at)}</div>
               <div className="text-sm font-medium">
                 {ev.tipo === 'etapa'
@@ -325,6 +326,9 @@ function Historico({ processoId, podeEditar }: { processoId: string; podeEditar:
                   : ev.titulo}
               </div>
               {ev.descricao && <p className="mt-0.5 whitespace-pre-wrap text-sm text-muted-foreground">{ev.descricao}</p>}
+              {ev.tipo === 'sentinela' && typeof (ev.dados as { url?: unknown })?.url === 'string' && /^https:\/\/pncp\.gov\.br\//.test((ev.dados as { url: string }).url) && (
+                <a href={(ev.dados as { url: string }).url} target="_blank" rel="noopener noreferrer" className="mt-0.5 inline-flex items-center gap-1 text-xs text-primary hover:underline">Abrir documento <ExternalLink className="h-3 w-3" /></a>
+              )}
             </li>
           ))}
         </ol>
@@ -401,6 +405,12 @@ export default function ProcessoDetalhe() {
           {podeEditar && <Button variante="contorno" tamanho="sm" className="h-9" onClick={() => setEditando(true)}><Pencil className="h-4 w-4" /> Editar</Button>}
         </div>
       </div>
+
+      {(() => {
+        // Edital vindo do PNCP: arquivos (edital, TR, ETP, anexos) abertos aqui dentro.
+        const m = /^(\d{14})-1-0*(\d+)\/(\d{4})$/.exec(p.pncp_controle ?? '')
+        return m && <ArquivosEdital cnpj={m[1]} ano={m[3]} seq={m[2]} linkFonte={p.link_edital ?? undefined} />
+      })()}
 
       {p.etapa === 'homologado' && (
         <Card className="mb-6 flex flex-col gap-3 border-success/30 bg-success/5 p-4 sm:flex-row sm:items-center">

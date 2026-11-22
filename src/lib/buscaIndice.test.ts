@@ -16,4 +16,8 @@ describe('consulta indexada',()=>{
   rpc.mockResolvedValue({data:null,error:{code:'PGRST202'}})
   await expect(pesquisarIndice(f,1)).rejects.toThrow('sendo preparado');expect(rpc).toHaveBeenCalledTimes(1)
  })
+ it('explica quando a busca passa do tempo limite do banco',async()=>{
+  rpc.mockResolvedValue({data:null,error:{code:'57014'}})
+  await expect(pesquisarIndice(f,1)).rejects.toThrow('demorou mais que o esperado')
+ })
 })

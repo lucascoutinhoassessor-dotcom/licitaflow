@@ -17,7 +17,7 @@ export function UsoIAPlano({ org }: { org: string }) {
   if (!liberado || !q.data) return null
   return (
     <div className="mt-6">
-      <h2 className="mb-3 flex items-center gap-2 text-lg font-semibold"><Bot className="h-5 w-5 text-primary" />Agentes de IA neste mês</h2>
+      <h2 className="mb-3 flex items-center gap-2 text-lg font-semibold"><Bot className="h-5 w-5 text-primary" />Agentes de IA</h2>
       <div className="grid gap-3 sm:grid-cols-3">
         {AGENTES_IA.map((a) => {
           const u = q.data[a.id] ?? { limite: 0, origem: 'plano', usadas: 0 }
@@ -28,8 +28,17 @@ export function UsoIAPlano({ org }: { org: string }) {
               {u.limite === 0 ? <p className="text-sm">Não incluído no seu plano.</p> : (
                 <p className="text-2xl font-semibold">{usadas} <span className="text-sm text-muted-foreground">/ {u.limite ?? 'sem limite'} {a.unidade}</span></p>
               )}
-              {u.limite !== null && u.limite > 0 && usadas >= u.limite && <p className="text-xs text-warning">Limite do mês alcançado. Editais já lidos continuam abrindo normalmente.</p>}
-              <p className="text-xs text-muted-foreground">Conta só o que é novo. O que já foi lido na plataforma abre sem gastar o limite. O limite renova no dia 1º.</p>
+              {a.tipo === 'simultaneo' ? (
+                <>
+                  {u.limite !== null && u.limite > 0 && usadas >= u.limite && <p className="text-xs text-warning">Limite alcançado: os processos mais recentes têm preferência.</p>}
+                  <p className="text-xs text-muted-foreground">Processos em andamento com edital no PNCP, vigiados ao mesmo tempo.</p>
+                </>
+              ) : (
+                <>
+                  {u.limite !== null && u.limite > 0 && usadas >= u.limite && <p className="text-xs text-warning">Limite do mês alcançado. Editais já lidos continuam abrindo normalmente.</p>}
+                  <p className="text-xs text-muted-foreground">Conta só o que é novo. O que já foi lido na plataforma abre sem gastar o limite. O limite renova no dia 1º.</p>
+                </>
+              )}
             </Card>
           )
         })}

@@ -21,12 +21,15 @@ export function prioridadeDocumento(titulo = '', tipo = '') {
   return null
 }
 
-const CHAVE = /desclassificad|desclassifica[çc][ãa]o|inabilitad|inabilita[çc][ãa]o|recusad|reprovad|n[ãa]o\s+(?:foi\s+)?aceit/i
+// Empresa que não chegou a mandar proposta/documentos (ou desistiu): também entra na lista de empresas.
+const SEM_PROPOSTA = /n[ãa]o\s+(?:enviou|encaminhou|apresentou|anexou|cadastrou|inseriu)\s+(?:a\s+|sua\s+|nenhuma\s+)?(?:proposta|documenta|anexo)|deixou\s+de\s+(?:enviar|encaminhar|apresentar|anexar)\s+(?:a\s+|sua\s+)?(?:proposta|documenta)|proposta\s+n[ãa]o\s+(?:informada|enviada|anexada|apresentada)|n[ãa]o\s+compareceu|desist(?:iu|[êe]ncia)\s+d[aoe]/i
+const CHAVE = new RegExp(`desclassificad|desclassifica[çc][ãa]o|inabilitad|inabilita[çc][ãa]o|recusad|reprovad|n[ãa]o\\s+(?:foi\\s+)?aceit|${SEM_PROPOSTA.source}`, 'i')
 // Regras do edital lidas na ata ("será desclassificada", "sob pena de"): não são ocorrências.
 // Decisões que afastam a desclassificação ("não há motivo para inabilitação") também não contam.
 const NEGACAO = /aus[êe]ncia de (?:motivo|irregularidade)|n[ãa]o (?:h[áa]|se (?:identifica|verifica)|houve)\b[^.]{0,60}(?:desclassifica|inabilita)|capaz de justificar|justificar a (?:desclassifica|inabilita)|pela conformidade|consider[ae]-?\s?se superad|revers[ãa]o da (?:desclassifica|inabilita)|n[ãa]o assiste raz[ãa]o|inexistindo fundamento|n[ãa]o tendo sido demonstrad|rejeitando\s?-?\s?se o pedido|antes de qualquer|n[ãa]o tem raz[ãa]o/i
 // Só conta o que afirma a decisão: "foi desclassificada", "pela inabilitação", "Motivo:", "restando desclassificada"...
-const AFIRMA = /\b(?:foi|foram|fica|ficam|ficou|resta(?:ndo)?|est[áa]|sendo|considerad[oa]s?)\s+(?:\w+\s+){0,2}(?:desclassificad|inabilitad|recusad|reprovad)|\bpela\s+(?:sua\s+)?(?:desclassifica|inabilita|recusa)|decid\w*\s?-?\s?se\s+pela|(?:desclassificad|inabilitad|recusad)[oa]s?\s*[.:(-]\s*(?:Motivo|\w)|Motivo\s*:|(?:Desclassifica[çc][ãa]o|Inabilita[çc][ãa]o)\s*:|\bdesclassific(?:o|amos|a-se)\b|\binabilit(?:o|amos|a-se)\b|\brecus(?:o|amos|a-se)\b/i
+const AFIRMA_BASE = /\b(?:foi|foram|fica|ficam|ficou|resta(?:ndo)?|est[áa]|sendo|considerad[oa]s?)\s+(?:\w+\s+){0,2}(?:desclassificad|inabilitad|recusad|reprovad)|\bpela\s+(?:sua\s+)?(?:desclassifica|inabilita|recusa)|decid\w*\s?-?\s?se\s+pela|(?:desclassificad|inabilitad|recusad)[oa]s?\s*[.:(-]\s*(?:Motivo|\w)|Motivo\s*:|(?:Desclassifica[çc][ãa]o|Inabilita[çc][ãa]o)\s*:|\bdesclassific(?:o|amos|a-se)\b|\binabilit(?:o|amos|a-se)\b|\brecus(?:o|amos|a-se)\b/i
+const AFIRMA = new RegExp(`${AFIRMA_BASE.source}|${SEM_PROPOSTA.source}`, 'i')
 const GENERICO = /\b(poder[áa]|ser[áa]|ser[ãa]o|ficar[áa]|implicar[áa]|acarretar[áa]|ensejar[áa]|dever[áa]|sob pena|s[óo] ser[áa] poss[íi]vel|na hip[óo]tese|se houver|implica(?:r)? na|motivo de desclassifica)\b/i
 const SUFIXO = '(?:LTDA\\.?|EIRELI|S\\/A|S\\.A\\.?|ME|EPP|MEI|SA)'
 const NOME_EMPRESA = new RegExp(`([A-ZÀ-Ü0-9&][A-ZÀ-Ü0-9&.,'/\\- ]{2,90}?\\s${SUFIXO})(?![A-Za-zÀ-ü])`, 'g')
@@ -96,7 +99,7 @@ export function extrairOcorrencias(textoBruto) {
         const motivo = limpar(l[3]), chave = so(l[1] + motivo + (quando0?.[0] ?? ''))
         if (vistos.has(chave)) continue
         vistos.add(chave)
-        lista.push({ tipo: /inabilit/i.test(l[2]) ? 'inabilitacao' : 'desclassificacao', empresa: limparNome(l[1]), cnpj: null, itens: null, data: quando0 ? `${quando0[1]} ${quando0[2]}` : null, motivo })
+        lista.push({ tipo: /inabilit/i.test(l[2]) ? 'inabilitacao' : SEM_PROPOSTA.test(motivo) ? 'sem_proposta' : 'desclassificacao', empresa: limparNome(l[1]), cnpj: null, itens: null, data: quando0 ? `${quando0[1]} ${quando0[2]}` : null, motivo })
       }
       continue
     }
@@ -109,7 +112,7 @@ export function extrairOcorrencias(textoBruto) {
     const chave = so(motivo).replace(/\d/g, '').replace(/\s+/g, ' ').slice(0, 160)
     if (vistos.has(chave)) continue
     vistos.add(chave)
-    const tipo = /inabilit/i.test(trecho) ? 'inabilitacao' : /recusad|n[ãa]o\s+(?:foi\s+)?aceit/i.test(trecho) && !/desclassific/i.test(trecho) ? 'recusa' : 'desclassificacao'
+    const tipo = /inabilit/i.test(trecho) ? 'inabilitacao' : SEM_PROPOSTA.test(trecho) ? 'sem_proposta' : /recusad|n[ãa]o\s+(?:foi\s+)?aceit/i.test(trecho) && !/desclassific/i.test(trecho) ? 'recusa' : 'desclassificacao'
     const pos = trecho.search(CHAVE)
     lista.push({ tipo, ...empresaDoTrecho(trecho, pos), itens: itensDoTrecho(motivo), data: quando ? `${quando[1]} ${quando[2]}` : null, motivo: motivo.slice(0, 450) })
   }
@@ -186,6 +189,33 @@ export function extrairParticipantes(textoBruto, cnpjOrgao = null) {
   return [...porCnpj.values()].slice(0, 200)
 }
 
+const COLOCACAO = [
+  /(?:^|\D)(\d{1,2})\s*[º°ª]\s*(?:lugar|colocad[oa]|classificad[oa]|posi[çc][ãa]o)/i,
+  /(?:classifica[çc][ãa]o|coloca[çc][ãa]o|posi[çc][ãa]o)\s*[:\-–]?\s*(\d{1,2})\s*[º°ª]?(?!\d)/i,
+]
+/**
+ * Colocação de cada empresa escrita perto do CNPJ dela ("2º lugar", "Classificação: 3").
+ * Só vale o que está a até 120 caracteres do CNPJ, sem passar por outro CNPJ; sem isso, fica sem colocação.
+ */
+export function colocacoesNoTexto(textoBruto) {
+  const texto = limpar(textoBruto)
+  const achados = [...texto.matchAll(/\b\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\s?\d{2}\b/g)]
+  const saida = {}
+  achados.forEach((m, k) => {
+    const cnpj = m[0].replace(/\D/g, '')
+    if (saida[cnpj] || !cnpjValido(cnpj)) return
+    const ini = Math.max(k ? achados[k - 1].index + achados[k - 1][0].length : 0, m.index - 120)
+    const fim = Math.min(k + 1 < achados.length ? achados[k + 1].index : texto.length, m.index + m[0].length + 120)
+    for (const trecho of [texto.slice(m.index + m[0].length, fim), texto.slice(ini, m.index)]) {
+      for (const re of COLOCACAO) {
+        const n = Number(re.exec(trecho)?.[1])
+        if (n >= 1 && n <= 50) { saida[cnpj] = n; return }
+      }
+    }
+  })
+  return saida
+}
+
 async function textoDoPdf(url) {
   const r = await fetch(url, { headers: { 'User-Agent': 'licitaflow-atas' }, signal: AbortSignal.timeout(25000) })
   if (!r.ok) return { erro: 'O arquivo da ata não pôde ser aberto.' }
@@ -217,7 +247,7 @@ export async function lerAtas(controle) {
     .filter((a) => a.prioridade !== null)
     .sort((a, b) => a.prioridade - b.prioridade)
     .slice(0, MAX_DOCS)
-  const documentos = [], ocorrencias = [], participantes = new Map()
+  const documentos = [], ocorrencias = [], participantes = new Map(), colocacoes = {}
   for (const d of candidatos) {
     try {
       const lido = await textoDoPdf(d.url)
@@ -228,6 +258,7 @@ export async function lerAtas(controle) {
         if (!atual) participantes.set(p.cnpj, { ...p, documento: d.titulo, url: d.url })
         else { atual.mencoes += p.mencoes; atual.nome ??= p.nome }
       }
+      for (const [c, n] of Object.entries(colocacoesNoTexto(lido.texto))) colocacoes[c] ??= n
       const achadas = extrairOcorrencias(lido.texto)
       documentos.push({ titulo: d.titulo, url: d.url, lido: true, paginas: lido.paginas, ocorrencias: achadas.length })
       for (const o of achadas) if (!falaDeBloqueada(o) && !ocorrencias.some((x) => so(x.motivo).slice(0, 160) === so(o.motivo).slice(0, 160))) ocorrencias.push({ ...o, documento: d.titulo, url: d.url })
@@ -235,7 +266,12 @@ export async function lerAtas(controle) {
       documentos.push({ titulo: d.titulo, url: d.url, lido: false, aviso: 'Não foi possível ler este arquivo.' })
     }
   }
-  return { controle, documentos, ocorrencias, participantes: [...participantes.values()] }
+  // Situação de cada empresa (desclassificada, inabilitada, sem proposta) e colocação, quando a ata diz.
+  const lista = [...participantes.values()].map((p) => ({
+    ...p, colocacao: colocacoes[p.cnpj] ?? null,
+    situacoes: ocorrencias.filter((o) => falaDaEmpresa(o, p.cnpj, p.nome)).map((o) => ({ tipo: o.tipo, itens: o.itens, motivo: o.motivo.slice(0, 240) })),
+  }))
+  return { controle, documentos, ocorrencias, participantes: lista }
 }
 
 /** Ocorrência que cita uma empresa bloqueada (pelo CNPJ, com ou sem pontuação). */
@@ -278,7 +314,7 @@ export default async function handler(req, res) {
     const usuario = await usuarioLogado(base, anon, token)
     if (!usuario) return res.status(401).json({ error: 'Entre na sua conta' })
     if (excedeuLimite('atas', usuario, 20)) return res.status(429).json({ error: 'Muitas consultas em pouco tempo. Aguarde um minuto e tente de novo.' })
-    const ler = (c) => emCache('atas-v3', c, 6 * 60 * 60_000, () => lerAtas(c), 500)
+    const ler = (c) => emCache('atas-v4', c, 6 * 60 * 60_000, () => lerAtas(c), 500)
     if (controle) { const lida = await ler(controle); guardarNoNavegador(res, 3600); return res.json(lida) }
     // Empresa: lê as atas das compras dela e fica só com o que fala dela.
     const lidas = await emLotes([...new Set(controles)].slice(0, 15), 4, (c) => ler(c).catch(() => ({ controle: c, documentos: [], ocorrencias: [] })))

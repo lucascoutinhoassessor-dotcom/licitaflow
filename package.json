@@ -8,7 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "vitest run && node scripts/test-db.mjs supabase/migrations && npm run test:indice && node scripts/test-desertas.mjs && node scripts/test-pecas.mjs && node scripts/test-push.mjs && node scripts/test-deploy-enxugar.mjs && node scripts/test-catalogo.mjs && node scripts/test-fornecedores.mjs && node scripts/test-limites-ia.mjs",
+    "test": "vitest run && node scripts/test-db.mjs supabase/migrations && npm run test:indice && node scripts/test-desertas.mjs && node scripts/test-pecas.mjs && node scripts/test-push.mjs && node scripts/test-deploy-enxugar.mjs && node scripts/test-catalogo.mjs && node scripts/test-fornecedores.mjs && node scripts/test-limites-ia.mjs && node scripts/test-sentinela.mjs",
     "test:watch": "vitest",
     "test:indice": "node scripts/test-indice-oportunidades.mjs"
   },
@@ -49,6 +49,7 @@
     "cmdk": "1.0.0",
     "date-fns": "^3.0.0",
     "embla-carousel-react": "^8.5.2",
+    "fflate": "^0.8.2",
     "framer-motion": "^11.11.17",
     "input-otp": "^1.4.2",
     "lucide-react": "^0.364.0",

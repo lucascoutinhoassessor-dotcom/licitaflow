@@ -6,6 +6,7 @@ import { supabase,mensagemErro } from '@/lib/supabase'
 import { formatarDataHora } from '@/lib/format'
 import { ativarPush,desativarPush,enviarPushAviso,estadoPush,precisaInstalar,type EstadoPush } from '@/lib/push'
 import { Aviso,Badge,Button,CabecalhoPagina,Campo,Card,Carregando,Input,Modal,Textarea } from '@/components/ui'
+import { TIPOS_LOG,type LogPlataforma } from '@/lib/logsPlataforma'
 
 interface Comunicado {id:string;titulo:string;texto:string;org_id:string|null;org_ids:string[]|null;ativo:boolean;expira_em:string|null;created_at:string;publicar_em:string;enviar_push:boolean;push_enviado_em:string|null}
 const FORM_VAZIO={titulo:'',texto:'',dest:'todos' as 'todos'|'alguns',orgs:[] as string[],busca:'',quando:'agora' as 'agora'|'agendar',data:'',push:true,expira:''}
@@ -98,6 +99,7 @@ export default function Avisos({master=false}:{master?:boolean}) {
         {master && <div className="flex flex-wrap gap-2">{a.ativo && <Button tamanho="sm" variante="contorno" disabled={ocupado} onClick={()=>arquivar(a.id,agendado)}>{agendado?'Cancelar agendamento':'Arquivar'}</Button>}<Button tamanho="sm" variante="perigo" disabled={ocupado} onClick={()=>excluir(a.id)}>Excluir</Button></div>}
         {!master && !lido && <Button tamanho="sm" variante="contorno" disabled={ocupado||leituras.isError} onClick={()=>marcar(a.id)}>Marcar como lido</Button>}</Card>
     })}</div>{!q.isLoading && !q.isError && !q.data?.length && <Card className="p-8 text-center text-sm text-muted-foreground">Nenhum aviso disponível.</Card>}
+    {!master && <AtualizacoesPlataforma/>}
     <Modal aberto={novo} aoFechar={()=>{if(!ocupado)setNovo(false)}} titulo="Publicar aviso"><form onSubmit={publicar} className="space-y-4">
       <fieldset className="space-y-2"><legend className="mb-1 text-sm font-medium">Destinatários</legend>
         <div className="flex flex-wrap gap-4 text-sm">
@@ -128,4 +130,11 @@ export default function Avisos({master=false}:{master?:boolean}) {
       <Button type="submit" carregando={ocupado} disabled={orgs.isError}>{f.quando==='agendar'?'Agendar aviso':'Publicar agora'}</Button>
     </form></Modal>
   </>
+}
+
+/** Logs que o master marcou como públicos: o que mudou na plataforma. */
+function AtualizacoesPlataforma(){
+  const q=useQuery({queryKey:['plataforma-logs-publicos'],queryFn:async()=>{const {data,error}=await supabase.from('plataforma_logs').select('id,tipo,titulo,texto,created_at').eq('publico',true).order('created_at',{ascending:false}).limit(30);if(error)throw error;return data as Pick<LogPlataforma,'id'|'tipo'|'titulo'|'texto'|'created_at'>[]}})
+  if(!q.data?.length)return null
+  return <section className="mt-8"><h2 className="mb-3 text-lg font-semibold">Atualizações da plataforma</h2><div className="space-y-3">{q.data.map(l=><Card key={l.id} className="space-y-1.5 p-4"><div className="flex flex-wrap items-center gap-2"><Badge cor={TIPOS_LOG[l.tipo][1]}>{TIPOS_LOG[l.tipo][0]}</Badge><span className="text-xs text-muted-foreground">{formatarDataHora(l.created_at)}</span></div><h3 className="font-medium">{l.titulo}</h3>{l.texto&&<p className="whitespace-pre-wrap text-sm text-muted-foreground">{l.texto}</p>}</Card>)}</div></section>
 }

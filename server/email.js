@@ -84,6 +84,32 @@ ${nota(`Esqueceu a senha? <a href="${URL_SITE}/recuperar-senha" style="color:${C
   return { assunto: 'Seu acesso ao LicitaFlow está liberado', html, texto }
 }
 
+/** Cupom de dias de acesso resgatado pelo cliente: confirma o acesso no e-mail cadastrado. */
+export function emailCupomAcesso({ nome, email, organizacao, codigo, dias, ate }) {
+  const login = `${URL_SITE}/entrar`
+  const fim = data(ate)
+  const html = layout('Seu acesso ao LicitaFlow foi liberado', `<p>${esc(ola(nome))}</p>
+<p>O cupom <b>${esc(codigo)}</b> foi aplicado na empresa <b>${esc(organizacao)}</b>: são <b>${esc(dias)} dias</b> de acesso${fim ? `, até <b>${fim}</b>` : ''}.</p>
+<p><b>Seus dados de acesso:</b><br>Endereço: <a href="${login}" style="color:${COR}">${esc(login)}</a><br>E-mail: <b>${esc(email)}</b><br>Senha: a definida no cadastro.</p>
+${botao(login, 'Entrar no LicitaFlow')}
+${nota(`Esqueceu a senha? <a href="${URL_SITE}/recuperar-senha" style="color:${COR}">Crie uma nova aqui</a>.`)}`)
+  const texto = `${ola(nome)}\n\nO cupom ${codigo} foi aplicado na empresa ${organizacao}: ${dias} dias de acesso${fim ? `, até ${fim}` : ''}.\n\nEndereço: ${login}\nE-mail: ${email}\nSenha: a definida no cadastro.\n\nEsqueceu a senha? ${URL_SITE}/recuperar-senha`
+  return { assunto: 'Seu acesso ao LicitaFlow foi liberado', html, texto }
+}
+
+/** Master liberou a conta (ou reenviou o acesso): endereço, e-mail de login e, se houver, o link para criar a senha. */
+export function emailContaLiberada({ nome, email, organizacao, ate, urlSenha }) {
+  const login = `${URL_SITE}/entrar`
+  const fim = data(ate)
+  const html = layout('Sua conta no LicitaFlow está liberada', `<p>${esc(ola(nome))}</p>
+<p>A conta da empresa <b>${esc(organizacao)}</b> está liberada${fim ? `, com acesso até <b>${fim}</b>` : ''}.</p>
+<p><b>Seus dados de acesso:</b><br>Endereço: <a href="${login}" style="color:${COR}">${esc(login)}</a><br>E-mail: <b>${esc(email)}</b></p>
+${urlSenha ? `<p>Para definir a sua senha, use o botão abaixo (o link vale por 1 hora):</p>${botao(urlSenha, 'Criar minha senha')}` : botao(login, 'Entrar no LicitaFlow')}
+${nota(`Esqueceu a senha depois? <a href="${URL_SITE}/recuperar-senha" style="color:${COR}">Crie uma nova aqui</a>.`)}`)
+  const texto = `${ola(nome)}\n\nA conta da empresa ${organizacao} está liberada${fim ? `, com acesso até ${fim}` : ''}.\n\nEndereço: ${login}\nE-mail: ${email}${urlSenha ? `\nCrie sua senha (vale 1 hora): ${urlSenha}` : ''}`
+  return { assunto: 'Sua conta no LicitaFlow está liberada', html, texto }
+}
+
 export function emailTeste() {
   return { assunto: 'Teste de e-mail do LicitaFlow', html: layout('Envio funcionando', '<p>Este é um e-mail de teste enviado pelo Painel Master. Se chegou com o nome e o logo do LicitaFlow, está tudo certo.</p>'), texto: 'Este é um e-mail de teste enviado pelo Painel Master.' }
 }

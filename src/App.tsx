@@ -42,6 +42,7 @@ const Financeiro = lazy(() => import('@/pages/app/Financeiro'))
 const Juridico = lazy(() => import('@/pages/app/Juridico'))
 const Agentes = lazy(() => import('@/pages/app/Agentes'))
 const LeitorEdital = lazy(() => import('@/pages/app/LeitorEdital'))
+const Sentinela = lazy(() => import('@/pages/app/Sentinela'))
 const MasterEntrar = lazy(() => import('@/pages/master/MasterEntrar'))
 const MasterLayout = lazy(() => import('@/pages/master/MasterLayout'))
 const MasterVisaoGeral = lazy(() => import('@/pages/master/VisaoGeral'))
@@ -65,6 +66,8 @@ const MasterAssinaturas = lazy(() => import('@/pages/master/Assinaturas'))
 const MasterRanking = lazy(() => import('@/pages/master/Ranking'))
 const MasterModulos = lazy(() => import('@/pages/master/Modulos'))
 const MasterConsumoIA = lazy(() => import('@/pages/master/ConsumoIA'))
+const MasterCupons = lazy(() => import('@/pages/master/Cupons'))
+const MasterLogs = lazy(() => import('@/pages/master/Logs'))
 const NaoEncontrada = lazy(() => import('@/pages/NaoEncontrada'))
 
 function ExigeLogin({ children }: { children: ReactNode }) {
@@ -164,6 +167,7 @@ export default function App() {
             <Route path="juridico/:tipo" element={<Juridico />} />
             <Route path="agentes" element={<Agentes />} />
             <Route path="agentes/leitor/:cnpj/:ano/:seq" element={<LeitorEdital />} />
+            <Route path="agentes/sentinela" element={<Sentinela />} />
             <Route path="avisos" element={<Avisos />} />
             <Route path="relatorios" element={<RelatoriosCliente />} />
             <Route path="plano" element={<MeuPlano />} />
@@ -191,6 +195,8 @@ export default function App() {
             <Route path="integracoes" element={<Integracoes />} />
             <Route path="configuracoes" element={<ConfiguracoesMaster />} />
             <Route path="atividade" element={<MasterAtividade />} />
+            <Route path="cupons" element={<MasterCupons />} />
+            <Route path="logs" element={<MasterLogs />} />
           </Route>
 
           <Route path="*" element={<NaoEncontrada />} />

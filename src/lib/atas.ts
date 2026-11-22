@@ -1,16 +1,17 @@
 import { supabase } from './supabase'
 
-export type TipoOcorrencia = 'desclassificacao' | 'inabilitacao' | 'recusa'
+export type TipoOcorrencia = 'desclassificacao' | 'inabilitacao' | 'recusa' | 'sem_proposta'
 export interface OcorrenciaAta {
   tipo: TipoOcorrencia; empresa: string | null; cnpj: string | null; itens: string | null
   data: string | null; motivo: string; documento: string; url: string; controle?: string
 }
 export interface DocumentoAta { titulo: string; url: string; lido: boolean; paginas?: number; ocorrencias?: number; aviso?: string }
-export interface ParticipanteAta { cnpj: string; nome: string | null; mencoes: number; documento: string; url: string }
+export interface SituacaoAta { tipo: TipoOcorrencia; itens: string | null; motivo: string }
+export interface ParticipanteAta { cnpj: string; nome: string | null; mencoes: number; documento: string; url: string; colocacao?: number | null; situacoes?: SituacaoAta[] }
 export interface AtasCompra { controle: string; documentos: DocumentoAta[]; ocorrencias: OcorrenciaAta[]; participantes?: ParticipanteAta[] }
 export interface AtasEmpresa { cnpj: string; comprasConsultadas: number; comAta: number; ocorrencias: OcorrenciaAta[] }
 
-export const NOME_TIPO: Record<TipoOcorrencia, string> = { desclassificacao: 'Desclassificação', inabilitacao: 'Inabilitação', recusa: 'Proposta recusada' }
+export const NOME_TIPO: Record<TipoOcorrencia, string> = { desclassificacao: 'Desclassificação', inabilitacao: 'Inabilitação', recusa: 'Proposta recusada', sem_proposta: 'Não enviou proposta' }
 
 async function chamar<T>(qs: URLSearchParams, signal?: AbortSignal): Promise<T> {
   const { data } = await supabase.auth.getSession()

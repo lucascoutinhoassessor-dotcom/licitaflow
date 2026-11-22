@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { cnpjValido, diasAte, formatarCnpj, prazoRelativo } from './format'
+import { cnpjValido, diasAte, formatarCnpj, prazoRelativo, tempoRestante } from './format'
 
 describe('CNPJ', () => {
   it('valida dígitos verificadores', () => {
@@ -33,5 +33,19 @@ describe('prazo relativo', () => {
     expect(prazoRelativo(new Date(2026, 11, 2, 10, 0).toISOString(), agora)).toBe('em 12 dias')
     expect(prazoRelativo(new Date(2026, 10, 19).toISOString(), agora)).toBe('encerrado')
     expect(prazoRelativo(null, agora)).toBe('')
+  })
+})
+
+describe('tempoRestante', () => {
+  const agora = new Date(2026, 10, 21, 10, 0, 30)
+  it('separa dias, horas e minutos', () => {
+    expect(tempoRestante(new Date(2026, 10, 24, 14, 15).toISOString(), agora)).toEqual({ dias: 3, horas: 4, minutos: 15 })
+    expect(tempoRestante(new Date(2026, 10, 21, 10, 0, 45).toISOString(), agora)).toEqual({ dias: 0, horas: 0, minutos: 1 })
+    expect(tempoRestante(new Date(2026, 10, 22, 10, 0, 30).toISOString(), agora)).toEqual({ dias: 1, horas: 0, minutos: 0 })
+  })
+  it('é nulo depois do início ou sem data', () => {
+    expect(tempoRestante(new Date(2026, 10, 21, 10, 0).toISOString(), agora)).toBeNull()
+    expect(tempoRestante(null, agora)).toBeNull()
+    expect(tempoRestante('x', agora)).toBeNull()
   })
 })

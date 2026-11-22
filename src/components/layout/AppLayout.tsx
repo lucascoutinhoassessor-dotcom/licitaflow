@@ -10,6 +10,7 @@ import { Logo } from '@/components/ui'
 import { useAuth } from '@/providers/AuthProvider'
 import { useOrg } from '@/providers/OrgProvider'
 import { useInstalacao } from '@/hooks/useInstalacao'
+import PedirNotificacoes from '@/components/PedirNotificacoes'
 
 function alternarTema() {
   const escuro = document.documentElement.classList.toggle('dark')
@@ -179,7 +180,7 @@ function BarraInferior() {
         {nav.grupos.map((g) => {
           const ativo = g.itens.some((i) => rotaAtiva(i.rota, pathname))
           const Icone = g.icone
-          const conteudo = <><span className={marca(ativo)}><Icone className="h-5 w-5" /></span><span className="max-w-full truncate">{g.rotulo}</span></>
+          const conteudo = <><span className={marca(ativo)}><Icone className="h-5 w-5" /></span><span className="max-w-full truncate">{g.curto ?? g.rotulo}</span></>
           return g.itens.length === 1
             ? <Link key={g.id} to={g.itens[0].rota} className={botao(ativo)} aria-current={ativo ? 'page' : undefined}>{conteudo}</Link>
             : <button key={g.id} type="button" className={botao(ativo)} onClick={() => setAberta(g.id)} aria-haspopup="dialog">{conteudo}</button>
@@ -271,6 +272,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
           </div>
         )}
         <div className="painel-conteudo mx-auto w-full min-w-0 max-w-6xl p-4 lg:p-8">{children}</div>
+        <PedirNotificacoes />
       </main>
 
       <BarraInferior />

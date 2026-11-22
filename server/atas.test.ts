@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import handler, { cnpjValido, extrairOcorrencias, extrairParticipantes, falaDaEmpresa, prioridadeDocumento } from './atas.js'
+import handler, { cnpjValido, colocacoesNoTexto, extrairOcorrencias, extrairParticipantes, falaDaEmpresa, prioridadeDocumento } from './atas.js'
 
 const resposta = () => ({ setHeader: vi.fn(), status: vi.fn().mockReturnThis(), json: vi.fn() })
 
@@ -15,6 +15,13 @@ describe('escolha dos documentos', () => {
   })
 })
 
+describe('colocação na ata', () => {
+  it('pega a colocação escrita perto do CNPJ e ignora o que está longe', () => {
+    expect(colocacoesNoTexto('1º lugar ALFA LTDA 11.222.333/0001-81 R$ 10,00; BETA LTDA CNPJ 33.000.167/0001-01 classificação: 2')).toEqual({ '11222333000181': 1, '33000167000101': 2 })
+    expect(colocacoesNoTexto('GAMA LTDA 11.222.333/0001-81 ' + 'x'.repeat(200) + ' 3º lugar')).toEqual({})
+  })
+})
+
 describe('leitura das atas', () => {
   it('separa desclassificação e inabilitação com empresa, itens, data e motivo', () => {
     const texto = `14/09/2026 11:45:04 MENSAGEM PREGOEIRO Encerrado o prazo para envio de documentos, informamos que a empresa ALFA SUPRIMENTOS LTDA foi desclassificada por não apresentar os mesmos, para os itens 2 e 14.
@@ -23,7 +30,7 @@ describe('leitura das atas', () => {
     const o = extrairOcorrencias(texto)
     expect(o).toHaveLength(3)
     expect(o[0]).toMatchObject({ tipo: 'desclassificacao', empresa: 'ALFA SUPRIMENTOS LTDA', itens: 'Itens 2 e 14', data: '14/09/2026 11:45' })
-    expect(o[1]).toMatchObject({ tipo: 'desclassificacao', empresa: 'BETA CAFE LTDA' })
+    expect(o[1]).toMatchObject({ tipo: 'sem_proposta', empresa: 'BETA CAFE LTDA' })
     expect(o[2]).toMatchObject({ tipo: 'inabilitacao', empresa: 'GAMA FERRAGENS EIRELI', itens: null })
     expect(o[2].motivo).toContain('não atender ao item 10.11.1')
   })
@@ -32,7 +39,7 @@ describe('leitura das atas', () => {
     const texto = `LIC001 DELTA MEDICAL LTDA Não Não LIC004 EPSILON HOSPITALAR LTDA Sim Não
       De: SISTEMA - Para: TODOS - (Data e Hora: 15/09/2026 09:01:40) Resultado da classificação das propostas lançadas: 1º - LIC001 (Classificado). LIC004 (Desclassificado: Proposta não informada.)`
     const o = extrairOcorrencias(texto)
-    expect(o).toEqual([expect.objectContaining({ tipo: 'desclassificacao', empresa: 'EPSILON HOSPITALAR LTDA', motivo: 'Proposta não informada.' })])
+    expect(o).toEqual([expect.objectContaining({ tipo: 'sem_proposta', empresa: 'EPSILON HOSPITALAR LTDA', motivo: 'Proposta não informada.' })])
   })
 
   it('ignora regras do edital, decisões que afastam a desclassificação e linhas de tabela', () => {

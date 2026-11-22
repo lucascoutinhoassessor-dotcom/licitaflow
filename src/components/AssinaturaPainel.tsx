@@ -14,7 +14,7 @@ export function AssinaturaPainel({ org, master = false }: { org: string; master?
   const q = useQuery({ queryKey: ['assinatura', org], queryFn: () => carregarAssinatura(org) })
   const [modal, setModal] = useState<'assinar' | 'trocar' | null>(null)
   const [ocupado, setOcupado] = useState('')
-  const [f, setF] = useState({ plano: '', ciclo: 'mensal', forma: 'UNDEFINED', documento: '' })
+  const [f, setF] = useState({ plano: '', ciclo: 'mensal', forma: 'UNDEFINED', documento: '', cupom: '' })
   const recarregar = () => Promise.all([
     qc.invalidateQueries({ queryKey: ['assinatura', org] }), qc.invalidateQueries({ queryKey: ['admin-assinaturas'] }),
     qc.invalidateQueries({ queryKey: ['admin-financeiro'] }), qc.invalidateQueries({ queryKey: ['plano-cliente'] }),
@@ -25,7 +25,7 @@ export function AssinaturaPainel({ org, master = false }: { org: string; master?
   const economia = plano && plano.mensal_centavos * 12 > plano.anual_centavos ? plano.mensal_centavos * 12 - plano.anual_centavos : 0
 
   function abrir(tipo: 'assinar' | 'trocar', a?: Assinatura | null) {
-    setF({ plano: a?.plano_id ?? planos[0]?.id ?? '', ciclo: a?.ciclo ?? 'mensal', forma: a?.forma ?? 'UNDEFINED', documento: '' })
+    setF({ plano: a?.plano_id ?? planos[0]?.id ?? '', ciclo: a?.ciclo ?? 'mensal', forma: a?.forma ?? 'UNDEFINED', documento: '', cupom: '' })
     setModal(tipo)
   }
   async function enviar(e: FormEvent) {
@@ -34,8 +34,8 @@ export function AssinaturaPainel({ org, master = false }: { org: string; master?
       if (modal === 'assinar') {
         const doc = apenasDigitos(f.documento)
         if (![11, 14].includes(doc.length)) throw new Error('Informe o CPF ou CNPJ de quem paga.')
-        const r = await pagamentoAPI({ acao: 'assinar', org, plano: f.plano, ciclo: f.ciclo, forma: f.forma, documento: doc })
-        toast.success('Assinatura criada no Asaas.')
+        const r = await pagamentoAPI({ acao: 'assinar', org, plano: f.plano, ciclo: f.ciclo, forma: f.forma, documento: doc, cupom: f.cupom.trim() || undefined })
+        toast.success(f.cupom.trim() && r.valor_centavos ? `Assinatura criada com o cupom: ${formatarMoeda(r.valor_centavos / 100)} por cobrança.` : 'Assinatura criada no Asaas.')
         if (r.url) window.open(r.url, '_blank', 'noopener,noreferrer')
       } else {
         await pagamentoAPI({ acao: 'trocar_plano', id: q.data?.assinatura?.id, plano: f.plano, ciclo: f.ciclo })
@@ -117,6 +117,7 @@ export function AssinaturaPainel({ org, master = false }: { org: string; master?
             {Object.entries(FORMAS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
           </Select></Campo>
           <Campo rotulo="CPF ou CNPJ de quem paga" htmlFor="as-doc" ajuda="Exigido pelo Asaas para emitir a cobrança."><Input id="as-doc" required inputMode="numeric" value={f.documento} onChange={e => setF({ ...f, documento: e.target.value })} /></Campo>
+          <Campo rotulo="Cupom de desconto (opcional)" htmlFor="as-cupom"><Input id="as-cupom" maxLength={40} value={f.cupom} onChange={e => setF({ ...f, cupom: e.target.value.toUpperCase().replace(/\s/g, '') })} /></Campo>
         </>}
         <p className="text-sm">Total: <strong>{formatarMoeda(valor / 100)}</strong> por {f.ciclo === 'anual' ? 'ano' : 'mês'}. {modal === 'assinar' ? 'A primeira cobrança vence hoje e o acesso é liberado ao pagar.' : 'Faturas em aberto são atualizadas para o novo valor.'}</p>
         <Button type="submit" carregando={ocupado === 'form'} disabled={!plano}>{modal === 'trocar' ? 'Confirmar troca' : 'Gerar cobrança'}</Button>

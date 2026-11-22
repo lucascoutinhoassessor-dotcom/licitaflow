@@ -1,15 +1,16 @@
 import { useState, type FormEvent } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useNavigate } from 'react-router-dom'
-import { CalendarClock, Hash, Info, Package, SearchX } from 'lucide-react'
+import { Hash, Info, Package, SearchX } from 'lucide-react'
 import { toast } from 'sonner'
 import { Badge, Button, Card, Input, Select, Vazio } from '@/components/ui'
 import IconePortal from '@/components/IconePortal'
 import CodigoComprasnet from '@/components/CodigoComprasnet'
 import { codigoComprasnet, portalCompra } from '@/lib/portais'
 import { rotaOportunidade } from '@/lib/pncp'
-import { formatarData, formatarMoeda } from '@/lib/format'
+import { formatarMoeda } from '@/lib/format'
 import { editalDireto, localizarEdital, rotaEditalDireto, validarLocalizar } from '@/lib/localizar'
+import ContagemDisputa from '@/components/ContagemDisputa'
 
 const CHAVE = 'lf-localizar-edital'
 const UFS = 'AC AL AP AM BA CE DF ES GO MA MT MS MG PA PB PR PE PI RJ RN RS RO RR SC SP SE TO'.split(' ')
@@ -77,7 +78,7 @@ export default function LocalizarEdital() {
             <CodigoComprasnet compra={c} />
           </div>
           <div className="mt-2.5 flex flex-wrap items-center justify-between gap-3">
-            <span className="flex items-center gap-1.5 text-sm font-semibold"><CalendarClock className="h-4 w-4 text-muted-foreground" />Propostas até {formatarData(c.dataEncerramentoProposta)}</span>
+            <ContagemDisputa data={c.dataEncerramentoProposta} />
             <Link to={`${rotaOportunidade(c)}#itens`} state={{ compra: c }} className="inline-flex h-8 items-center gap-2 rounded-full border border-input bg-card px-3.5 text-sm font-semibold hover:bg-muted"><Package className="h-4 w-4" />Ver itens</Link>
           </div>
         </Card>

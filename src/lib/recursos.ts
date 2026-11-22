@@ -16,7 +16,8 @@ export interface RecursoCatalogo {
 export const CATALOGO_RECURSOS: RecursoCatalogo[] = [
   { id: 'recurso-localizar-edital', tela: 'Oportunidades', rotulo: 'Localizar edital', descricao: 'Atalho que acha um edital pelo número da compra, processo, UASG, código do Compras.gov, CNPJ do órgão ou link do PNCP.' },
   { id: 'recurso-sem-vencedor', tela: 'Oportunidades', rotulo: 'Itens sem vencedor', descricao: 'Editais com itens desertos (ninguém propôs) ou fracassados (nenhuma proposta aceita) nas sessões recentes.' },
-  { id: 'recurso-sem-vencedor-portal', tela: 'Oportunidades', rotulo: 'Itens sem vencedor por portal', descricao: 'Escolher o portal (Portal de Compras Públicas, Compras.gov, Compras MG...) e os atalhos por portal.' },
+  { id: 'recurso-sem-vencedor-portal', tela: 'Oportunidades', rotulo: 'Itens sem vencedor por portal', descricao: 'Escolher o portal (Portal de Compras Públicas, Compras.gov, Compras MG...).' },
+  { id: 'recurso-proximas-disputas', tela: 'Oportunidades', rotulo: 'Próximas disputas', descricao: 'Atalhos para editais que ainda vão abrir: hoje, amanhã, 7 e 30 dias, e por portal.' },
   { id: 'recurso-importar-oportunidade', tela: 'Oportunidades', rotulo: 'Adicionar aos processos', descricao: 'Importar um edital da busca para a lista de processos da empresa.' },
   { id: 'recurso-codigo-comprasnet', tela: 'Oportunidades', rotulo: 'Copiar UASG e número da compra', descricao: 'Botões que copiam a UASG e o número da compra do Compras.gov.' },
   { id: 'recurso-inverter-ordem', tela: 'Listas', rotulo: 'Inverter ordem', descricao: 'Botão que inverte a ordem das listas (mais recentes/mais antigas, mais próximas/mais distantes).' },

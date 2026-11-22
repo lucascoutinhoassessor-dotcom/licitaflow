@@ -37,6 +37,16 @@ async function marcasDaCompra(idCompra, itens) {
   return marcas
 }
 
+/** { numeroItem: numeroGrupo } só dos itens que estão em algum grupo. */
+export function gruposDosItens(itens) {
+  const grupos = {}
+  for (const i of itens) {
+    const n = Number(i.numeroItemPncp), g = Number(i.numeroGrupo)
+    if (Number.isInteger(n) && Number.isInteger(g) && g > 0) grupos[n] = g
+  }
+  return grupos
+}
+
 /** Junta contratação, itens, resultados e marcas no formato da tela. */
 export function montarCompra(contratacao, itens, resultados, marcas) {
   const porItem = new Map()
@@ -91,6 +101,12 @@ export default async function handler(req, res) {
       if (!c?.numeroControlePNCP) return res.status(404).json({ error: 'Esta compra não tem edital publicado (pode ser anterior à Lei 14.133).' })
       guardarNoNavegador(res, 3600)
       return res.json({ controle: c.numeroControlePNCP })
+    }
+    if (req.query?.so === 'grupos') {
+      // Número do grupo de cada item (o PNCP não publica esse campo; o Compras.gov publica, com 0 = sem grupo).
+      const grupos = await emCache('compra-grupos', idCompra, 60 * 60_000, async () => gruposDosItens(await obter('modulo-contratacoes/2.1_consultarItensContratacoes_PNCP_14133_Id', { tipo: 'idCompra', codigo: idCompra })))
+      guardarNoNavegador(res, 3600)
+      return res.json({ grupos })
     }
     const corpo = await emCache('compra', idCompra, 10 * 60_000, async () => {
     const [contratacoes, itens, resultados] = await Promise.all([

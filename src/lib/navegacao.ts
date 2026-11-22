@@ -36,6 +36,8 @@ export interface ItemNav {
 export interface GrupoNav {
   id: string
   rotulo: string
+  /** rótulo da barra inferior do celular, quando o completo não cabe */
+  curto?: string
   icone: LucideIcon
   itens: ItemNav[]
 }
@@ -57,6 +59,7 @@ export const GRUPOS_NAV: GrupoNav[] = [
   {
     id: 'oportunidades',
     rotulo: 'Oportunidades',
+    curto: 'Editais',
     icone: Radar,
     itens: [
       {

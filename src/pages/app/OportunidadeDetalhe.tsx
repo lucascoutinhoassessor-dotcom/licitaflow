@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowLeft, CalendarClock, ExternalLink, FileSearch, FileText, Plus } from 'lucide-react'
+import { ArrowLeft, ExternalLink, FileSearch, FileText, Plus } from 'lucide-react'
 import { useModulos } from '@/hooks/useModulos'
 import { rotaLeitor } from '@/lib/leitor'
 import { toast } from 'sonner'
@@ -11,6 +11,7 @@ import ItensAcordeao from '@/components/ItensAcordeao'
 import IconePortal from '@/components/IconePortal'
 import CodigoComprasnet from '@/components/CodigoComprasnet'
 import EmpresasDisputa from '@/components/EmpresasDisputa'
+import ArquivosEdital, { BotaoArquivos } from '@/components/ArquivosEdital'
 import CategoriasObjeto from '@/components/CategoriasObjeto'
 import { useOrg } from '@/providers/OrgProvider'
 import { useLista, useSalvar } from '@/hooks/useDados'
@@ -18,8 +19,11 @@ import { dadosProcesso, linkCompra, type CompraPNCP } from '@/lib/pncp'
 import { itensDoEdital } from '@/lib/itensIndice'
 import { consultarItens, nomeModoDisputa } from '@/lib/filtrosOportunidades'
 import { codigoComprasnet, portalCompra, urlOrigem } from '@/lib/portais'
-import { formatarDataHora, formatarMoeda, prazoRelativo } from '@/lib/format'
+import { formatarMoeda } from '@/lib/format'
 import type { Processo } from '@/types/db'
+import ContagemDisputa from '@/components/ContagemDisputa'
+import { comGrupos } from '@/lib/itensEdital'
+import { gruposDaCompra, idCompraComprasnet, resultadosDoEdital } from '@/lib/resultadosEdital'
 
 async function buscarCompra(cnpj: string, ano: string, seq: string, signal?: AbortSignal): Promise<CompraPNCP> {
   const r = await fetch(`https://pncp.gov.br/api/consulta/v1/orgaos/${encodeURIComponent(cnpj)}/compras/${encodeURIComponent(ano)}/${encodeURIComponent(seq)}`, { signal })
@@ -29,9 +33,13 @@ async function buscarCompra(cnpj: string, ano: string, seq: string, signal?: Abo
   return c as CompraPNCP
 }
 
-/** Itens com a descrição completa direto do PNCP; se a fonte falhar, usa a cópia resumida da base. */
+/** Itens com a descrição completa direto do PNCP (se a fonte falhar, usa a cópia resumida da base), com o grupo do Compras.gov quando houver. */
 async function itensCompletos(compra: CompraPNCP, signal?: AbortSignal) {
-  try { return await consultarItens(compra, signal) } catch (e) { if (signal?.aborted) throw e; return itensDoEdital(compra, signal) }
+  const id = idCompraComprasnet(compra)
+  const grupos = id ? gruposDaCompra(id, signal).catch(() => ({})) : Promise.resolve({})
+  let itens
+  try { itens = await consultarItens(compra, signal) } catch (e) { if (signal?.aborted) throw e; itens = await itensDoEdital(compra, signal) }
+  return comGrupos(itens, await grupos)
 }
 
 export default function OportunidadeDetalhe() {
@@ -48,6 +56,8 @@ export default function OportunidadeDetalhe() {
   const q = useQuery({ queryKey: ['oportunidade', cnpj, ano, seq], enabled: valida && !compraEstado, queryFn: ({ signal }) => buscarCompra(cnpj, ano, seq, signal), staleTime: 300_000, retry: 1 })
   const compra = compraEstado ?? q.data
   const itens = useQuery({ queryKey: ['itens-edital', compra?.numeroControlePNCP], enabled: !!compra, queryFn: ({ signal }) => itensCompletos(compra!, signal), staleTime: 300_000, retry: 1 })
+  const encerrada = !!compra?.dataEncerramentoProposta && new Date(compra.dataEncerramentoProposta) < new Date()
+  const resultados = useQuery({ queryKey: ['resultados-edital', compra?.numeroControlePNCP], enabled: encerrada && !!itens.data?.some((i) => i.temResultado), queryFn: ({ signal }) => resultadosDoEdital(compra!, itens.data!, signal), staleTime: 600_000, retry: 1 })
   const processos = useLista<Processo>('processos', { porEmpresa: false })
   const { salvar } = useSalvar('processos', ['processo_eventos', 'prazos'])
   // "Ver itens" na lista abre a página já na seção de itens.
@@ -86,14 +96,11 @@ export default function OportunidadeDetalhe() {
           {modo && <Badge>{modo}</Badge>}
         </div>
         {compra.dataEncerramentoProposta && (
-          <p className="mt-4 flex items-center justify-center gap-2 font-semibold text-emerald-600 dark:text-emerald-400">
-            <CalendarClock className="h-4 w-4" /> Abertura em {formatarDataHora(compra.dataEncerramentoProposta)}
-            <span className="text-xs font-medium text-muted-foreground">{prazoRelativo(compra.dataEncerramentoProposta)}</span>
-          </p>
+          <ContagemDisputa data={compra.dataEncerramentoProposta} className="mt-4 justify-center" />
         )}
         <div className="mt-5 flex flex-wrap justify-center gap-2">
           {origem && <a href={origem} target="_blank" rel="noopener noreferrer"><Button variante="contorno" tamanho="sm"><ExternalLink className="h-4 w-4" />Acessar no portal</Button></a>}
-          <a href={linkCompra(compra)} target="_blank" rel="noopener noreferrer"><Button variante="contorno" tamanho="sm"><FileText className="h-4 w-4" />Edital e arquivos</Button></a>
+          <BotaoArquivos />
           {estadoModulo('/app/agentes') === 'liberado' && <Link to={rotaLeitor(compra.numeroControlePNCP)}><Button tamanho="sm"><FileSearch className="h-4 w-4" />Ler edital com IA</Button></Link>}
         </div>
       </Card>
@@ -114,7 +121,9 @@ export default function OportunidadeDetalhe() {
       </Card>
 
       {/* Depois da abertura das propostas, as atas publicadas no PNCP mostram quem disputou. */}
-      {compra.dataEncerramentoProposta && new Date(compra.dataEncerramentoProposta) < new Date() && <EmpresasDisputa controle={compra.numeroControlePNCP} />}
+      {encerrada && <EmpresasDisputa controle={compra.numeroControlePNCP} colocacoes={resultados.data} carregandoResultados={resultados.isLoading && resultados.fetchStatus !== 'idle'} />}
+
+      <div id="arquivos" className="scroll-mt-20"><ArquivosEdital cnpj={compra.orgaoEntidade.cnpj} ano={compra.anoCompra} seq={compra.sequencialCompra} linkFonte={linkCompra(compra)} /></div>
 
       <section id="itens">
         <h2 className="mb-3 text-lg font-semibold">Itens do edital</h2>

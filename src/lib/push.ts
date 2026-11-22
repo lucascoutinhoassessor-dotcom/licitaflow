@@ -57,6 +57,29 @@ export async function ativarPush(): Promise<EstadoPush> {
   return 'ativo'
 }
 
+/**
+ * Ao entrar: se este aparelho já está inscrito, regrava a inscrição para a conta atual (o servidor pode ter
+ * apagado uma inscrição vencida, ou outra pessoa usou o aparelho). Não pede permissão nem mostra nada.
+ */
+export async function sincronizarPush(): Promise<EstadoPush> {
+  const estado = await estadoPush()
+  if (estado !== 'ativo') return estado
+  const reg = await navigator.serviceWorker.getRegistration()
+  const sub = await reg?.pushManager.getSubscription()
+  if (sub) await chamar({ acao: 'inscrever', inscricao: sub.toJSON() }).catch(() => undefined)
+  return 'ativo'
+}
+
+/** Avisa quando o usuário muda a permissão de notificações nas configurações do navegador. */
+export function observarPermissao(aoMudar: () => void) {
+  let status: PermissionStatus | null = null
+  const permissoes = typeof navigator !== 'undefined' ? navigator.permissions : undefined
+  permissoes?.query({ name: 'notifications' as PermissionName }).then((s) => { status = s; s.onchange = aoMudar }).catch(() => undefined)
+  const visivel = () => { if (document.visibilityState === 'visible') aoMudar() }
+  document.addEventListener('visibilitychange', visivel)
+  return () => { if (status) status.onchange = null; document.removeEventListener('visibilitychange', visivel) }
+}
+
 export async function desativarPush() {
   const reg = await navigator.serviceWorker.getRegistration()
   const sub = await reg?.pushManager.getSubscription()

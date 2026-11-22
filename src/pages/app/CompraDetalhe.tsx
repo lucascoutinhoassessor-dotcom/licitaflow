@@ -5,7 +5,8 @@ import { ArrowLeft, ChevronDown, ExternalLink, FileText, Tag, Trophy } from 'luc
 import { Badge, Button, Card, Carregando, Vazio } from '@/components/ui'
 import { abrirCompra, linkCompraComprasGov, type CompraFederal, type ItemCompraFederal } from '@/lib/compraFederal'
 import { rotaPorControle } from '@/lib/analiseEmpresa'
-import EmpresasDisputa, { type Vencedora } from '@/components/EmpresasDisputa'
+import EmpresasDisputa from '@/components/EmpresasDisputa'
+import type { ColocacaoItem } from '@/lib/resultadosEdital'
 import { linkPesquisaMarca } from '@/lib/precos'
 import { formatarCnpj, formatarData, formatarMoeda } from '@/lib/format'
 import { cn } from '@/lib/utils'
@@ -90,7 +91,7 @@ export default function CompraDetalhe() {
           </div>
           <p className="mt-3 text-xs text-muted-foreground">Lances, propostas desclassificadas e motivos ficam na página oficial da compra, no portal da disputa, que exige acesso próprio.</p>
         </Card>
-        <EmpresasDisputa controle={c.controle} vencedoras={vencedorasDa(c)} />
+        <EmpresasDisputa controle={c.controle} colocacoes={colocacoesDa(c)} />
         <h2 className="mb-3 flex items-center gap-2 text-lg font-semibold"><Tag className="h-5 w-5 text-sky-400" />Itens, vencedores e marcas</h2>
         <div className="space-y-2">{c.itens.map((i) => <Item key={i.numero} item={i} />)}</div>
       </>}
@@ -98,14 +99,7 @@ export default function CompraDetalhe() {
   )
 }
 
-/** Empresas que venceram algum item, somando itens e valor homologado. */
-function vencedorasDa(c: CompraFederal): Vencedora[] {
-  const por = new Map<string, Vencedora>()
-  for (const item of c.itens) for (const r of item.resultados) {
-    if (!r.cnpj) continue
-    const v = por.get(r.cnpj) ?? { cnpj: r.cnpj, nome: r.fornecedor, itens: 0, valor: 0 }
-    v.itens++; v.valor += r.valorTotal ?? 0
-    por.set(r.cnpj, v)
-  }
-  return [...por.values()]
+/** Resultados homologados por item: ordem 1 vence; 2, 3... são o cadastro de reserva do registro de preço. */
+function colocacoesDa(c: CompraFederal): ColocacaoItem[] {
+  return c.itens.flatMap((item) => item.resultados.filter((r) => r.cnpj).map((r) => ({ item: item.numero, cnpj: r.cnpj!, nome: r.fornecedor, ordem: r.ordem, valorUnitario: r.valorUnitario, valorTotal: r.valorTotal })))
 }

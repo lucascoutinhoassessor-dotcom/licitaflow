@@ -16,6 +16,8 @@ export async function pesquisarIndice(f: FiltrosOportunidades,pagina:number,sign
  if(error){
   if(signal?.aborted)throw signal.reason
   if(['PGRST202','PGRST205','42883'].includes(error.code))throw new Error('O catálogo de pesquisa está sendo preparado. Tente novamente em instantes.')
+  // 57014: a busca passou do tempo limite do banco (ex.: banco sobrecarregado ou filtro muito amplo).
+  if(error.code==='57014')throw new Error('A pesquisa demorou mais que o esperado. Tente novamente ou reduza o período, a UF ou as modalidades.')
   throw new Error('Não foi possível pesquisar o catálogo. Tente novamente.')
  }
  if(!data||!Array.isArray(data.data)||!Number.isInteger(data.totalRegistros)||!Number.isInteger(data.totalPaginas))throw new Error('O catálogo retornou uma resposta inesperada.')

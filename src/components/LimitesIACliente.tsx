@@ -55,12 +55,16 @@ export function LimitesIACliente({ org }: { org: string }) {
                 <div>
                   <p className="font-medium">{a.nome} {temExcecao && <Badge cor="amarelo">Exceção</Badge>}</p>
                   <p className="text-sm text-muted-foreground">
-                    Plano {q.data?.plano?.nome ?? '—'}: {textoLimite(plano)}{temExcecao && <> · Cliente: {textoLimite(efetivo)}</>}
+                    Plano {q.data?.plano?.nome ?? '—'}: {textoLimite(plano, a.tipo)}{temExcecao && <> · Cliente: {textoLimite(efetivo, a.tipo)}</>}
                   </p>
-                  <p className="text-sm">
-                    Neste mês: <strong>{uso?.novas ?? 0}</strong>{efetivo !== null && efetivo > 0 ? ` de ${efetivo}` : ''} {a.unidade} novas
-                    {uso?.reaproveitadas ? ` · ${uso.reaproveitadas} reaproveitadas` : ''} · {dolar(uso?.custo_usd ?? 0)}
-                  </p>
+                  {a.tipo === 'simultaneo' ? (
+                    <p className="text-sm">Agora: <strong>{uso?.novas ?? 0}</strong>{efetivo !== null && efetivo > 0 ? ` de ${efetivo}` : ''} {a.unidade} · sem custo de IA</p>
+                  ) : (
+                    <p className="text-sm">
+                      Neste mês: <strong>{uso?.novas ?? 0}</strong>{efetivo !== null && efetivo > 0 ? ` de ${efetivo}` : ''} {a.unidade} novas
+                      {uso?.reaproveitadas ? ` · ${uso.reaproveitadas} reaproveitadas` : ''} · {dolar(uso?.custo_usd ?? 0)}
+                    </p>
+                  )}
                 </div>
                 <Button tamanho="sm" variante="contorno" disabled={!q.data} onClick={() => { setAgente(a); setValor(efetivo === null ? '' : String(efetivo)) }}>Ajustar limite</Button>
               </div>
@@ -70,7 +74,7 @@ export function LimitesIACliente({ org }: { org: string }) {
       )}
       <Modal aberto={!!agente} aoFechar={() => { if (!ocupado) setAgente(null) }} titulo={`Limite do ${agente?.nome ?? ''} para este cliente`}>
         <div className="space-y-4">
-          <Campo rotulo={`${agente?.unidade ?? 'Usos'} novos por mês`} htmlFor="ia-limite-cliente" ajuda="Em branco = sem limite; 0 = bloqueado para este cliente.">
+          <Campo rotulo={agente?.tipo === 'simultaneo' ? `${agente.unidade} ao mesmo tempo` : `${agente?.unidade ?? 'Usos'} novos por mês`} htmlFor="ia-limite-cliente" ajuda="Em branco = sem limite; 0 = bloqueado para este cliente.">
             <Input id="ia-limite-cliente" type="number" min={0} step={1} value={valor} onChange={(e) => setValor(e.target.value)} />
           </Campo>
           <div className="flex flex-wrap gap-2">

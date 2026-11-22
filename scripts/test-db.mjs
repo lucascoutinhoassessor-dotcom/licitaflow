@@ -394,6 +394,39 @@ expect((await as(U1, `select public.modulos_da_org('${o1}') r`)).rows[0].r.merca
 expect((await as(U2, `select public.modulos_da_org('${o2}') r`)).rows[0].r.mercado==='oculto','demais organizações não veem o módulo em teste');
 expect(Object.keys((await as(U2, `select public.admin_modulos() r`)).rows[0].r).includes('mercado'),'master lista as liberações');
 
+// avisos: quem entrou depois não vê aviso antigo
+await db.exec(`insert into public.plataforma_avisos(titulo, texto, publicar_em) values ('Aviso antigo', 'Texto do aviso antigo', now() - interval '1 day')`);
+expect((await as(U1, `select count(*)::int n from public.plataforma_avisos where titulo='Aviso antigo'`)).rows[0].n === 0, 'membro novo não vê aviso publicado antes da entrada');
+await db.exec(`update public.memberships set created_at = now() - interval '3 days' where org_id='${o1}'`);
+expect((await as(U1, `select count(*)::int n from public.plataforma_avisos where titulo='Aviso antigo'`)).rows[0].n === 1, 'membro antigo continua vendo o aviso');
+
+// cupons
+await as(U2, `select public.admin_salvar_cupom('teste30', 'dias', 30, null, 'Trinta dias', null, 1, true)`);
+await as(U2, `select public.admin_salvar_cupom('DEZ', 'percentual', 10)`);
+expect((await as(U1, `select count(*)::int n from public.cupons`)).rows[0].n === 0, 'cliente não lista os cupons');
+blocked=false;try{await as(U1, `select public.admin_salvar_cupom('HACK', 'dias', 365)`);}catch{blocked=true;}
+expect(blocked, 'cliente não cria cupom');
+const antes = (await db.query(`select trial_ate::text t from public.organizations where id='${o1}'`)).rows[0].t;
+const r = (await as(U1, `select public.resgatar_cupom_dias('Teste30', '${o1}') r`)).rows[0].r;
+const depois = (await db.query(`select trial_ate::text t from public.organizations where id='${o1}'`)).rows[0].t;
+expect(r.tipo === 'dias' && r.ate === depois && (new Date(depois) - new Date(antes)) / 86400000 === 30, 'cupom de dias soma os dias ao acesso');
+await as(U1, `update public.organizations set trial_ate = '2099-01-01' where id = '${o1}'`);
+expect((await db.query(`select trial_ate::text t from public.organizations where id='${o1}'`)).rows[0].t === depois, 'cliente continua sem mudar o prazo do teste direto');
+blocked=false;try{await as(U1, `select public.resgatar_cupom_dias('TESTE30', '${o1}')`);}catch{blocked=true;}
+expect(blocked, 'a mesma organização não usa o cupom duas vezes');
+blocked=false;try{await as(U2, `select public.resgatar_cupom_dias('TESTE30', '${o2}')`);}catch{blocked=true;}
+expect(blocked, 'cupom respeita o limite de usos');
+blocked=false;try{await as(U1, `select public.resgatar_cupom_dias('DEZ', '${o1}')`);}catch{blocked=true;}
+expect(blocked, 'cupom de desconto não vira dias de acesso');
+blocked=false;try{await as(U1, `select public.registrar_cupom_desconto('DEZ', '${o1}', '${U1}', null)`);}catch{blocked=true;}
+expect(blocked, 'cliente não consome cupom de desconto direto');
+
+// logs
+await as(U2, `insert into public.plataforma_logs(titulo, texto, publico) values ('Log interno', 'x', false), ('Novidade', 'y', true)`);
+expect((await as(U1, `select string_agg(titulo, ',') t from public.plataforma_logs`)).rows[0].t === 'Novidade', 'cliente vê só os logs públicos');
+blocked=false;try{await as(U1, `insert into public.plataforma_logs(titulo) values ('Hack log')`);}catch{blocked=true;}
+expect(blocked, 'cliente não cria log');
+
 // delete em cascata da org
 await as(U1, `delete from public.organizations where id = '${o1}'`);
 expect((await db.query(`select count(*)::int c from public.processos`)).rows[0].c === 0, 'excluir organização remove dados em cascata');

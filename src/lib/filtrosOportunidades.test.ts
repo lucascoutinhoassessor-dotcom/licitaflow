@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { consultarItens, filtrosExtras, MODALIDADES, periodoAbertura, validarFiltros, type FiltrosOportunidades } from './filtrosOportunidades'
+import { consultarItens, filtrosExtras, MODALIDADES, periodoAbertura, periodoEntre, validarFiltros, type FiltrosOportunidades } from './filtrosOportunidades'
 import { portalCompra, urlOrigem, PORTAIS } from './portais'
 import type { CompraPNCP } from './pncp'
 const f: FiltrosOportunidades={...filtrosExtras,modalidades:['6','8'],busca:'computadores',inicio:'2026-11-09',fim:'2026-11-16',uf:'',modalidade:'6'}
@@ -24,6 +24,13 @@ describe('filtros de oportunidades',()=>{
    expect(periodoAbertura(30,hoje).aberturaAte).toBe('2026-12-20')
    expect(periodoAbertura(null,hoje)).toEqual({aberturaDe:'',aberturaAte:''})
    expect(filtrosExtras.diasUteis).toBe(true)
+ })
+
+ it('próximas disputas: hoje, amanhã e janelas a partir de hoje',()=>{
+   const hoje=new Date('2026-11-30T23:30:00-03:00')
+   expect(periodoEntre(0,0,hoje)).toEqual({aberturaDe:'2026-11-30',aberturaAte:'2026-11-30'})
+   expect(periodoEntre(1,1,hoje)).toEqual({aberturaDe:'2026-12-01',aberturaAte:'2026-12-01'})
+   expect(periodoEntre(0,7,hoje).aberturaAte).toBe('2026-12-07')
  })
 
  it('rejeita seleção vazia e intervalos inválidos',()=>{

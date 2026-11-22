@@ -61,3 +61,18 @@ export function prazoRelativo(data: string | null | undefined, agora = new Date(
   const dias = Math.round((dia(alvo) - dia(agora)) / 86_400_000)
   return dias === 0 ? 'hoje' : dias === 1 ? 'amanhã' : `em ${dias} dias`
 }
+
+/** Tempo que falta até a data, em dias, horas e minutos (minutos arredondados para cima). Null se já passou ou é inválida. */
+export function tempoRestante(data: string | null | undefined, agora = new Date()) {
+  if (!data) return null
+  const alvo = new Date(data).getTime()
+  if (Number.isNaN(alvo) || alvo <= agora.getTime()) return null
+  const minutosTotais = Math.ceil((alvo - agora.getTime()) / 60_000)
+  return { dias: Math.floor(minutosTotais / 1440), horas: Math.floor((minutosTotais % 1440) / 60), minutos: minutosTotais % 60 }
+}
+
+/** "01/12/2026 às 09:00" */
+export function dataHoraDisputa(iso: string) {
+  const d = new Date(iso)
+  return `${d.toLocaleDateString('pt-BR')} às ${d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`
+}

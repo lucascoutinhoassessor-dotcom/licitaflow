@@ -2,14 +2,14 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import BotaoInverterOrdem from '@/components/BotaoInverterOrdem'
 import { Link, useNavigate } from 'react-router-dom'
-import { CalendarClock, Package, Radar, Search, SlidersHorizontal, ChevronDown } from 'lucide-react'
+import { Package, Radar, Search, SlidersHorizontal, ChevronDown } from 'lucide-react'
 import { toast } from 'sonner'
 import { Badge, Button, CabecalhoPagina, Campo, Card, Input, Select, Vazio } from '@/components/ui'
 import { SeletorEmpresa, useEmpresaPadrao } from '@/components/Situacoes'
 import { useOrg } from '@/providers/OrgProvider'
 import { useLista, useSalvar } from '@/hooks/useDados'
 import { dadosProcesso, rotaOportunidade, type CompraPNCP } from '@/lib/pncp'
-import { filtrosExtras, MODALIDADES, nomeModoDisputa, PERIODOS_ABERTURA, periodoAbertura, validarFiltros, type FiltrosOportunidades as Filtros } from '@/lib/filtrosOportunidades'
+import { filtrosExtras, MODALIDADES, nomeModoDisputa, PERIODOS_ABERTURA, periodoAbertura, periodoEntre, validarFiltros, type FiltrosOportunidades as Filtros } from '@/lib/filtrosOportunidades'
 import {pesquisarIndice,type ResultadoIndice} from '@/lib/buscaIndice'
 import CategoriasObjeto from '@/components/CategoriasObjeto'
 import FiltrosOportunidades from '@/components/FiltrosOportunidades'
@@ -23,8 +23,9 @@ import CodigoComprasnet from '@/components/CodigoComprasnet'
 import { FiltroLiberado } from '@/components/FiltroLiberado'
 import { useFiltrosLiberados, useRecursos } from '@/hooks/useModulos'
 import { aplicarLiberacao, modalidadesLiberadas } from '@/lib/filtrosLiberacao'
-import { formatarData, formatarMoeda, prazoRelativo } from '@/lib/format'
+import { formatarMoeda } from '@/lib/format'
 import type { Processo } from '@/types/db'
+import ContagemDisputa from '@/components/ContagemDisputa'
 
 function dataLocal(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
@@ -70,7 +71,15 @@ export default function Oportunidades() {
   const abas=ABAS.filter(([,,r])=>!r||recursos.estado(r)==='liberado')
   // Aba que o master deixou de liberar volta para os editais abertos.
   const aba:Aba=abas.some(([id])=>id===abaEscolhida)?abaEscolhida:'abertas'
-  function usarAtalho(a:AcaoAtalho){if(a.tipo==='localizar'){setAba('localizar');return}setAba('desertas');setAtalho(x=>({portal:a.portal,vez:(x?.vez??0)+1}))}
+  function usarAtalho(a:AcaoAtalho){
+    if(a.tipo==='localizar'){setAba('localizar');return}
+    if(a.tipo==='proximas'){
+      // Editais que ainda vão abrir: troca período e portal e já pesquisa. Num dia só (hoje/amanhã) mostra também fim de semana e feriado.
+      const novo:Filtros={...f,situacao:'abertas',...periodoEntre(a.de,a.ate),portais:a.portal?[a.portal]:filtrosExtras.portais,diasUteis:a.de===a.ate?false:f.diasUteis,inverter:false}
+      setAba('abertas');setAtalho(undefined);setAvancados(false);setF(novo);setPagina(1);setConsulta(novo);return
+    }
+    setAba('desertas');setAtalho(x=>({portal:a.portal,vez:(x?.vez??0)+1}))
+  }
   useEffect(()=>{try{sessionStorage.setItem(CHAVE_ABA,aba)}catch{/* armazenamento indisponível */}},[aba])
   useEffect(()=>{try{sessionStorage.setItem(CHAVE_BUSCA,JSON.stringify({f,consulta,pagina}))}catch{/* armazenamento indisponível */}},[f,consulta,pagina])
   const navigate=useNavigate()
@@ -114,9 +123,9 @@ export default function Oportunidades() {
   }
   return <>
     <CabecalhoPagina titulo="Oportunidades" descricao="Encontre editais e consulte seus itens." acoes={<AtalhosOportunidades aoEscolher={usarAtalho} />} />
-    {abas.length>1&&<div role="tablist" aria-label="Tipo de oportunidade" className="mb-4 inline-flex max-w-full overflow-x-auto rounded-full border bg-card p-1">
+    {abas.length>1&&<div role="tablist" aria-label="Tipo de oportunidade" className="mb-4 flex w-full rounded-full border bg-card p-1 sm:inline-flex sm:w-auto">
       {abas.map(([id,rotulo])=><button key={id} type="button" role="tab" aria-selected={aba===id} onClick={()=>{setAba(id);setAtalho(undefined)}}
-        className={`h-9 rounded-full px-4 text-sm font-semibold transition-colors ${aba===id?'bg-primary text-primary-foreground':'text-muted-foreground hover:text-foreground'}`}>{rotulo}</button>)}
+        className={`min-h-9 min-w-0 flex-1 rounded-full px-2 py-1 text-xs font-semibold leading-tight transition-colors sm:flex-none sm:px-4 sm:text-sm ${aba===id?'bg-primary text-primary-foreground':'text-muted-foreground hover:text-foreground'}`}>{rotulo}</button>)}
     </div>}
     {aba==='desertas'?<OportunidadesDesertas atalho={atalho} />:aba==='localizar'?<LocalizarEdital />:<>
     <Card className="mb-5 p-4">
@@ -154,7 +163,7 @@ export default function Oportunidades() {
           <p className="mt-1 line-clamp-2 break-words text-sm text-muted-foreground">{c.objetoCompra}</p>
           <CategoriasObjeto objeto={c.objetoCompra} className="mt-2" />
           <div className="mt-2.5 flex flex-wrap items-center gap-2"><Badge cor="verde">{c.modalidadeNome}</Badge>{c.srp===true&&<Badge cor="azul">Registro de preço</Badge>}{nomeModoDisputa(c.modoDisputaId)&&<Badge>{nomeModoDisputa(c.modoDisputaId)}</Badge>}{c.materialOuServico&&<Badge title={c.tipoEstimado?'Deduzido pelo objeto do edital; confirme nos itens.':undefined}>{c.materialOuServico==='M'?'Material':c.materialOuServico==='S'?'Serviço':'Material e serviço'}{c.tipoEstimado?' (estimado)':''}</Badge>}<Badge>{c.valorTotalEstimado?formatarMoeda(c.valorTotalEstimado):'Valor não divulgado'}</Badge></div>
-          <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm"><span className="flex items-center gap-1.5 font-semibold"><CalendarClock className="h-4 w-4 text-muted-foreground" />Propostas até {formatarData(c.dataEncerramentoProposta)}</span>{prazoRelativo(c.dataEncerramentoProposta)&&<span className="text-xs text-muted-foreground">{prazoRelativo(c.dataEncerramentoProposta)}</span>}</div>
+          <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm"><ContagemDisputa data={c.dataEncerramentoProposta} /></div>
           <div className="mt-2 flex flex-wrap gap-2"><Badge className="gap-1.5"><IconePortal id={portalCompra(c)[0]} nome={portalCompra(c)[1]} />{portalCompra(c)[1]}</Badge><Badge>{c.unidadeOrgao.municipioNome}/{c.unidadeOrgao.ufSigla}</Badge><CodigoComprasnet compra={c} /></div>
           <div className="mt-3 flex flex-wrap items-center gap-3"><Link to={`${rotaOportunidade(c)}#itens`} state={{compra:c}} className="inline-flex h-8 items-center gap-2 rounded-full border border-input bg-card px-3.5 text-sm font-semibold hover:bg-muted"><Package className="h-4 w-4" />Ver itens</Link>{existente?<Link className="text-sm text-primary hover:underline" to={`/app/processos/${existente.id}`}>Abrir processo</Link>:podeEditar&&<RecursoLiberado id="recurso-importar-oportunidade"><Button tamanho="sm" disabled={processos.isLoading||processos.isError||salvar.isPending} onClick={()=>importar(c)}>Adicionar aos processos</Button></RecursoLiberado>}</div>
         </Card>
