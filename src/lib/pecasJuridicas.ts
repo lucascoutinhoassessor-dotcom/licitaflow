@@ -63,6 +63,29 @@ export async function lerPeca(url: string, signal?: AbortSignal): Promise<TextoP
   return corpo as TextoPeca
 }
 
+export interface ArquivoPeca { blob: Blob; pdf: boolean }
+const ARQUIVO_PCP = /^https:\/\/arquivos\.portaldecompraspublicas\.com\.br\/v1\/download\/[0-9a-f]{20,80}$/
+
+/**
+ * Baixa o arquivo direto do portal (que libera CORS), sem passar pela Vercel, que limita respostas a 4,5 MB.
+ * O portal manda "attachment"; refazer o arquivo como Blob com o tipo certo deixa o navegador mostrar o PDF na tela.
+ */
+export async function baixarArquivoPeca(url: string, signal?: AbortSignal): Promise<ArquivoPeca> {
+  if (!ARQUIVO_PCP.test(url)) throw new Error('Arquivo inválido.')
+  const r = await fetch(url, { signal }).catch(() => null)
+  if (!r?.ok) throw new Error('O portal não entregou o arquivo agora. Tente “Abrir no portal”.')
+  const bytes = new Uint8Array(await r.arrayBuffer())
+  const pdf = bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46 // %PDF
+  return { blob: new Blob([bytes], { type: pdf ? 'application/pdf' : r.headers.get('content-type') || 'application/octet-stream' }), pdf }
+}
+
+/** Nome legível para salvar: "Recurso - EMPRESA - Pregão 4-2026 - Varginha.pdf". */
+export function nomeArquivoPeca(p: PecaPublicada, pdf = true) {
+  const partes = [p.titulo.split(' · ')[0], p.empresa, [p.processo.modalidade, p.processo.numero].filter(Boolean).join(' '), p.processo.municipio ?? p.processo.orgao]
+  const base = partes.filter(Boolean).join(' - ').replace(/[\\/:*?"<>|]+/g, '-').replace(/\s+/g, ' ').trim().slice(0, 120)
+  return `${base || 'peca'}${pdf ? '.pdf' : ''}`
+}
+
 /** Texto que vai para a minuta ao usar uma peça como modelo: cabeçalho de referência + conteúdo. */
 export function textoDoModelo(p: PecaPublicada, conteudo: string) {
   const ref = [p.processo.modalidade, p.processo.numero && `nº ${p.processo.numero}`, p.processo.orgao, p.processo.uf].filter(Boolean).join(' · ')

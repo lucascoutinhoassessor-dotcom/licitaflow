@@ -1,12 +1,13 @@
-import { useState, type FormEvent } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { BookOpen, ChevronUp, Download, ExternalLink, FilePen, Info, Search, SearchX } from 'lucide-react'
+import { useEffect, useState, type FormEvent } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
+import { BookOpen, ChevronUp, Download, ExternalLink, FilePen, Info, Maximize2, Search, SearchX } from 'lucide-react'
 import { Badge, Button, Card, Input, Select, Vazio } from '@/components/ui'
 import { PECAS, type TipoPeca } from '@/lib/juridico'
 import { formatarData } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import {
-  lerPeca, pesquisarPecas, rotuloPapel, statusPecas, TAMANHO_PAGINA, UFS,
+  baixarArquivoPeca, lerPeca, nomeArquivoPeca, pesquisarPecas, rotuloPapel, statusPecas, TAMANHO_PAGINA, UFS,
   type FiltrosPecas, type PecaPublicada,
 } from '@/lib/pecasJuridicas'
 
@@ -115,14 +116,31 @@ export default function BuscaPecas({ tipoInicial, aoUsarModelo }: { tipoInicial:
   )
 }
 
+/** O navegador mostra PDF dentro da página? (Chrome/Edge/Firefox no computador sim; Android não.) */
+const mostraPdf = () => typeof navigator !== 'undefined' && (navigator as Navigator & { pdfViewerEnabled?: boolean }).pdfViewerEnabled !== false
+
 function CartaoPeca({ p, aoUsarModelo }: { p: PecaPublicada; aoUsarModelo: (p: PecaPublicada, texto: string) => void }) {
   const [aberto, setAberto] = useState(false)
+  const [aba, setAba] = useState<'documento' | 'texto'>(mostraPdf() ? 'documento' : 'texto')
+  const [preparando, setPreparando] = useState(false)
+  const queryClient = useQueryClient()
   const temArquivo = !!p.arquivoUrl
-  const leitura = useQuery({
-    queryKey: ['peca-texto', p.arquivoUrl], enabled: aberto && temArquivo, staleTime: Infinity, retry: 1,
-    queryFn: ({ signal }) => lerPeca(p.arquivoUrl!, signal),
-  })
+  const chaveTexto = ['peca-texto', p.arquivoUrl]
+  const lerTexto = ({ signal }: { signal?: AbortSignal }) => lerPeca(p.arquivoUrl!, signal)
+  const leitura = useQuery({ queryKey: chaveTexto, enabled: aberto && temArquivo && aba === 'texto', staleTime: Infinity, retry: 1, queryFn: lerTexto })
   const texto = temArquivo ? leitura.data?.texto ?? null : p.trecho
+
+  async function usarModelo() {
+    if (!temArquivo) { if (p.trecho) aoUsarModelo(p, p.trecho); return }
+    setPreparando(true)
+    try {
+      const lido = await queryClient.fetchQuery({ queryKey: chaveTexto, staleTime: Infinity, queryFn: lerTexto })
+      if (lido.texto) aoUsarModelo(p, lido.texto)
+      else toast.error(lido.motivo ?? 'Esta peça não tem texto para copiar. Baixe o arquivo.')
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Não foi possível ler a peça agora.')
+    } finally { setPreparando(false) }
+  }
   const pr = p.processo
   const titulo = [pr.modalidade, pr.numero && `Nº ${pr.numero}`].filter(Boolean).join(' ')
 
@@ -143,8 +161,16 @@ function CartaoPeca({ p, aoUsarModelo }: { p: PecaPublicada; aoUsarModelo: (p: P
       {!temArquivo && p.trecho && <p className="mt-2 rounded-lg border bg-muted/40 p-2.5 text-sm">{p.trecho}</p>}
 
       {aberto && temArquivo && (
-        <div className="mt-3 rounded-lg border bg-muted/30">
-          {leitura.isFetching ? <p className="p-3 text-sm text-muted-foreground">Abrindo o arquivo no portal...</p>
+        <div className="mt-3 overflow-hidden rounded-lg border bg-muted/30">
+          <div className="flex flex-wrap items-center gap-1.5 border-b p-2">
+            {(['documento', 'texto'] as const).map((a) => (
+              <button key={a} type="button" aria-pressed={aba === a} onClick={() => setAba(a)}
+                className={cn('h-7 rounded-full border px-3 text-xs font-medium', aba === a ? 'border-primary bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:text-foreground')}>
+                {a === 'documento' ? 'Documento' : 'Texto (para copiar)'}
+              </button>
+            ))}
+          </div>
+          {aba === 'documento' ? <VisualizadorPdf p={p} /> : leitura.isFetching ? <p className="p-3 text-sm text-muted-foreground">Abrindo o arquivo no portal...</p>
             : leitura.isError ? <p role="alert" className="p-3 text-sm text-destructive">{leitura.error.message}</p>
             : leitura.data?.texto ? (
               <>
@@ -161,14 +187,38 @@ function CartaoPeca({ p, aoUsarModelo }: { p: PecaPublicada; aoUsarModelo: (p: P
             {aberto ? <><ChevronUp className="h-4 w-4" /> Fechar</> : <><BookOpen className="h-4 w-4" /> Ler peça</>}
           </Button>
         )}
-        {(texto || !temArquivo) && (
-          <Button tamanho="sm" disabled={!texto} onClick={() => texto && aoUsarModelo(p, texto)}>
+        {(temArquivo || texto) && (
+          <Button tamanho="sm" carregando={preparando} onClick={usarModelo}>
             <FilePen className="h-4 w-4" /> Usar como modelo
           </Button>
         )}
-        {temArquivo && <a href={p.arquivoUrl!} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline"><Download className="h-4 w-4" />Baixar arquivo</a>}
         {pr.url && <a href={pr.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline"><ExternalLink className="h-4 w-4" />Abrir no portal</a>}
       </div>
     </Card>
   )
+}
+
+/** PDF dentro da página (visualizador do navegador), com tela cheia e download com nome legível. */
+function VisualizadorPdf({ p }: { p: PecaPublicada }) {
+  const arq = useQuery({ queryKey: ['peca-arquivo', p.arquivoUrl], staleTime: 10 * 60_000, gcTime: 5 * 60_000, retry: 1, queryFn: ({ signal }) => baixarArquivoPeca(p.arquivoUrl!, signal) })
+  const [url, setUrl] = useState<string | null>(null)
+  useEffect(() => {
+    if (!arq.data) return
+    const u = URL.createObjectURL(arq.data.blob)
+    setUrl(u)
+    return () => URL.revokeObjectURL(u)
+  }, [arq.data])
+  if (arq.isFetching && !url) return <p className="p-3 text-sm text-muted-foreground">Baixando o arquivo do portal...</p>
+  if (arq.isError) return <p role="alert" className="p-3 text-sm text-destructive">{arq.error.message}</p>
+  if (!url || !arq.data) return null
+  const nome = nomeArquivoPeca(p, arq.data.pdf)
+  const acoes = (
+    <div className="flex flex-wrap items-center gap-3 p-2 text-sm">
+      <a href={url} download={nome} className="inline-flex items-center gap-1.5 text-primary hover:underline"><Download className="h-4 w-4" />Baixar</a>
+      {arq.data.pdf && <a href={url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-primary hover:underline"><Maximize2 className="h-4 w-4" />Tela cheia</a>}
+    </div>
+  )
+  if (!arq.data.pdf) return <div><p className="p-3 text-sm text-muted-foreground">Este arquivo não é PDF (Word, ZIP ou imagem). Baixe para abrir no seu computador.</p>{acoes}</div>
+  if (!mostraPdf()) return <div><p className="p-3 text-sm text-muted-foreground">Este aparelho não mostra PDF dentro da página. Use “Tela cheia” ou “Baixar”, ou veja a aba Texto.</p>{acoes}</div>
+  return <div>{acoes}<iframe title={`PDF: ${p.titulo}`} src={`${url}#view=FitH`} className="h-[70vh] w-full border-t bg-white" /></div>
 }

@@ -213,9 +213,29 @@ export async function lerTexto(url, fetcher = fetch, { maxPaginas = MAX_PAGINAS_
 }
 
 /** Junta as quebras de linha do meio da frase e tira espaços repetidos, mantendo os parágrafos. */
+const PALAVRA = /^[(“"'«]*(?:[A-Za-zÀ-ÿ]{1,24}(?:[-'][A-Za-zÀ-ÿ]+)*|[\dºª°]+(?:[.,/:\-–][\dºª°]+)*%?|[A-Za-z]{2,}:\/\/\S+|\S+@\S+\.\S+|[§&–—-]|R\$)[)”"'».,;:!?]*$/
+
+/**
+ * Linha que uma pessoa consegue ler. PDFs com fonte sem mapa de caracteres viram sequências de símbolos
+ * ("(K7./*,V(6T)L,1K./*"), letras em ordem ("ghhijklmnlioipk") ou quadradinhos; essas linhas são descartadas.
+ */
+export function linhaLegivel(linha) {
+  const l = linha.trim()
+  if (!l) return true
+  const estranhos = (l.match(/[\u0000-\u0008\u000e-\u001f\u007f-\u009f-�□]/g) ?? []).length
+  if (estranhos > 1 && estranhos / l.length > 0.05) return false
+  const simbolos = (l.match(/[*^{}[\]|~<>=@#$%\\`]/g) ?? []).length
+  if (l.length >= 8 && simbolos / l.length > 0.08) return false
+  const tokens = l.split(/\s+/)
+  const bons = tokens.filter((t) => PALAVRA.test(t)).reduce((n, t) => n + t.length, 0)
+  const total = tokens.reduce((n, t) => n + t.length, 0)
+  return l.length < 12 ? bons > 0 || /^[\d\s.,/:-]+$/.test(l) : bons / total >= 0.6
+}
+
 export function arrumarTexto(t) {
   return String(t ?? '')
     .replace(/\r/g, '')
+    .split('\n').filter(linhaLegivel).join('\n')
     .replace(/[ \t]+/g, ' ')
     .replace(/ *\n */g, '\n')
     .replace(/([^\n.:;!?])\n(?=[a-zà-ü(])/g, '$1 ')

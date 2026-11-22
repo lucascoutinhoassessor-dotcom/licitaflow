@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { arrumarTexto, classificarDocumento, coletarPagina, criarHandler, dataDoPortal, lerChat, nomeDoArquivo, pecasDoProcesso } from './juridico.js'
+import { arrumarTexto, classificarDocumento, coletarPagina, criarHandler, dataDoPortal, lerChat, linhaLegivel, nomeDoArquivo, pecasDoProcesso } from './juridico.js'
 import { limparProtecoes } from './protecao.js'
 
 const ARQ = (n: number) => `https://arquivos.portaldecompraspublicas.com.br/v1/download/${String(n).padStart(2, '0').repeat(32)}`
@@ -119,6 +119,21 @@ describe('coleta de uma página', () => {
 describe('texto do PDF', () => {
   it('junta linhas quebradas no meio da frase e mantém os parágrafos', () => {
     expect(arrumarTexto('RECURSO ADMINISTRATIVO\nA empresa ALFA, inscrita\nno CNPJ  nº 1,\n\n\n\nvem apresentar')).toBe('RECURSO ADMINISTRATIVO\nA empresa ALFA, inscrita no CNPJ nº 1,\n\nvem apresentar')
+  })
+})
+
+describe('linhas ilegíveis do PDF', () => {
+  it('descarta símbolos, letras em sequência e quadradinhos de fonte sem mapa, e mantém o texto real', () => {
+    expect(linhaLegivel('(K7./*,V(6T)L,1K./*,*)7K6M./*9,*(/.*T,//.)-*,*9.L^/K6J.X*:)6[)/*K^7L6J)/o*T)7)*')).toBe(false)
+    expect(linhaLegivel('ghhijklmnlioipkqrsjpsntiknukvwiojnvmxygz{|}~|�n|~|��|}')).toBe(false)
+    expect(linhaLegivel('<;:0*:=>*?@ABCD<4B3*E')).toBe(false)
+    expect(linhaLegivel('18/08/2025���� � ���')).toBe(false)
+    expect(linhaLegivel('Junta Comercial do Estado de Santa Catarina')).toBe(true)
+    expect(linhaLegivel('Arquivamento 20256011699 Protocolo 256011699 de 15/08/2025 NIRE 42206756679')).toBe(true)
+    expect(linhaLegivel('Este documento pode ser verificado em http://regin.jucesc.sc.gov.br/autenticacaoDocumentos/autenticacao.aspx')).toBe(true)
+    expect(linhaLegivel('Art. 5º — Nas licitações serão observados (art. 165, § 1º, I, “a”)')).toBe(true)
+    expect(linhaLegivel('E-mail: documentos@caluxcomercial.com.br')).toBe(true)
+    expect(arrumarTexto('RECURSO\n(K7./*,V(6T)L,1K./*,*)7K6M./*9\nDOS FATOS')).toBe('RECURSO\nDOS FATOS')
   })
 })
 
