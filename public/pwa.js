@@ -12,6 +12,8 @@
   if (HOSTS_SITE.indexOf(host) >= 0 && rotaMaster) return location.replace('https://' + MASTER + path + resto);
 
   var master = rotaMaster;
+  // A abertura animada de index.html usa as cores do master.
+  if (master) document.documentElement.classList.add('lf-master');
   var head = document.head;
   function link(rel, href) {
     var el = document.createElement('link');

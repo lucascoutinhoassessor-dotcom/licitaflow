@@ -14,50 +14,71 @@
     <title>LicitaFlow</title>
     <script src="/tema.js"></script>
     <style>
-      #lf-splash{position:fixed;inset:0;z-index:2147483000;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;background:radial-gradient(circle at 50% 42%,#1e3a8a 0%,#0f172a 58%);transition:opacity .45s ease,visibility .45s ease;font-family:Inter,system-ui,-apple-system,'Segoe UI',sans-serif}
+      /* Abertura animada. O primeiro quadro é igual à tela nativa do app instalado (fundo do manifesto + ícone
+         centralizado, ~53% da largura no Android), então a passagem não aparece. Depois o ícone encolhe e sobe,
+         o nome aparece e uma luz percorre a linha do gráfico. html.lf-master (pwa.js) troca para as cores do master. */
+      #lf-splash{--fundo:#0f172a;--brilho:rgba(37,99,235,.55);--destaque:#34d399;--ponto:#6ee7b7;--sombra:rgba(37,99,235,.45);
+        position:fixed;inset:0;z-index:2147483000;overflow:hidden;background:var(--fundo);transition:opacity .45s ease,visibility .45s ease;font-family:Inter,system-ui,-apple-system,'Segoe UI',sans-serif}
+      html.lf-master #lf-splash{--fundo:#09090b;--brilho:rgba(251,191,36,.16);--destaque:#fbbf24;--ponto:#fbbf24;--sombra:rgba(0,0,0,.6)}
+      #lf-splash::before{content:'';position:absolute;inset:0;background:radial-gradient(circle at 50% 44%,var(--brilho) 0%,transparent 55%);opacity:0;animation:lf-aparece .8s .15s ease-out forwards}
       #lf-splash.sair{opacity:0;visibility:hidden}
-      #lf-splash.sair .lf-logo{transform:scale(1.08);transition:transform .45s ease}
-      .lf-logo{width:112px;height:112px;filter:drop-shadow(0 18px 40px rgba(37,99,235,.45));animation:lf-pop .7s cubic-bezier(.34,1.56,.64,1) both}
-      .lf-eixo,.lf-linha{fill:none;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:1;stroke-dashoffset:1}
-      .lf-eixo{stroke:#fff;stroke-width:44;animation:lf-traco .55s .35s ease-out forwards}
-      .lf-linha{stroke:url(#lf-verde);stroke-width:40;animation:lf-traco .6s .8s ease-out forwards}
-      .lf-ponto{fill:#6ee7b7;transform-origin:368px 172px;transform:scale(0);animation:lf-ponto .4s 1.35s cubic-bezier(.34,1.56,.64,1) forwards}
-      .lf-onda{fill:none;stroke:#6ee7b7;stroke-width:8;transform-origin:368px 172px;opacity:0;animation:lf-onda 1.6s 1.5s ease-out infinite}
-      .lf-brilho{transform:translateX(-520px) skewX(-20deg);animation:lf-brilho 1s 1.1s ease-in-out forwards}
+      .lf-logo{position:absolute;left:50%;top:50%;width:min(53vw,240px);height:min(53vw,240px);transform:translate(-50%,-50%);animation:lf-encolhe .65s .15s cubic-bezier(.65,0,.35,1) forwards}
+      #lf-splash.sair .lf-logo{transition:scale .45s ease;scale:1.08}
+      .lf-eixo,.lf-linha,.lf-luz{fill:none;stroke-linecap:round;stroke-linejoin:round}
+      .lf-eixo{stroke:#fff;stroke-width:44}
+      .lf-linha{stroke:url(#lf-verde);stroke-width:40}
+      .lf-luz{stroke:#fff;stroke-width:22;stroke-dasharray:.18 1.2;stroke-dashoffset:.2;opacity:0;animation:lf-luz .7s .85s ease-in-out forwards}
+      .lf-ponto{fill:var(--ponto);transform-origin:368px 172px}
+      .lf-onda{fill:none;stroke:var(--ponto);stroke-width:8;transform-origin:368px 172px;opacity:0;animation:lf-onda 1.6s 1.1s ease-out infinite}
+      .lf-reflexo{fill:#fff;opacity:.07}
+      .lf-brilho{transform:translateX(-520px) skewX(-20deg);animation:lf-brilho .9s .7s ease-in-out forwards}
+      #lf-fundo .a{stop-color:#3b82f6}#lf-fundo .b{stop-color:#1e40af}#lf-verde .a{stop-color:#10b981}#lf-verde .b{stop-color:#6ee7b7}
+      html.lf-master #lf-fundo .a,html.lf-master #lf-fundo .b{stop-color:#18181b}
+      html.lf-master #lf-verde .a,html.lf-master #lf-verde .b{stop-color:#fbbf24}
+      html.lf-master .lf-reflexo{opacity:0}
+      html.lf-master .lf-canto{rx:100px}
+      html.lf-master .lf-ponto{transform:scale(0);animation:lf-ponto .4s .95s cubic-bezier(.34,1.56,.64,1) forwards}
+      .lf-rodape{position:absolute;left:0;right:0;top:calc(50% + 46px);display:flex;flex-direction:column;align-items:center;gap:16px}
       .lf-nome{margin:0;font-size:26px;font-weight:700;letter-spacing:-.02em;color:#fff;opacity:0;animation:lf-subir .5s .55s ease-out forwards}
-      .lf-nome span{color:#34d399}
-      .lf-barra{width:120px;height:3px;border-radius:3px;background:rgba(255,255,255,.12);overflow:hidden;opacity:0;animation:lf-subir .4s .9s ease-out forwards}
-      .lf-barra i{display:block;width:40%;height:100%;border-radius:3px;background:linear-gradient(90deg,transparent,#34d399,transparent);animation:lf-corre 1.1s 1s ease-in-out infinite}
-      @keyframes lf-pop{from{opacity:0;transform:scale(.55) rotate(-8deg)}to{opacity:1;transform:none}}
-      @keyframes lf-traco{to{stroke-dashoffset:0}}
+      .lf-nome span{color:var(--destaque)}
+      .lf-nome b{display:none;margin-left:8px;font-weight:600;color:#a1a1aa}
+      html.lf-master .lf-nome b{display:inline}
+      .lf-barra{width:120px;height:3px;border-radius:3px;background:rgba(255,255,255,.12);overflow:hidden;opacity:0;animation:lf-subir .4s .75s ease-out forwards}
+      .lf-barra i{display:block;width:40%;height:100%;border-radius:3px;background:linear-gradient(90deg,transparent,var(--destaque),transparent);animation:lf-corre 1.1s .8s ease-in-out infinite}
+      @keyframes lf-aparece{to{opacity:1}}
+      @keyframes lf-encolhe{to{width:112px;height:112px;transform:translate(-50%,calc(-50% - 30px));filter:drop-shadow(0 18px 40px var(--sombra))}}
+      @keyframes lf-luz{0%{opacity:1;stroke-dashoffset:.2}90%{opacity:1}100%{opacity:0;stroke-dashoffset:-1}}
       @keyframes lf-ponto{to{transform:scale(1)}}
       @keyframes lf-onda{0%{opacity:.9;transform:scale(.6)}100%{opacity:0;transform:scale(2.6)}}
       @keyframes lf-brilho{to{transform:translateX(620px) skewX(-20deg)}}
       @keyframes lf-subir{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
       @keyframes lf-corre{from{transform:translateX(-100%)}to{transform:translateX(250%)}}
-      @media (prefers-reduced-motion:reduce){#lf-splash *{animation-duration:.01s!important;animation-delay:0s!important;animation-iteration-count:1!important}}
+      @media (prefers-reduced-motion:reduce){#lf-splash *,#lf-splash::before{animation-duration:.01s!important;animation-delay:0s!important;animation-iteration-count:1!important}}
     </style>
   </head>
   <body>
     <div id="lf-splash" role="status" aria-label="Abrindo o LicitaFlow">
       <svg class="lf-logo" viewBox="0 0 512 512" aria-hidden="true">
         <defs>
-          <linearGradient id="lf-fundo" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3b82f6"/><stop offset="1" stop-color="#1e40af"/></linearGradient>
-          <linearGradient id="lf-verde" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#10b981"/><stop offset="1" stop-color="#6ee7b7"/></linearGradient>
-          <clipPath id="lf-recorte"><rect width="512" height="512" rx="116"/></clipPath>
+          <linearGradient id="lf-fundo" x1="0" y1="0" x2="1" y2="1"><stop class="a" offset="0"/><stop class="b" offset="1"/></linearGradient>
+          <linearGradient id="lf-verde" x1="0" y1="1" x2="1" y2="0"><stop class="a" offset="0"/><stop class="b" offset="1"/></linearGradient>
+          <clipPath id="lf-recorte"><rect class="lf-canto" width="512" height="512" rx="116"/></clipPath>
         </defs>
         <g clip-path="url(#lf-recorte)">
           <rect width="512" height="512" fill="url(#lf-fundo)"/>
-          <rect width="512" height="256" fill="#fff" opacity=".07"/>
-          <polyline class="lf-eixo" pathLength="1" points="144,128 144,384 366,384"/>
-          <polyline class="lf-linha" pathLength="1" points="224,290 272,218 320,250 368,172"/>
+          <rect class="lf-reflexo" width="512" height="256"/>
+          <polyline class="lf-eixo" points="144,128 144,384 366,384"/>
+          <polyline class="lf-linha" points="224,290 272,218 320,250 368,172"/>
+          <polyline class="lf-luz" pathLength="1" points="224,290 272,218 320,250 368,172"/>
           <circle class="lf-onda" cx="368" cy="172" r="26"/>
           <circle class="lf-ponto" cx="368" cy="172" r="30"/>
           <rect class="lf-brilho" x="0" y="-60" width="110" height="640" fill="#fff" opacity=".22"/>
         </g>
       </svg>
-      <p class="lf-nome">Licita<span>Flow</span></p>
-      <div class="lf-barra"><i></i></div>
+      <div class="lf-rodape">
+        <p class="lf-nome">Licita<span>Flow</span><b>Master</b></p>
+        <div class="lf-barra"><i></i></div>
+      </div>
     </div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
