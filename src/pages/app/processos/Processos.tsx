@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type DragEvent, type TouchEvent a
 import { createPortal } from 'react-dom'
 import { Link, useNavigate } from 'react-router-dom'
 import * as Menu from '@radix-ui/react-dropdown-menu'
-import { Archive, ArchiveRestore, CalendarClock, Check, Gavel, KanbanSquare, List, MoreHorizontal, Plus, Radar, Search, Trash2 } from 'lucide-react'
+import { Archive, ArchiveRestore, ArrowLeft, ArrowRight, CalendarClock, Check, Gavel, KanbanSquare, List, MoreHorizontal, Pencil, Plus, Radar, Search, Trash2 } from 'lucide-react'
 import MenuFiltros, { ChipFiltro, SecaoFiltro } from '@/components/MenuFiltros'
 import { AnimatePresence, LayoutGroup, motion } from 'framer-motion'
 import { toast } from 'sonner'
@@ -14,7 +14,7 @@ import { cn } from '@/lib/utils'
 import { useLista, useNomeEmpresa, useSalvar } from '@/hooks/useDados'
 import { useRecursos } from '@/hooks/useModulos'
 import { useOrg } from '@/providers/OrgProvider'
-import type { Processo } from '@/types/db'
+import type { Processo, ProcessoColuna } from '@/types/db'
 import { ProcessoForm } from './ProcessoForm'
 
 function lerVisao(): 'kanban' | 'lista' {
@@ -34,6 +34,7 @@ const HEX_ETAPA: Record<Etapa, string> = {
   habilitacao: '#f59e0b',
   recurso: '#f97316',
   homologado: '#10b981',
+  concluido: '#14b8a6',
   perdido: '#ef4444',
   desistencia: '#a1a1aa',
 }
@@ -42,6 +43,17 @@ const HEX_ETAPA: Record<Etapa, string> = {
 const SEGURAR_MS = 320
 /** Quanto o dedo pode mexer enquanto segura; mais que isso é rolagem, não arraste. */
 const TOLERANCIA_PX = 8
+
+/** Coluna do Kanban: uma etapa (chave = etapa) ou uma coluna criada pelo cliente (chave = 'c:<id>'). */
+interface ColunaKanban {
+  chave: string
+  nome: string
+  cor: string
+  coluna?: ProcessoColuna
+}
+
+/** Cores oferecidas para as colunas criadas pelo cliente. */
+const CORES_COLUNA = ['#64748b', '#0ea5e9', '#6366f1', '#8b5cf6', '#ec4899', '#ef4444', '#f97316', '#f59e0b', '#84cc16', '#10b981', '#14b8a6', '#06b6d4']
 
 const finalizada = (e: Etapa) => (ETAPAS_FINAIS as readonly Etapa[]).includes(e)
 
@@ -71,15 +83,18 @@ function ConteudoCartao({ p, nomeEmpresa, monitorVisivel }: { p: Processo; nomeE
         ) : (
           <span />
         )}
-        <span className="flex items-center gap-2">
-          {monitorVisivel && vigiado(p) && (
-            <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400" title="Monitorado pela Sentinela">
-              <Radar className="h-3 w-3" /> IA
-            </span>
-          )}
-          {p.valor_estimado != null && <span className="tabular-nums">{formatarMoeda(p.valor_estimado)}</span>}
-        </span>
+        {p.valor_estimado != null && <span className="tabular-nums">{formatarMoeda(p.valor_estimado)}</span>}
       </div>
+      {/* Só aparece quando a Sentinela está vigiando; sem monitoramento, o cartão não mostra nada aqui. */}
+      {monitorVisivel && vigiado(p) && (
+        <div className="mt-2 flex items-center gap-1.5 text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
+          <span className="relative flex h-2 w-2">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500/60" />
+            <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+          </span>
+          Monitorando com IA
+        </div>
+      )}
       {nomeEmpresa && <div className="mt-2 truncate border-t pt-2 text-[11px] text-muted-foreground">{nomeEmpresa}</div>}
     </>
   )
@@ -147,6 +162,74 @@ function MenuCartao({
         </Menu.Content>
       </Menu.Portal>
     </Menu.Root>
+  )
+}
+
+function MenuColuna({ primeira, ultima, aoEditar, aoMover, aoExcluir }: { primeira: boolean; ultima: boolean; aoEditar: () => void; aoMover: (passo: -1 | 1) => void; aoExcluir: () => void }) {
+  return (
+    <Menu.Root modal={false}>
+      <Menu.Trigger aria-label="Opções da coluna" className="rounded-md p-1 text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:bg-muted">
+        <MoreHorizontal className="h-4 w-4" />
+      </Menu.Trigger>
+      <Menu.Portal>
+        <Menu.Content align="end" sideOffset={4} collisionPadding={8} className="z-50 min-w-[13rem] rounded-xl border bg-card p-1.5 text-card-foreground shadow-xl">
+          <Menu.Item className={itemMenu} onSelect={aoEditar}>
+            <Pencil className="h-4 w-4" /> Renomear ou mudar a cor
+          </Menu.Item>
+          <Menu.Item className={itemMenu} disabled={primeira} onSelect={() => aoMover(-1)}>
+            <ArrowLeft className="h-4 w-4" /> Mover para a esquerda
+          </Menu.Item>
+          <Menu.Item className={itemMenu} disabled={ultima} onSelect={() => aoMover(1)}>
+            <ArrowRight className="h-4 w-4" /> Mover para a direita
+          </Menu.Item>
+          <Menu.Separator className="my-1 h-px bg-border" />
+          <Menu.Item className={cn(itemMenu, 'text-destructive data-[highlighted]:bg-destructive/10')} onSelect={aoExcluir}>
+            <Trash2 className="h-4 w-4" /> Excluir coluna
+          </Menu.Item>
+        </Menu.Content>
+      </Menu.Portal>
+    </Menu.Root>
+  )
+}
+
+function FormColuna({ inicial, salvando, aoSalvar }: { inicial?: ProcessoColuna; salvando: boolean; aoSalvar: (nome: string, cor: string) => void }) {
+  const [nome, setNome] = useState(inicial?.nome ?? '')
+  const [cor, setCor] = useState(inicial?.cor ?? CORES_COLUNA[1])
+  return (
+    <form
+      className="space-y-4"
+      onSubmit={(e) => {
+        e.preventDefault()
+        if (nome.trim()) aoSalvar(nome.trim(), cor)
+      }}
+    >
+      <div>
+        <label htmlFor="coluna-nome" className="mb-1.5 block text-sm font-medium">Nome da coluna</label>
+        <Input id="coluna-nome" autoFocus maxLength={40} placeholder="Ex.: Aguardando empenho" value={nome} onChange={(e) => setNome(e.target.value)} />
+      </div>
+      <fieldset>
+        <legend className="mb-1.5 text-sm font-medium">Cor</legend>
+        <div className="flex flex-wrap gap-2">
+          {CORES_COLUNA.map((c) => (
+            <button
+              key={c}
+              type="button"
+              aria-label={`Cor ${c}`}
+              aria-pressed={cor === c}
+              onClick={() => setCor(c)}
+              className={cn('h-8 w-8 rounded-full ring-offset-2 ring-offset-background transition', cor === c && 'ring-2 ring-foreground')}
+              style={{ backgroundColor: c }}
+            />
+          ))}
+        </div>
+      </fieldset>
+      <p className="text-xs text-muted-foreground">A coluna organiza o quadro da sua equipe. A etapa oficial do processo (usada em relatórios e no monitoramento) não muda.</p>
+      <div className="flex justify-end">
+        <Button type="submit" carregando={salvando} disabled={!nome.trim()}>
+          {inicial ? 'Salvar' : 'Criar coluna'}
+        </Button>
+      </div>
+    </form>
   )
 }
 
@@ -260,14 +343,18 @@ export default function Processos() {
   const [modalidade, setModalidade] = useState('')
   const [mostrarFinais, setMostrarFinais] = useState(false)
   const [mostrarArquivados, setMostrarArquivados] = useState(false)
-  const [sobre, setSobre] = useState<Etapa | null>(null)
-  const [movidos, setMovidos] = useState<Record<string, Etapa>>({})
+  // Colunas do Kanban são identificadas por uma chave: a etapa ('captacao'...) ou 'c:<id>' para coluna do cliente.
+  const [sobre, setSobre] = useState<string | null>(null)
+  const [movidos, setMovidos] = useState<Record<string, string>>({})
+  const [colunaEditada, setColunaEditada] = useState<ProcessoColuna | 'nova' | null>(null)
   const [segurado, setSegurado] = useState<Segurado | null>(null)
   const trilho = useRef<HTMLDivElement>(null)
   const fantasmaRef = useRef<HTMLDivElement>(null)
   const fimDoArraste = useRef(0)
   const q = useLista<Processo>('processos', { ordem: ['data_abertura', true] })
   const { salvar, excluir } = useSalvar('processos', ['processo_eventos'])
+  const colunasQ = useLista<ProcessoColuna>('processo_colunas', { porEmpresa: false, ordem: ['ordem', true] })
+  const { salvar: salvarColuna, excluir: excluirColuna } = useSalvar('processo_colunas', ['processos'])
   const mostrarEmpresa = !empresa && empresas.length > 1
 
   const trocarVisao = (v: 'kanban' | 'lista') => {
@@ -290,19 +377,28 @@ export default function Processos() {
     )
   }, [q.data, busca, modalidade, mostrarArquivados])
 
-  const colunas = mostrarFinais ? [...ETAPAS_ATIVAS, ...ETAPAS_FINAIS] : ETAPAS_ATIVAS
+  const extras = colunasQ.data ?? []
+  const deEtapa = (e: Etapa): ColunaKanban => ({ chave: e, nome: ETAPAS[e], cor: HEX_ETAPA[e] })
+  const colunas: ColunaKanban[] = [
+    ...ETAPAS_ATIVAS.map(deEtapa),
+    ...extras.map((c) => ({ chave: `c:${c.id}`, nome: c.nome, cor: c.cor, coluna: c })),
+    ...(mostrarFinais ? ETAPAS_FINAIS.map(deEtapa) : []),
+  ]
 
-  // Etapa mostrada já na hora do soltar, para o cartão animar sem esperar o servidor.
-  const etapaDe = (p: Processo) => movidos[p.id] ?? p.etapa
+  // Coluna de cada cartão: a coluna do cliente, se houver e ainda existir; senão a da etapa.
+  // A chave local vale já na hora do soltar, para o cartão animar sem esperar o servidor.
+  const chaveDe = (p: Processo) => movidos[p.id] ?? (p.coluna_id && extras.some((c) => c.id === p.coluna_id) ? `c:${p.coluna_id}` : p.etapa)
 
-  async function mover(id: string, etapa: Etapa) {
+  async function mover(id: string, chave: string) {
     const p = q.data?.find((x) => x.id === id)
-    if (!p || etapaDe(p) === etapa) return
-    setMovidos((m) => ({ ...m, [id]: etapa }))
+    if (!p || chaveDe(p) === chave) return
+    const nome = chave.startsWith('c:') ? extras.find((c) => `c:${c.id}` === chave)?.nome : ETAPAS[chave as Etapa]
+    if (!nome) return
+    setMovidos((m) => ({ ...m, [id]: chave }))
     try {
-      await salvar.mutateAsync({ id, dados: { etapa } })
-      await q.refetch() // só solta a etapa local depois que a lista já veio atualizada
-      toast.success(`Movido para ${ETAPAS[etapa]}.`)
+      await salvar.mutateAsync({ id, dados: chave.startsWith('c:') ? { coluna_id: chave.slice(2) } : { etapa: chave, coluna_id: null } })
+      await q.refetch() // só solta a coluna local depois que a lista já veio atualizada
+      toast.success(`Movido para ${nome}.`)
     } catch {
       /* o erro já aparece no aviso do useSalvar; o cartão volta para a coluna de origem */
     } finally {
@@ -312,11 +408,11 @@ export default function Processos() {
   const moverRef = useRef(mover)
   moverRef.current = mover
 
-  const soltar = (etapa: Etapa) => (e: DragEvent) => {
+  const soltar = (chave: string) => (e: DragEvent) => {
     e.preventDefault()
     setSobre(null)
     const id = e.dataTransfer.getData('text/processo')
-    if (id && podeEditar) mover(id, etapa)
+    if (id && podeEditar) mover(id, chave)
   }
 
   // Arraste pelo dedo (o arrastar nativo do navegador não funciona no toque): o cartão segue o dedo,
@@ -325,19 +421,19 @@ export default function Processos() {
   useEffect(() => {
     if (!segurado) return
     const pos = { x: segurado.x, y: segurado.y }
-    let alvo: Etapa | null = null
+    let alvo: string | null = null
     let quadro = 0
     const posicionar = () => {
       const el = fantasmaRef.current
       if (el) el.style.transform = `translate3d(${pos.x - segurado.dx}px, ${pos.y - segurado.dy}px, 0)`
     }
     const procurarColuna = () => {
-      const col = document.elementFromPoint(pos.x, pos.y)?.closest<HTMLElement>('[data-etapa]')
-      const etapa = (col?.dataset.etapa as Etapa | undefined) ?? null
-      if (etapa !== alvo) {
-        alvo = etapa
-        setSobre(etapa)
-        if (etapa) navigator.vibrate?.(5)
+      const col = document.elementFromPoint(pos.x, pos.y)?.closest<HTMLElement>('[data-coluna]')
+      const chave = col?.dataset.coluna ?? null
+      if (chave !== alvo) {
+        alvo = chave
+        setSobre(chave)
+        if (chave) navigator.vibrate?.(5)
       }
     }
     const rolar = () => {
@@ -388,6 +484,43 @@ export default function Processos() {
     // O arraste dura enquanto o mesmo cartão estiver segurado.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [idSegurado])
+
+  async function gravarColuna(nome: string, cor: string) {
+    const editada = colunaEditada
+    try {
+      if (editada && editada !== 'nova') await salvarColuna.mutateAsync({ id: editada.id, dados: { nome, cor } })
+      else await salvarColuna.mutateAsync({ dados: { nome, cor, ordem: Math.max(0, ...extras.map((c) => c.ordem)) + 1 } })
+      setColunaEditada(null)
+      toast.success(editada === 'nova' ? 'Coluna criada.' : 'Coluna atualizada.')
+    } catch {
+      /* useSalvar mostra o erro */
+    }
+  }
+
+  async function apagarColuna(c: ProcessoColuna) {
+    const n = (q.data ?? []).filter((p) => p.coluna_id === c.id).length
+    if (!confirm(`Excluir a coluna "${c.nome}"?${n ? ` Os ${n} processo(s) nela voltam para a coluna da etapa deles; nada é apagado.` : ''}`)) return
+    try {
+      await excluirColuna.mutateAsync(c.id)
+      toast.success('Coluna excluída.')
+    } catch {
+      /* useSalvar mostra o erro */
+    }
+  }
+
+  async function reordenarColuna(c: ProcessoColuna, passo: -1 | 1) {
+    const i = extras.findIndex((x) => x.id === c.id)
+    const outra = extras[i + passo]
+    if (!outra) return
+    try {
+      // Troca a ordem das duas; se empatarem, dá uma ordem distinta para cada.
+      const [a, b] = c.ordem === outra.ordem ? [outra.ordem + passo, c.ordem] : [outra.ordem, c.ordem]
+      await salvarColuna.mutateAsync({ id: c.id, dados: { ordem: a } })
+      await salvarColuna.mutateAsync({ id: outra.id, dados: { ordem: b } })
+    } catch {
+      /* useSalvar mostra o erro */
+    }
+  }
 
   async function monitorar(p: Processo, ligar: boolean) {
     try {
@@ -490,7 +623,7 @@ export default function Processos() {
           <div className="mb-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-muted-foreground">
             {visao === 'kanban' && (
               <label className="flex items-center gap-2">
-                <input type="checkbox" checked={mostrarFinais} onChange={(e) => setMostrarFinais(e.target.checked)} /> Mostrar ganhos, perdidos e desistências
+                <input type="checkbox" checked={mostrarFinais} onChange={(e) => setMostrarFinais(e.target.checked)} /> Mostrar ganhos, concluídos, perdidos e desistências
               </label>
             )}
             {arquivados > 0 && (
@@ -507,23 +640,23 @@ export default function Processos() {
                   layoutScroll
                   className={cn('rolagem-kanban -mx-4 flex gap-4 overflow-x-auto px-4 pb-4 lg:-mx-8 lg:px-8', segurado ? 'snap-none' : 'snap-x snap-mandatory sm:snap-none')}
                 >
-                  {colunas.map((etapa) => {
-                    const itens = lista.filter((p) => etapaDe(p) === etapa)
+                  {colunas.map((col) => {
+                    const itens = lista.filter((p) => chaveDe(p) === col.chave)
                     const total = itens.reduce((a, p) => a + (p.valor_estimado ?? 0), 0)
-                    const cor = HEX_ETAPA[etapa]
-                    const ativa = sobre === etapa
+                    const cor = col.cor
+                    const ativa = sobre === col.chave
                     return (
                       <div
-                        key={etapa}
-                        data-etapa={etapa}
+                        key={col.chave}
+                        data-coluna={col.chave}
                         onDragOver={(e) => {
                           e.preventDefault()
-                          setSobre(etapa)
+                          setSobre(col.chave)
                         }}
                         onDragLeave={(e) => {
                           if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setSobre(null)
                         }}
-                        onDrop={soltar(etapa)}
+                        onDrop={soltar(col.chave)}
                         style={{
                           borderColor: ativa ? cor : `${cor}40`,
                           backgroundImage: `linear-gradient(to bottom, ${cor}${ativa ? '2e' : '17'}, ${cor}05 45%, transparent)`,
@@ -535,15 +668,26 @@ export default function Processos() {
                         )}
                       >
                         <span className="absolute inset-x-0 top-0 h-1" style={{ backgroundColor: cor }} />
-                        <div className="mb-1 flex items-center justify-between border-b px-1 pb-3" style={{ borderColor: `${cor}33` }}>
-                          <div className="flex items-center gap-2 text-base font-semibold">
-                            <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: cor, boxShadow: `0 0 8px ${cor}` }} />
-                            {ETAPAS[etapa]}
+                        <div className="mb-1 flex items-center justify-between gap-2 border-b px-1 pb-3" style={{ borderColor: `${cor}33` }}>
+                          <div className="flex min-w-0 items-center gap-2 text-base font-semibold">
+                            <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: cor, boxShadow: `0 0 8px ${cor}` }} />
+                            <span className="truncate">{col.nome}</span>
                             <span className="rounded-full px-2 text-xs tabular-nums" style={{ backgroundColor: `${cor}26`, color: cor }}>
                               {itens.length}
                             </span>
                           </div>
-                          {total > 0 && <span className="text-[11px] tabular-nums text-muted-foreground">{formatarMoeda(total)}</span>}
+                          <div className="flex shrink-0 items-center gap-1">
+                            {total > 0 && <span className="text-[11px] tabular-nums text-muted-foreground">{formatarMoeda(total)}</span>}
+                            {col.coluna && podeEditar && (
+                              <MenuColuna
+                                primeira={extras[0]?.id === col.coluna.id}
+                                ultima={extras[extras.length - 1]?.id === col.coluna.id}
+                                aoEditar={() => setColunaEditada(col.coluna!)}
+                                aoMover={(passo) => reordenarColuna(col.coluna!, passo)}
+                                aoExcluir={() => apagarColuna(col.coluna!)}
+                              />
+                            )}
+                          </div>
                         </div>
                         <div className="flex flex-1 flex-col gap-3 pt-2">
                           <AnimatePresence initial={false} mode="popLayout">
@@ -576,17 +720,26 @@ export default function Processos() {
                               className="flex flex-1 items-center justify-center rounded-xl border-2 border-dashed p-4 text-center text-xs text-muted-foreground transition-colors"
                               style={{ borderColor: ativa ? cor : `${cor}30`, color: ativa ? cor : undefined }}
                             >
-                              {ativa ? 'Solte aqui' : 'Nenhum processo nesta etapa'}
+                              {ativa ? 'Solte aqui' : 'Nenhum processo nesta coluna'}
                             </div>
                           )}
                         </div>
                       </div>
                     )
                   })}
+                  {podeEditar && (
+                    <button
+                      type="button"
+                      onClick={() => setColunaEditada('nova')}
+                      className="flex min-h-[calc(100dvh-20rem)] w-[70vw] max-w-[16rem] shrink-0 snap-center flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed text-sm text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground sm:w-56"
+                    >
+                      <Plus className="h-5 w-5" /> Nova coluna
+                    </button>
+                  )}
                 </motion.div>
               </LayoutGroup>
               <p className="text-xs text-muted-foreground">
-                Dica: arraste os cartões entre as colunas para mudar a etapa. No celular, segure o cartão um instante e arraste.
+                Dica: arraste os cartões entre as colunas para mudar a etapa. No celular, segure o cartão um instante e arraste. Colunas criadas por você organizam o quadro sem mudar a etapa do processo.
               </p>
               {segurado &&
                 createPortal(
@@ -634,6 +787,17 @@ export default function Processos() {
           )}
         </>
       )}
+
+      <Modal aberto={!!colunaEditada} aoFechar={() => setColunaEditada(null)} titulo={colunaEditada === 'nova' ? 'Nova coluna' : 'Editar coluna'}>
+        {colunaEditada && (
+          <FormColuna
+            key={colunaEditada === 'nova' ? 'nova' : colunaEditada.id}
+            inicial={colunaEditada === 'nova' ? undefined : colunaEditada}
+            salvando={salvarColuna.isPending}
+            aoSalvar={gravarColuna}
+          />
+        )}
+      </Modal>
 
       <Modal aberto={novo} aoFechar={() => setNovo(false)} titulo="Novo processo">
         <ProcessoForm

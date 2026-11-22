@@ -353,7 +353,7 @@ export default function ProcessoDetalhe() {
   if (!p) return <NaoEncontrada embutida />
 
   const mudarEtapa = async (etapa: Etapa) => {
-    await salvar.mutateAsync({ id: p.id, dados: { etapa } })
+    await salvar.mutateAsync({ id: p.id, dados: { etapa, coluna_id: null } }) // mudar a etapa tira o cartão da coluna personalizada do Kanban
     toast.success(`Etapa: ${ETAPAS[etapa]}`)
   }
 

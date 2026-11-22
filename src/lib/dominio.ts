@@ -21,12 +21,13 @@ export const ETAPAS = {
   habilitacao: 'Habilitação',
   recurso: 'Recurso',
   homologado: 'Ganho',
+  concluido: 'Concluído',
   perdido: 'Perdido',
   desistencia: 'Desistência',
 } as const
 export type Etapa = keyof typeof ETAPAS
 export const ETAPAS_ATIVAS: Etapa[] = ['captacao', 'analise', 'proposta', 'disputa', 'habilitacao', 'recurso']
-export const ETAPAS_FINAIS: Etapa[] = ['homologado', 'perdido', 'desistencia']
+export const ETAPAS_FINAIS: Etapa[] = ['homologado', 'concluido', 'perdido', 'desistencia']
 export const COR_ETAPA: Record<Etapa, string> = {
   captacao: 'bg-slate-400',
   analise: 'bg-sky-500',
@@ -35,6 +36,7 @@ export const COR_ETAPA: Record<Etapa, string> = {
   habilitacao: 'bg-amber-500',
   recurso: 'bg-orange-500',
   homologado: 'bg-emerald-500',
+  concluido: 'bg-teal-500',
   perdido: 'bg-red-500',
   desistencia: 'bg-zinc-400',
 }

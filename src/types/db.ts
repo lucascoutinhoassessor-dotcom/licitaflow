@@ -99,8 +99,20 @@ export interface Processo {
   arquivado_em: string | null
   /** Sentinela ligada neste processo (padrão ligado; o cliente desliga pelo cartão do Kanban). */
   monitorar: boolean
+  /** Coluna criada pelo cliente no Kanban (null = fica na coluna da etapa). */
+  coluna_id: string | null
   created_at: string
   updated_at: string
+}
+
+/** Coluna extra do Kanban criada pela organização. */
+export interface ProcessoColuna {
+  id: string
+  org_id: string
+  nome: string
+  cor: string
+  ordem: number
+  created_at: string
 }
 
 export interface ProcessoItem {

@@ -36,8 +36,8 @@ export default function Painel() {
   const nome = (user?.user_metadata?.nome as string | undefined)?.split(' ')[0]
   const ativos = (processos.data ?? []).filter((p) => ETAPAS_ATIVAS.includes(p.etapa))
   const emDisputa = ativos.reduce((a, p) => a + (p.valor_estimado ?? 0), 0)
-  const ganhos = (processos.data ?? []).filter((p) => p.etapa === 'homologado').length
-  const finalizados = (processos.data ?? []).filter((p) => ['homologado', 'perdido'].includes(p.etapa)).length
+  const ganhos = (processos.data ?? []).filter((p) => p.etapa === 'homologado' || p.etapa === 'concluido').length
+  const finalizados = (processos.data ?? []).filter((p) => ['homologado', 'concluido', 'perdido'].includes(p.etapa)).length
   const proximos = (prazos.data ?? []).filter((p) => ['atrasado', 'hoje', 'semana'].includes(situacaoPrazo(p.data_hora, false)))
   const atencaoDocs = (docs.data ?? []).filter((d) => ['vencido', 'vence_em_breve'].includes(situacaoValidade(d.validade)))
 
