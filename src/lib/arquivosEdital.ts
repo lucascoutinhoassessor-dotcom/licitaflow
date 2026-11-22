@@ -67,9 +67,23 @@ export function mimeDe(formato: Formato, bytes: Uint8Array) {
   return MIME[formato]
 }
 
-/** Baixa o arquivo do PNCP. */
+/**
+ * Endereço do arquivo pelo próprio domínio (rewrite /pncp-arquivos na Vercel e no Vite): quando entrega o arquivo,
+ * o PNCP manda "Access-Control-Allow-Origin: *" duas vezes e o navegador bloqueia a leitura direta.
+ */
+export function urlArquivoLocal(url: string) {
+  const m = url.match(/^https:\/\/pncp\.gov\.br\/pncp-api\/v1\/(orgaos\/\d{14}\/compras\/\d{4}\/\d+\/arquivos\/\d+)$/)
+  return m ? `/pncp-arquivos/${m[1]}` : url
+}
+
+/** Baixa o arquivo do PNCP. O PNCP às vezes responde 422 ("Erro ao tentar carregar arquivo") e acerta na tentativa seguinte. */
 export async function baixarArquivo(url: string, nome: string, signal?: AbortSignal): Promise<ConteudoArquivo> {
-  const r = await fetch(url, { signal }).catch((e) => { if (signal?.aborted) throw e; return null })
+  let r: Response | null = null
+  for (let tentativa = 0; tentativa < 4; tentativa++) {
+    if (tentativa) await new Promise((ok) => setTimeout(ok, 700 * tentativa))
+    r = await fetch(urlArquivoLocal(url), { signal }).catch((e) => { if (signal?.aborted) throw e; return null })
+    if (r?.ok || (r && r.status !== 422 && r.status < 500)) break
+  }
   if (!r?.ok) throw new Error('A fonte oficial não entregou o arquivo agora. Tente de novo em instantes.')
   if (Number(r.headers.get('content-length')) > MAX_BYTES) throw new Error('Arquivo grande demais para abrir aqui (mais de 60 MB). Use “Abrir na fonte”.')
   const bytes = new Uint8Array(await r.arrayBuffer())

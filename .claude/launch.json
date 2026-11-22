@@ -21,6 +21,17 @@
         "3110"
       ],
       "port": 3110
+    },
+    {
+      "name": "licitaflow-dev-3120",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "--use-system-ca",
+        "node_modules/vite/bin/vite.js",
+        "--port",
+        "3120"
+      ],
+      "port": 3120
     }
   ]
 }

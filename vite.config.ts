@@ -30,7 +30,8 @@ export default defineConfig({
     },
   },
   // Porta 3100 (a 3000 costuma estar ocupada por outros projetos). Precisa estar nas Redirect URLs do Supabase Auth.
-  server: { port: 3100, strictPort: true },
+  // /pncp-arquivos repete o rewrite da Vercel (arquivos do edital pelo próprio domínio; o PNCP duplica o cabeçalho de CORS).
+  server: { port: 3100, strictPort: true, proxy: { '/pncp-arquivos': { target: 'https://pncp.gov.br', changeOrigin: true, rewrite: (p) => p.replace(/^\/pncp-arquivos/, '/pncp-api/v1') } } },
   preview: { port: 3100 },
   build: {
     rollupOptions: {
