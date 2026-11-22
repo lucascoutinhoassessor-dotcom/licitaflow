@@ -13,19 +13,18 @@ Assim, o dado bruto não passa pelo Postgres do Supabase, que está no plano Nan
 
 ## Conectar (passo a passo)
 
-1. Entre em https://app.turso.tech e crie um banco. Exemplo: `licitaflow`, na região mais próxima (São Paulo, se houver).
-2. Copie a **URL do banco** (`libsql://licitaflow-<org>.turso.io`) e gere um **token** em *Create Token*,
-   com permissão de leitura e escrita.
-3. Na Vercel, no projeto `licitaflow-prod`, abra *Settings → Environment Variables* e cadastre:
-   - `TURSO_DATABASE_URL`: a URL do passo 2;
-   - `TURSO_AUTH_TOKEN`: o token do passo 2;
-   - `TURSO_COLETA_TOKEN`: um texto aleatório de 32 a 200 caracteres (é a senha do agendador).
-4. Faça um novo deploy.
-5. No SQL Editor do Supabase, aplique a migração `20261122000053_turso_agendador.sql` e ative o agendador:
+1. Banco criado em 22/11/2026: `licitaforce`, em São Paulo (aws-sa-east-1).
+   URL: `libsql://licitaforce-lucas-cout.aws-sa-east-1.turso.io`.
+2. No Turso, abra o banco, clique em **Create Token** (leitura e escrita, sem expiração) e copie o token.
+3. Na Vercel (projeto `licitaflow-prod` → Settings → Environment Variables, ambiente Production), cadastre:
+   - `TURSO_DATABASE_URL` = a URL do passo 1
+   - `TURSO_AUTH_TOKEN` = o token do passo 2
+   e faça um **Redeploy**.
+4. Ligue a coleta no Supabase. O token do agendador já é gerado e guardado no banco pela migração 055:
    ```sql
-   update licitaflow_turso.config set ativo = true, token = '<o mesmo TURSO_COLETA_TOKEN>' where id;
+   update licitaflow_turso.config set ativo = true where id;
    ```
-6. Em alguns minutos, o cartão em Integrações mostra os editais guardados e a hora da última coleta.
+5. Em alguns minutos, o cartão em Integrações mostra os editais guardados e a hora da última coleta.
 
 Para desligar: `update licitaflow_turso.config set ativo = false where id;`
 

@@ -45,8 +45,8 @@ describe('turso', () => {
   })
 
   it('a coleta exige o segredo e o endereço antigo continua 410', async () => {
-    const h = criarHandler({ env: { SUPABASE_URL: 'https://s', SUPABASE_ANON_KEY: 'a', TURSO_COLETA_TOKEN: 'segredo' }, fetcher: vi.fn() as unknown as typeof fetch })
-    const r1 = resposta(); await h({ method: 'POST', query: { acao: 'turso-coletar' }, headers: { 'x-coleta': 'errado' } }, r1)
+    const h = criarHandler({ env: { SUPABASE_URL: 'https://s', SUPABASE_ANON_KEY: 'a', SUPABASE_SERVICE_ROLE_KEY: 'k' }, fetcher: vi.fn(async () => new Response('false')) as unknown as typeof fetch })
+    const r1 = resposta(); await h({ method: 'POST', query: { acao: 'turso-coletar' }, headers: { 'x-coleta': 'a'.repeat(64) } }, r1)
     expect(r1.status).toHaveBeenCalledWith(401)
     const r2 = resposta(); await h({ method: 'GET', query: {}, headers: {} }, r2)
     expect(r2.status).toHaveBeenCalledWith(410)

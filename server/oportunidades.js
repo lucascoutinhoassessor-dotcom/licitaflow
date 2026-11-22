@@ -1,10 +1,15 @@
 // /api/oportunidades: a pesquisa antiga (que percorria a fonte externa) saiu; clientes antigos recebem 410.
 // O mesmo endereço agora serve a camada de dados brutos no Turso (server/turso.js):
-//   POST ?acao=turso-coletar   (cron, cabeçalho x-coleta = TURSO_COLETA_TOKEN) → grava no Turso o que mudou no PNCP
+//   POST ?acao=turso-coletar   (cron, cabeçalho x-coleta conferido no banco) → grava no Turso o que mudou no PNCP
 //   GET  ?acao=turso-situacao  (master)                                          → configurado? quantos editais? última coleta
 //   GET  ?acao=turso-buscar&q=&uf= (usuário logado)                              → busca rápida no bruto
 import { usuarioLogado, excedeuLimite, guardarNoNavegador } from './protecao.js'
 import { buscarBruto, clienteTurso, coletarRodada, situacaoTurso } from './turso.js'
+
+async function rpcServico(fetcher, base, chave, nome, corpo) {
+  const r = await fetcher(`${base}/rest/v1/rpc/${nome}`, { method: 'POST', headers: { apikey: chave, Authorization: `Bearer ${chave}`, 'Content-Type': 'application/json' }, body: JSON.stringify(corpo), signal: AbortSignal.timeout(10000) })
+  return r.ok ? r.json().catch(() => null) : null
+}
 
 export function criarHandler({ fetcher = fetch, env = process.env } = {}) {
   return async function handler(req, res) {
@@ -18,8 +23,11 @@ export function criarHandler({ fetcher = fetch, env = process.env } = {}) {
     try {
       if (acao === 'turso-coletar') {
         if (req.method !== 'POST') return res.status(405).json({ error: 'Método não permitido' })
-        const segredo = env.TURSO_COLETA_TOKEN
-        if (!segredo || String(req.headers['x-coleta'] ?? '') !== segredo) return res.status(401).json({ error: 'Não autorizado' })
+        // O token mora no banco (licitaflow_turso.config): a Vercel só pergunta se o cabeçalho confere.
+        const coleta = String(req.headers['x-coleta'] ?? '')
+        if (!/^[0-9a-f]{32,200}$/.test(coleta) || !env.SUPABASE_SERVICE_ROLE_KEY) return res.status(401).json({ error: 'Não autorizado' })
+        const ok = await rpcServico(fetcher, base, env.SUPABASE_SERVICE_ROLE_KEY, 'turso_conferir_token', { p_token: coleta })
+        if (ok !== true) return res.status(401).json({ error: 'Não autorizado' })
         if (!turso) return res.status(503).json({ error: 'Turso não configurado' })
         return res.status(200).json({ feitos: await coletarRodada(turso, { fetcher }) })
       }
@@ -31,8 +39,9 @@ export function criarHandler({ fetcher = fetch, env = process.env } = {}) {
       if (acao === 'turso-situacao') {
         const r = await fetcher(`${base}/rest/v1/rpc/is_platform_admin`, { method: 'POST', headers: { apikey: anon, Authorization: token, 'Content-Type': 'application/json' }, body: '{}' })
         if ((await r.json().catch(() => false)) !== true) return res.status(403).json({ error: 'Acesso restrito ao master' })
-        if (!turso) return res.status(200).json({ configurado: false, coletaAgendada: !!env.TURSO_COLETA_TOKEN })
-        return res.status(200).json({ configurado: true, coletaAgendada: !!env.TURSO_COLETA_TOKEN, ...(await situacaoTurso(turso)) })
+        const coletaAgendada = env.SUPABASE_SERVICE_ROLE_KEY ? (await rpcServico(fetcher, base, env.SUPABASE_SERVICE_ROLE_KEY, 'turso_coleta_ativa', {}).catch(() => false)) === true : false
+        if (!turso) return res.status(200).json({ configurado: false, coletaAgendada })
+        return res.status(200).json({ configurado: true, coletaAgendada, ...(await situacaoTurso(turso)) })
       }
       if (acao === 'turso-buscar') {
         if (!turso) return res.status(503).json({ error: 'A base rápida ainda não foi conectada.' })

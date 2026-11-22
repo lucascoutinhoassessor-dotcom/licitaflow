@@ -33,8 +33,8 @@ export default function TursoStatus() {
       </ul>}
       {s && !s.configurado && <ol className="list-decimal space-y-1 pl-5 text-sm text-muted-foreground">
         <li>Crie um banco no Turso (app.turso.tech) e gere um token de acesso.</li>
-        <li>Na Vercel, cadastre <code>TURSO_DATABASE_URL</code>, <code>TURSO_AUTH_TOKEN</code> e <code>TURSO_COLETA_TOKEN</code> (texto aleatório de 32+ caracteres).</li>
-        <li>No Supabase, ative o agendador com o mesmo <code>TURSO_COLETA_TOKEN</code> (passo a passo em docs/turso.md).</li>
+        <li>Na Vercel, cadastre <code>TURSO_DATABASE_URL</code> e <code>TURSO_AUTH_TOKEN</code> e faça um novo deploy.</li>
+        <li>Ligue a coleta no Supabase (o token do agendador já é gerado no banco; passo a passo em docs/turso.md).</li>
       </ol>}
       <Button tamanho="sm" variante="contorno" onClick={() => q.refetch()} carregando={q.isFetching}>Atualizar</Button>
     </Card>
