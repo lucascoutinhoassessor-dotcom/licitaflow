@@ -4,7 +4,7 @@ import { toast } from 'sonner'
 import { useAuth } from '@/providers/AuthProvider'
 import { supabase,mensagemErro } from '@/lib/supabase'
 import { formatarDataHora } from '@/lib/format'
-import { ativarPush,desativarPush,enviarPushAviso,estadoPush,precisaInstalar,type EstadoPush } from '@/lib/push'
+import { ativarPush,desativarPush,descreverAparelho,enviarPushAviso,estadoPush,explicarErroPush,precisaInstalar,testarPush,type EstadoPush } from '@/lib/push'
 import { Aviso,Badge,Button,CabecalhoPagina,Campo,Card,Carregando,Input,Modal,Textarea } from '@/components/ui'
 import { TIPOS_LOG,type LogPlataforma } from '@/lib/logsPlataforma'
 
@@ -53,7 +53,9 @@ export default function Avisos({master=false}:{master?:boolean}) {
       await qc.invalidateQueries({queryKey:['plataforma-avisos']});setNovo(false);setF(FORM_VAZIO)
       if(quando){toast.success(`Aviso agendado para ${formatarDataHora(quando.toISOString())}.${f.push?' O push sai automaticamente nesse horário.':''}`);return}
       if(!f.push){toast.success('Aviso publicado no painel, sem push.');return}
-      try{const r=await enviarPushAviso(String(id));toast.success(r.enviados?`Aviso publicado e enviado por push para ${r.enviados} ${r.enviados===1?'aparelho':'aparelhos'}.`:'Aviso publicado no painel. Nenhum aparelho com notificações ativadas para receber o push.')}
+      try{const r=await enviarPushAviso(String(id))
+        if(r.falhas)toast.warning(`Aviso publicado. Push entregue a ${r.enviados} e recusado em ${r.falhas} ${r.falhas===1?'aparelho':'aparelhos'}.`,{description:[...new Set((r.erros??[]).map(x=>explicarErroPush(x.status)))].join(' · '),duration:15000})
+        else toast.success(r.enviados?`Aviso publicado e enviado por push para ${r.enviados} ${r.enviados===1?'aparelho':'aparelhos'}.`:'Aviso publicado no painel. Nenhum aparelho com notificações ativadas para receber o push.')}
       catch(e){toast.error(`Aviso publicado no painel, mas o push falhou: ${mensagemErro(e)}`)}
     }
     catch(e){toast.error(mensagemErro(e))}finally{setOcupado(false)}
@@ -64,6 +66,17 @@ export default function Avisos({master=false}:{master?:boolean}) {
     setOcupado(true)
     try{if(push==='ativo'){await desativarPush();setPush('inativo');toast.success('Notificações desativadas neste aparelho.')}else{const e=await ativarPush();setPush(e);if(e==='negado')toast.error('As notificações estão bloqueadas. Libere nas configurações do navegador para este site.')}}
     catch(e){toast.error(mensagemErro(e))}finally{setOcupado(false)}
+  }
+  const [testando,setTestando]=useState(false)
+  async function testar(){
+    setTestando(true)
+    try{
+      const r=await testarPush()
+      if(!r.resultados.length){toast.error('Nenhum aparelho seu com notificações ativadas. Abra o app no celular ou no computador e ative as notificações em Avisos.');return}
+      const linhas=r.resultados.map(x=>`${x.ok?'✓':'✗'} ${descreverAparelho(x.aparelho)}: ${x.ok?'entregue ao serviço de push':explicarErroPush(x.status)}`)
+      const desc=<div className="space-y-0.5">{linhas.map((l,i)=><p key={i}>{l}</p>)}{r.enviados>0 && <p className="pt-1">Se a notificação não apareceu num aparelho marcado com ✓, o bloqueio está nele: notificações do navegador nas configurações do sistema, modo Não Perturbe ou economia de bateria.</p>}</div>
+      ;(r.falhas?toast.warning:toast.success)(`Teste enviado: ${r.enviados} de ${r.resultados.length} ${r.resultados.length===1?'aparelho':'aparelhos'}.`,{description:desc,duration:20000})
+    }catch(e){toast.error(mensagemErro(e))}finally{setTestando(false)}
   }
   async function excluir(id:string){
     if(!confirm('Excluir o aviso de vez? Ele some do painel dos clientes e do histórico. Notificações já entregues nos aparelhos não são apagadas.'))return
@@ -82,7 +95,7 @@ export default function Avisos({master=false}:{master?:boolean}) {
     try{const {error}=await supabase.from('aviso_leituras').upsert({aviso_id:id,user_id:user!.id},{onConflict:'aviso_id,user_id',ignoreDuplicates:true});if(error)throw error;await qc.invalidateQueries({queryKey:['aviso-leituras']})}
     catch(e){toast.error(mensagemErro(e))}finally{setOcupado(false)}
   }
-  return <><CabecalhoPagina titulo={master?'Avisos aos clientes':'Avisos do LicitaFlow'} descricao={master?'Publique agora ou agende data e horário, para todos ou para clientes escolhidos. Quem ativou as notificações recebe o aviso por push.':'Comunicados no painel, com histórico recente de até 100 avisos. Quem ativa as notificações recebe cada aviso na hora, por push.'} acoes={<><Button variante="contorno" onClick={()=>q.refetch()}>Atualizar</Button>{master && <Button onClick={()=>setNovo(true)}>Publicar aviso</Button>}</>}/>
+  return <><CabecalhoPagina titulo={master?'Avisos aos clientes':'Avisos do LicitaFlow'} descricao={master?'Publique agora ou agende data e horário, para todos ou para clientes escolhidos. Quem ativou as notificações recebe o aviso por push.':'Comunicados no painel, com histórico recente de até 100 avisos. Quem ativa as notificações recebe cada aviso na hora, por push.'} acoes={<><Button variante="contorno" onClick={()=>q.refetch()}>Atualizar</Button>{(master||push==='ativo') && <Button variante="contorno" carregando={testando} onClick={testar}>Testar push</Button>}{master && <Button onClick={()=>setNovo(true)}>Publicar aviso</Button>}</>}/>
     {q.isLoading && <Carregando/>}{q.isError && <Aviso>Não foi possível consultar os avisos. Tente atualizar a página.</Aviso>}{leituras.isError && <Aviso>Não foi possível consultar seus registros de leitura.</Aviso>}
     {!master && push && push!=='sem-suporte' && <Card className="mb-4 flex flex-wrap items-center gap-3 p-4"><div className="min-w-0 flex-1"><p className="font-medium">{push==='ativo'?'Notificações ativadas neste aparelho':'Receber os avisos na hora'}</p><p className="text-sm text-muted-foreground">{push==='negado'?'As notificações deste site estão bloqueadas. Libere nas configurações do navegador e toque em Ativar.':push==='ativo'?'Cada aviso novo chega como notificação, mesmo com o app fechado.':'Ative para receber cada aviso como notificação no celular ou no computador, mesmo com o app fechado.'}</p></div><Button tamanho="sm" variante={push==='ativo'?'contorno':'primario'} carregando={ocupado} onClick={alternarPush}>{push==='ativo'?'Desativar':'Ativar notificações'}</Button></Card>}
     {!master && push==='sem-suporte' && precisaInstalar() && <div className="mb-4"><Aviso>No iPhone, as notificações só funcionam com o LicitaFlow instalado: toque em Compartilhar → Adicionar à Tela de Início e abra por lá.</Aviso></div>}

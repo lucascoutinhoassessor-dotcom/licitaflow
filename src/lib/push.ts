@@ -88,5 +88,28 @@ export async function desativarPush() {
   await sub.unsubscribe().catch(() => undefined)
 }
 
+export interface ErroPush { status: number; motivo: string }
+export interface ResultadoTeste { aparelho: string; ok: boolean; status: number; motivo?: string }
+
 /** Master: dispara o push de um aviso recém-publicado. */
-export const enviarPushAviso = (aviso: string) => chamar({ acao: 'enviar', aviso }) as Promise<{ enviados: number; falhas: number }>
+export const enviarPushAviso = (aviso: string) => chamar({ acao: 'enviar', aviso }) as Promise<{ enviados: number; falhas: number; erros?: ErroPush[] }>
+
+/** Manda uma notificação de teste para todos os aparelhos inscritos da conta logada. */
+export const testarPush = () => chamar({ acao: 'testar' }) as Promise<{ enviados: number; falhas: number; removidos: number; resultados: ResultadoTeste[] }>
+
+/** "Android · Chrome", "Windows · Edge"… a partir do user-agent gravado na inscrição. */
+export function descreverAparelho(ua: string) {
+  const so = /Android/.test(ua) ? 'Android' : /iPhone|iPad|iPod/.test(ua) ? 'iPhone' : /Windows/.test(ua) ? 'Windows' : /Mac OS X/.test(ua) ? 'Mac' : /Linux/.test(ua) ? 'Linux' : 'Aparelho'
+  const nav = /Edg\//.test(ua) ? 'Edge' : /OPR\//.test(ua) ? 'Opera' : /SamsungBrowser/.test(ua) ? 'Samsung Internet' : /Firefox\//.test(ua) ? 'Firefox' : /Chrome\//.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : ''
+  return nav ? `${so} · ${nav}` : so
+}
+
+/** Motivo de falha do serviço de push em português. */
+export function explicarErroPush(status: number) {
+  if (status === 404 || status === 410) return 'inscrição vencida (o aparelho saiu ou bloqueou); foi removida. Ative as notificações de novo nele'
+  if (status === 403) return 'chave do servidor não confere com a do aparelho. Desative e ative as notificações de novo nele'
+  if (status === 413) return 'texto grande demais'
+  if (status === 429) return 'muitos envios seguidos; tente em alguns minutos'
+  if (status >= 500) return 'serviço de push do navegador fora do ar; tente de novo'
+  return 'sem resposta do serviço de push'
+}

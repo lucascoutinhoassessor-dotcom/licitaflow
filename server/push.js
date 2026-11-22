@@ -2,6 +2,7 @@
 // GET                      → chave pública VAPID (o aparelho precisa dela para se inscrever)
 // POST {acao:'inscrever'}  → grava a inscrição deste aparelho para o usuário logado
 // POST {acao:'cancelar'}   → remove a inscrição deste aparelho
+// POST {acao:'testar'}     → manda uma notificação de teste para os aparelhos do usuário logado
 // POST {acao:'enviar'}     → (só master) manda o push de um aviso recém-publicado, uma vez só
 // POST {acao:'agendados'}  → (pg_cron, sem login) manda os pushes agendados que já venceram
 // As chaves VAPID são geradas no primeiro uso e guardadas em push_vapid (só a chave de serviço lê).
@@ -72,27 +73,37 @@ export function criarHandler({ webpush = webpushPadrao, fetcher = fetch } = {}) 
         inscricoes = inscricoes.concat(await chamar(`/rest/v1/push_inscricoes?select=id,endpoint,p256dh,auth&user_id=in.(${lote})`))
       }
       if (!inscricoes.length) return { enviados: 0, falhas: 0 }
+      const r = await disparar(inscricoes, { id: aviso.id, titulo: aviso.titulo, texto: resumo(aviso.texto), url: '/app/avisos', tag: aviso.id })
+      return { enviados: r.enviados, falhas: r.falhas, ...(r.falhas ? { erros: r.erros.slice(0, 5) } : {}) }
+    }
 
+    /** Manda o push para cada aparelho e devolve o resultado de cada um (o motivo vem do serviço de push do navegador). */
+    async function disparar(inscricoes, dados) {
       const k = await chaves()
       webpush.setVapidDetails(CONTATO, k.publica, k.privada)
-      const payload = JSON.stringify({ id: aviso.id, titulo: aviso.titulo, texto: resumo(aviso.texto), url: '/app/avisos', tag: aviso.id })
+      const payload = JSON.stringify(dados)
       let enviados = 0, falhas = 0
-      const mortas = []
+      const mortas = [], erros = [], resultados = []
       for (let i = 0; i < inscricoes.length; i += 25) {
         await Promise.all(inscricoes.slice(i, i + 25).map(async s => {
           try {
             // urgency high: o Android/Chrome entrega na hora, sem esperar o aparelho "acordar" (modo soneca).
-            await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, payload, { TTL: 86400, urgency: 'high', timeout: 10000 })
+            const r = await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, payload, { TTL: 86400, urgency: 'high', timeout: 10000 })
             enviados++
+            resultados.push({ aparelho: s.aparelho ?? '', ok: true, status: r?.statusCode ?? 201 })
           } catch (e) {
             falhas++
-            if (e?.statusCode === 404 || e?.statusCode === 410) mortas.push(s.id)
+            const status = e?.statusCode ?? 0
+            const motivo = resumo(e?.body || e?.message || 'sem resposta', 160)
+            erros.push({ status, motivo })
+            resultados.push({ aparelho: s.aparelho ?? '', ok: false, status, motivo })
+            if (status === 404 || status === 410) mortas.push(s.id)
           }
         }))
       }
       // Aparelhos que desinstalaram ou revogaram a permissão: some da lista.
       if (mortas.length) await chamar(`/rest/v1/push_inscricoes?id=in.(${mortas.join(',')})`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } }).catch(() => undefined)
-      return { enviados, falhas }
+      return { enviados, falhas, erros, resultados, removidos: mortas.length }
     }
 
     try {
@@ -129,6 +140,14 @@ export function criarHandler({ webpush = webpushPadrao, fetcher = fetch } = {}) 
         if (typeof body.endpoint !== 'string' || body.endpoint.length > 1000) return res.status(400).json({ error: 'Aparelho inválido' })
         await chamar(`/rest/v1/push_inscricoes?user_id=eq.${eu.id}&endpoint=eq.${encodeURIComponent(body.endpoint)}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } })
         return res.status(200).json({ ok: true })
+      }
+
+      // Teste: manda uma notificação só para os aparelhos de quem pediu e devolve o resultado de cada um.
+      if (body.acao === 'testar') {
+        const inscricoes = await chamar(`/rest/v1/push_inscricoes?select=id,endpoint,p256dh,auth,aparelho&user_id=eq.${eu.id}`)
+        if (!inscricoes?.length) return res.status(200).json({ enviados: 0, falhas: 0, resultados: [], removidos: 0 })
+        const r = await disparar(inscricoes, { titulo: 'Teste de notificação', texto: 'Se você está vendo isto, o push chegou neste aparelho.', url: '/app/avisos', tag: `licitaflow-teste-${Date.now()}` })
+        return res.status(200).json({ enviados: r.enviados, falhas: r.falhas, resultados: r.resultados, removidos: r.removidos })
       }
 
       if (body.acao === 'enviar') {

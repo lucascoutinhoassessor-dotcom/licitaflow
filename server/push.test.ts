@@ -85,7 +85,7 @@ describe('push', () => {
     const wp = webpushFalso()
     const { r, res } = resposta()
     await criarHandler({ webpush: wp, fetcher } as never)({ method: 'POST', headers: { authorization: 'Bearer t' }, body: { acao: 'enviar', aviso: AVISO } }, res)
-    expect(r.body).toEqual({ enviados: 1, falhas: 1 })
+    expect(r.body).toEqual({ enviados: 1, falhas: 1, erros: [{ status: 410, motivo: 'gone' }] })
     expect(wp.sendNotification).toHaveBeenCalledTimes(2)
     const [, payload, opts] = wp.sendNotification.mock.calls[0] as unknown as [unknown, string, Record<string, unknown>]
     expect(JSON.parse(payload)).toMatchObject({ id: AVISO, titulo: 'Novo recurso', texto: 'Texto do aviso', url: '/app/avisos' })
@@ -130,6 +130,16 @@ describe('push', () => {
     await criarHandler({ webpush: wp, fetcher } as never)({ method: 'POST', headers: {}, body: { acao: 'agendados' } }, res)
     expect(r.body).toEqual({ avisos: 0, enviados: 0, falhas: 0 })
     expect(wp.sendNotification).not.toHaveBeenCalled()
+  })
+  it('o teste vai só para os aparelhos de quem pediu e mostra o resultado de cada um', async () => {
+    const { fetcher, chamadas } = banco()
+    const wp = webpushFalso()
+    const { r, res } = resposta()
+    await criarHandler({ webpush: wp, fetcher } as never)({ method: 'POST', headers: { authorization: 'Bearer t' }, body: { acao: 'testar' } }, res)
+    expect(r.status).toBe(200)
+    expect(chamadas.find(c => c.url.startsWith('/rest/v1/push_inscricoes') && c.method === 'GET')?.url).toContain('user_id=eq.u1')
+    expect(r.body).toMatchObject({ enviados: 1, falhas: 1, removidos: 1 })
+    expect((r.body as { resultados: { ok: boolean; status: number }[] }).resultados.map(x => [x.ok, x.status]).sort()).toEqual([[false, 410], [true, 201]])
   })
 
   it('outras ações continuam exigindo login', async () => {
