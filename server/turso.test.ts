@@ -86,7 +86,7 @@ describe('coleta e busca no Turso', () => {
 
   it('carga completa grava os editais, os itens e marca a carga como concluída', async () => {
     const { turso, feitos } = await preparar()
-    expect(feitos).toContainEqual(expect.objectContaining({ etapa: 'carga', modalidade: 6, gravados: 4 }))
+    expect(feitos).toContainEqual(expect.objectContaining({ etapa: 'carga', modalidade: 6, gravados: 3 }) // o encerrado há 5 dias não entra)
     expect(feitos).toContainEqual(expect.objectContaining({ etapa: 'itens' }))
     const [e] = await turso.consultar('select count(*) n, sum(itens_completos) c from editais where encerramento >= ?', [new Date().toISOString()])
     expect(e).toEqual({ n: 3, c: 3 })

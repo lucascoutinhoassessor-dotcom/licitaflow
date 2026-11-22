@@ -104,7 +104,9 @@ export function linhaEdital(c) {
  * Edital que mudou perde os itens (são coletados de novo).
  */
 export async function gravarEditais(turso, lista, agora = agoraIso()) {
-  const novos = lista.map(linhaEdital).filter(Boolean)
+  // Encerrados há mais de 2 dias não entram (a limpeza apagaria logo depois).
+  const corte = new Date(Date.now() - 2 * 86400_000).toISOString()
+  const novos = lista.map(linhaEdital).filter((n) => n && (!n.encerramento || n.encerramento >= corte))
   if (!novos.length) return 0
   const existentes = new Map((await turso.consultar(`select controle, atualizado_pncp from editais where controle in (${novos.map(() => '?').join(',')})`, novos.map((n) => n.controle))).map((l) => [l.controle, l.atualizado_pncp]))
   const mudaram = novos.filter((n) => !existentes.has(n.controle) || (n.atualizado_pncp ?? '') > (existentes.get(n.controle) ?? ''))
@@ -262,6 +264,8 @@ export async function coletarRodada(turso, { prazo = Date.now() + 40_000, fetche
     await turso.pipeline([[`delete from itens where controle in (${marcas})`, velhos], [`delete from itens_fts where controle in (${marcas})`, velhos], [`delete from editais_fts where controle in (${marcas})`, velhos], [`delete from editais where controle in (${marcas})`, velhos]])
     feitos.push({ etapa: 'limpeza', editais: velhos.length })
   })
+  // A cada 10 minutos a resposta traz o tamanho da base (aparece em net._http_response no Supabase).
+  if (hoje.getUTCMinutes() % 10 === 0) await etapa('situacao', async () => { const s = await situacaoTurso(turso); feitos.push({ etapa: 'situacao', editais: s.editais, abertos: s.abertos, comItens: s.comItens, cargaCompletaEm: s.cargaCompletaEm }) })
   const fim = [guardar('ultima_coleta_em', agoraIso())]
   if (pausar) fim.push(guardar('pausado_ate', new Date(Date.now() + 3 * 60_000).toISOString()))
   await turso.pipeline(fim)
