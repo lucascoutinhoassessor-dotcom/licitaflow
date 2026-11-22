@@ -38,7 +38,8 @@ Pagamentos exigem ainda variáveis de servidor e homologação de cada conta. De
 | Assinaturas recorrentes, webhooks e alteração automática de plano | Pendente |
 | Colaboradores do master com permissões por área | Pendente; não conceder master total para simular suporte restrito |
 | Promoções, cupons, afiliação e recompensas | Pendente |
-| Provedores de IA, leitura automática de editais e consumo por agente | Pendente; não são apresentados como execução disponível |
+| Leitor de editais com IA e consumo por organização | Implementado (`docs/leitor-editais.md`); depende da chave da IA e da liberação do módulo "agentes" |
+| Demais agentes de IA (Radar, Cotador, Jurídico, Sentinela, Termômetro) | Pendentes |
 | Prospecção contínua, filas e monitoramento automático de portais | Pendente; busca atual funciona por consulta manual |
 | Conversas do assistente e aprendizado dos agentes | Pendente |
 | Push, e-mail e WhatsApp automáticos | Pendentes de infraestrutura, consentimento e configuração |

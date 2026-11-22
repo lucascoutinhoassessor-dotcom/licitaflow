@@ -1,7 +1,9 @@
 import { rotuloPortal } from '@/lib/portais'
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Check, ExternalLink, FileSignature, FileText, MessageSquarePlus, Pencil, Plus, Trash2 } from 'lucide-react'
+import { useModulos } from '@/hooks/useModulos'
+import { rotaLeitor } from '@/lib/leitor'
+import { ArrowLeft, Check, ExternalLink, FileSearch, FileSignature, FileText, MessageSquarePlus, Pencil, Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Abas, Badge, Button, Campo, Card, Carregando, Input, Modal, Select, Textarea, Vazio } from '@/components/ui'
 import { BadgeEtapa, BadgePrazo, BadgeValidade } from '@/components/Situacoes'
@@ -335,6 +337,7 @@ export default function ProcessoDetalhe() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { podeEditar } = useOrg()
+  const { estado: estadoModulo } = useModulos()
   const nomeEmpresa = useNomeEmpresa()
   const q = useRegistro<Processo>('processos', id)
   const { salvar, excluir } = useSalvar('processos', ['processo_eventos'])
@@ -391,6 +394,9 @@ export default function ProcessoDetalhe() {
             <a href={p.link_edital} target="_blank" rel="noopener noreferrer">
               <Button variante="contorno" tamanho="sm" className="h-9"><ExternalLink className="h-4 w-4" /> Edital</Button>
             </a>
+          )}
+          {p.pncp_controle && estadoModulo('/app/agentes') === 'liberado' && (
+            <Link to={rotaLeitor(p.pncp_controle)}><Button variante="contorno" tamanho="sm" className="h-9"><FileSearch className="h-4 w-4" /> Ler com IA</Button></Link>
           )}
           {podeEditar && <Button variante="contorno" tamanho="sm" className="h-9" onClick={() => setEditando(true)}><Pencil className="h-4 w-4" /> Editar</Button>}
         </div>

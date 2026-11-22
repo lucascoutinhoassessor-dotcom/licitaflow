@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowLeft, CalendarClock, ExternalLink, FileText, Plus } from 'lucide-react'
+import { ArrowLeft, CalendarClock, ExternalLink, FileSearch, FileText, Plus } from 'lucide-react'
+import { useModulos } from '@/hooks/useModulos'
+import { rotaLeitor } from '@/lib/leitor'
 import { toast } from 'sonner'
 import { Badge, Button, Card, Carregando, Vazio } from '@/components/ui'
 import { SeletorEmpresa, useEmpresaPadrao } from '@/components/Situacoes'
@@ -38,6 +40,7 @@ export default function OportunidadeDetalhe() {
   const estado = local.state as { compra?: CompraPNCP } | null
   const navigate = useNavigate()
   const { podeEditar } = useOrg()
+  const { estado: estadoModulo } = useModulos()
   const padrao = useEmpresaPadrao()
   const [empresaId, setEmpresaId] = useState(padrao)
   const valida = /^\d{14}$/.test(cnpj) && /^\d{4}$/.test(ano) && /^\d+$/.test(seq)
@@ -91,6 +94,7 @@ export default function OportunidadeDetalhe() {
         <div className="mt-5 flex flex-wrap justify-center gap-2">
           {origem && <a href={origem} target="_blank" rel="noopener noreferrer"><Button variante="contorno" tamanho="sm"><ExternalLink className="h-4 w-4" />Acessar no portal</Button></a>}
           <a href={linkCompra(compra)} target="_blank" rel="noopener noreferrer"><Button variante="contorno" tamanho="sm"><FileText className="h-4 w-4" />Edital e arquivos</Button></a>
+          {estadoModulo('/app/agentes') === 'liberado' && <Link to={rotaLeitor(compra.numeroControlePNCP)}><Button tamanho="sm"><FileSearch className="h-4 w-4" />Ler edital com IA</Button></Link>}
         </div>
       </Card>
 
