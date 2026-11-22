@@ -17,7 +17,11 @@ const COR: Record<TipoPeca, 'azul' | 'verde' | 'amarelo' | 'vermelho' | 'neutro'
 const rotuloTipo = (t: TipoPeca) => PECAS.find((p) => p.id === t)?.rotulo ?? t
 
 /** Busca nas peças publicadas no Portal de Compras Públicas, com leitura do texto e "usar como modelo". */
-export default function BuscaPecas({ tipoInicial, aoUsarModelo }: { tipoInicial: TipoPeca; aoUsarModelo: (p: PecaPublicada, texto: string) => void }) {
+export default function BuscaPecas({ tipoInicial, aoUsarModelo, aoMudarTipo }: {
+  tipoInicial: TipoPeca; aoUsarModelo: (p: PecaPublicada, texto: string) => void
+  /** Quando sobra um tipo só marcado: a rota acompanha, para "Escrever minuta" abrir nesse tipo. */
+  aoMudarTipo?: (t: TipoPeca) => void
+}) {
   const inicial: FiltrosPecas = { busca: '', tipos: [tipoInicial], uf: '', orgao: '', novaLei: false }
   const [f, setF] = useState<FiltrosPecas>(inicial)
   const [consulta, setConsulta] = useState<FiltrosPecas>(inicial)
@@ -26,6 +30,15 @@ export default function BuscaPecas({ tipoInicial, aoUsarModelo }: { tipoInicial:
   const st = useQuery({ queryKey: ['pecas-juridicas-status'], staleTime: 10 * 60_000, queryFn: statusPecas })
 
   const aplicar = (novo: FiltrosPecas) => { setF(novo); setPagina(1); setConsulta(novo) }
+  // Veio de outro item do menu (Impugnação, Recurso…): a busca passa a mostrar esse tipo.
+  useEffect(() => {
+    setF((x) => {
+      if (x.tipos.includes(tipoInicial)) return x
+      const novo = { ...x, tipos: [tipoInicial] }
+      setPagina(1); setConsulta(novo)
+      return novo
+    })
+  }, [tipoInicial])
   function pesquisar(e: FormEvent) {
     e.preventDefault()
     if (JSON.stringify(f) === JSON.stringify(consulta) && pagina === 1) void q.refetch()
@@ -33,7 +46,9 @@ export default function BuscaPecas({ tipoInicial, aoUsarModelo }: { tipoInicial:
   }
   const alternarTipo = (t: TipoPeca) => {
     const tipos = f.tipos.includes(t) ? f.tipos.filter((x) => x !== t) : [...f.tipos, t]
-    if (tipos.length) aplicar({ ...f, tipos })
+    if (!tipos.length) return
+    aplicar({ ...f, tipos })
+    if (tipos.length === 1) aoMudarTipo?.(tipos[0])
   }
 
   const lista = q.data?.data ?? []

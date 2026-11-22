@@ -67,15 +67,6 @@ export default function Juridico() {
           ? 'Consulte peças já publicadas nos portais e use uma delas como ponto de partida da sua.'
           : 'Monte a peça com os dados do processo, revise o texto e baixe em Word para protocolar no portal.'}
       />
-      <div className="mb-4 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" role="tablist" aria-label="Tipo de peça">
-        {PECAS.map((p) => (
-          <Link key={p.id} to={`/app/juridico/${p.id}${aba === 'minuta' ? '?aba=minuta' : ''}`} role="tab" aria-selected={p.id === def.id}
-            className={cn('flex h-9 shrink-0 items-center rounded-full border px-4 text-sm font-medium transition-colors',
-              p.id === def.id ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-card text-muted-foreground hover:text-foreground')}>
-            {p.rotulo}
-          </Link>
-        ))}
-      </div>
       <div className="mb-5">
         <Abas<Aba>
           abas={[{ id: 'modelos', rotulo: 'Modelos publicados' }, { id: 'minuta', rotulo: 'Escrever minuta' }]}
@@ -83,8 +74,20 @@ export default function Juridico() {
           aoTrocar={(a) => navigate(`/app/juridico/${def.id}${a === 'minuta' ? '?aba=minuta' : ''}`)}
         />
       </div>
+      {aba === 'minuta' && (
+      <div className="mb-4 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" role="tablist" aria-label="Tipo de peça">
+        {PECAS.map((p) => (
+          <Link key={p.id} to={`/app/juridico/${p.id}?aba=minuta`} role="tab" aria-selected={p.id === def.id}
+            className={cn('flex h-9 shrink-0 items-center rounded-full border px-4 text-sm font-medium transition-colors',
+              p.id === def.id ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-card text-muted-foreground hover:text-foreground')}>
+            {p.rotulo}
+          </Link>
+        ))}
+      </div>
+      )}
       {aba === 'modelos'
-        ? <BuscaPecas key={def.id} tipoInicial={def.id} aoUsarModelo={usarModelo} />
+        ? <BuscaPecas tipoInicial={def.id} aoUsarModelo={usarModelo}
+            aoMudarTipo={(t) => { if (t !== def.id) navigate(`/app/juridico/${t}`, { replace: true }) }} />
         : <Editor key={`${def.id}-${location.key}`} tipo={def.id} modelo={modelo} />}
     </>
   )
