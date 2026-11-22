@@ -152,13 +152,15 @@ export default function AnaliseEmpresaDetalhe() {
           {a.ultimos.length === 0 ? <p className="text-sm text-muted-foreground">Nenhum item vencido no período (resultados da Lei 14.133).</p> : <ul className="divide-y">
             {(antigosPrimeiro ? [...a.ultimos].reverse() : a.ultimos).map((r) => {
               const rota = rotaPorControle(r.controle)
-              return <li key={`${r.controle}-${r.item}`} className="flex flex-wrap items-center gap-x-4 gap-y-1 py-2.5 text-sm">
-                <span className="min-w-0 flex-1">{rota ? <Link to={rota} className="font-semibold text-sky-700 hover:underline dark:text-sky-300">{r.controle}</Link> : r.controle} · Item {r.item}</span>
-                <span className="text-muted-foreground">{formatarData(r.data)} · {r.uf ?? '—'}</span>
-                <span className="font-semibold tabular-nums">{r.valorTotal ? formatarMoeda(r.valorTotal) : 'Valor não informado'}</span>
-                {r.marca && <Badge cor="azul">Marca: {r.marca}</Badge>}
-                {r.meEpp && <Badge cor="verde">ME/EPP</Badge>}
-                {r.idCompra && /^\d{17}$/.test(r.idCompra) && <Link to={`/app/compras/${r.idCompra}`} className="text-xs font-semibold text-primary hover:underline">Ver compra</Link>}
+              return <li key={`${r.controle}-${r.item}`} className="flex flex-col gap-1.5 py-3 text-sm sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-4">
+                <span className="min-w-0 break-words sm:flex-1">{rota ? <Link to={rota} className="font-semibold text-sky-700 hover:underline dark:text-sky-300">{r.controle}</Link> : r.controle} <span className="whitespace-nowrap">· Item {r.item}</span></span>
+                <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <span className="text-muted-foreground">{formatarData(r.data)} · {r.uf ?? '—'}</span>
+                  <span className="font-semibold tabular-nums">{r.valorTotal ? formatarMoeda(r.valorTotal) : 'Valor não informado'}</span>
+                  {r.marca && <Badge cor="azul">Marca: {r.marca}</Badge>}
+                  {r.meEpp && <Badge cor="verde">ME/EPP</Badge>}
+                  {r.idCompra && /^\d{17}$/.test(r.idCompra) && <Link to={`/app/compras/${r.idCompra}`} className="ml-auto text-xs font-semibold text-primary hover:underline">Ver compra</Link>}
+                </span>
               </li>
             })}
           </ul>}
