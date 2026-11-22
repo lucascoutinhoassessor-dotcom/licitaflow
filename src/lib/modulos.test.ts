@@ -10,6 +10,7 @@ describe('liberação de módulos', () => {
     expect(idModulo('/app/processos/123')).toBe('processos')
     expect(idModulo('/suporte')).toBe('suporte')
     expect(idModulo('/app')).toBeNull()
+    expect(idModulo('/app/compras/12345678901234567')).toBe('historico-precos')
   })
   it('módulo novo, sem cadastro, nasce oculto', () => {
     expect(estadoDe({ processos: 'liberado' }, '/app/analise-mercado')).toBe('oculto')

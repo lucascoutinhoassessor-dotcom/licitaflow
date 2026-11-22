@@ -25,8 +25,8 @@ export default function CartaoCompraPreco({ compra: c }: { compra: CompraPreco }
       const rota = rotaPorControle(await controleDaCompra(c.idCompra))
       if (rota) navigate(rota)
       else navigate(`/app/compras/${c.idCompra}`)
-    } catch (e) {
-      toast.error((e as Error).message)
+    } catch {
+      toast.info('Edital não encontrado no PNCP. Abrindo os itens, empresas e marcas desta compra.')
       navigate(`/app/compras/${c.idCompra}`)
     } finally { setAbrindo(false) }
   }

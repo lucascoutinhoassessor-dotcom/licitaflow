@@ -9,8 +9,12 @@ const ESSENCIAIS = new Set(['empresas', 'equipe', 'plano', 'cobrancas', 'avisos'
 export function idModulo(rota: string): string | null {
   const m = rota.match(/^\/(?:app\/)?([a-z0-9-]+)/)
   if (!m || rota === '/app' || rota === '/app/') return null
-  return m[1] === 'app' ? null : m[1]
+  if (m[1] === 'app') return null
+  return SUBTELAS[m[1]] ?? m[1]
 }
+
+/** Telas internas que não estão no menu: seguem a liberação do módulo de onde são abertas. */
+const SUBTELAS: Record<string, string> = { compras: 'historico-precos' }
 
 export function moduloControlavel(rota: string) {
   const id = idModulo(rota)
