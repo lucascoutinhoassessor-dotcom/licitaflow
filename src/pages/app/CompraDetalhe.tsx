@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
-import { ArrowLeft, ChevronDown, ExternalLink, FileText, Tag, Trophy } from 'lucide-react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { ArrowLeft, ChevronDown, ExternalLink, FileText, Tag, Trophy, Upload } from 'lucide-react'
 import { Badge, Button, Card, Carregando, Vazio } from '@/components/ui'
 import { abrirCompra, linkCompraComprasGov, type CompraFederal, type ItemCompraFederal } from '@/lib/compraFederal'
 import { rotaPorControle } from '@/lib/analiseEmpresa'
@@ -9,7 +9,7 @@ import EmpresasDisputa from '@/components/EmpresasDisputa'
 import type { ColocacaoItem } from '@/lib/resultadosEdital'
 import { linkPesquisaMarca } from '@/lib/precos'
 import { formatarCnpj, formatarData, formatarMoeda } from '@/lib/format'
-import { atasDaCompra, type AtasCompra } from '@/lib/atas'
+import { atasDaCompra, atasEnviadas, enviarAta, juntarAtas, type AtaEnviada, type AtasCompra } from '@/lib/atas'
 import { concorrentesDoItem, type Concorrente, type SituacaoConcorrente } from '@/lib/concorrentesItem'
 import { cn } from '@/lib/utils'
 
@@ -77,12 +77,46 @@ function Item({ item, todos, atas, atasCarregando }: { item: ItemCompraFederal; 
           )}
           <p className="mt-3 text-xs text-muted-foreground">
             {atasCarregando ? 'Procurando desclassificadas e inabilitadas nas atas da compra…'
-              : lidas ? 'Vencedora, colocações e cancelamentos são os dados oficiais; desclassificadas, inabilitadas e demais participantes foram lidos na ata da sessão (confira na ata original).'
-              : 'Os dados abertos publicam só as empresas homologadas (vencedora e cadastro de reserva) e os resultados cancelados. Desclassificadas, inabilitadas e as demais propostas ficam na ata da sessão, que esta compra não publicou em PDF com texto, ou na disputa no portal.'}
+              : lidas ? 'Vencedora, colocações e cancelamentos são os dados oficiais; as demais propostas, desclassificadas e inabilitadas foram lidas na ata (confira no arquivo original).'
+              : 'Os dados abertos publicam só as empresas homologadas (vencedora e cadastro de reserva) e os resultados cancelados. Para ver todas as propostas, desclassificadas e inabilitadas, envie o termo de julgamento ou a ata da sessão no quadro acima dos itens.'}
           </p>
         </div>
       )}
     </article>
+  )
+}
+
+/**
+ * Envio do termo de julgamento / ata da sessão baixado no portal da compra (que pede captcha).
+ * A leitura fica guardada para a compra e aparece para todos os usuários.
+ */
+function EnviarAta({ idCompra, controle, enviadas }: { idCompra: string; controle: string | null; enviadas: AtaEnviada[] }) {
+  const qc = useQueryClient()
+  const entrada = useRef<HTMLInputElement>(null)
+  const envio = useMutation({
+    mutationFn: (arquivo: File) => enviarAta(idCompra, controle, arquivo),
+    onSuccess: (nova) => qc.setQueryData<AtaEnviada[]>(['atas-enviadas', idCompra], (atual = []) => [nova, ...atual.filter((a) => a.hash !== nova.hash)]),
+  })
+  const ultima = envio.data
+  const empresasLidas = (a: AtaEnviada) => new Set([...(a.resultado.itens ?? []).flatMap((i) => i.empresas.map((e) => e.cnpj)), ...(a.resultado.participantes ?? []).map((p) => p.cnpj)]).size
+  return (
+    <Card className="mb-4 p-4 text-sm">
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="min-w-0 flex-1">
+          <span className="flex items-center gap-2 font-semibold"><Upload className="h-4 w-4 text-sky-400" />Todas as propostas, desclassificadas e inabilitadas</span>
+          <span className="mt-0.5 block text-xs text-muted-foreground">Baixe o <b>termo de julgamento</b> ou a <b>ata da sessão</b> em PDF em "Ver disputa no portal" e envie aqui. A plataforma lê o arquivo e mostra todas as empresas em cada item, para todos os usuários.</span>
+        </span>
+        <input ref={entrada} type="file" accept="application/pdf,.pdf" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) envio.mutate(f) }} />
+        <Button tamanho="sm" variante="contorno" disabled={envio.isPending} onClick={() => entrada.current?.click()}><Upload className="h-4 w-4" />{envio.isPending ? 'Lendo o arquivo…' : 'Enviar ata (PDF)'}</Button>
+      </div>
+      {envio.isError && <p className="mt-2 text-red-600 dark:text-red-400">{(envio.error as Error).message}</p>}
+      {ultima && <p className="mt-2 text-emerald-600 dark:text-emerald-300">Arquivo lido: {empresasLidas(ultima)} empresas em {ultima.resultado.itens?.length ?? 0} itens/grupos. Abra um item para ver os concorrentes.</p>}
+      {enviadas.length > 0 && (
+        <p className="mt-2 text-xs text-muted-foreground">
+          Atas já enviadas: {enviadas.map((a, i) => <span key={a.hash}>{i > 0 && ', '}{a.arquivo} ({formatarData(a.created_at)})</span>)}. A leitura é automática: confira no arquivo original.
+        </p>
+      )}
+    </Card>
   )
 }
 
@@ -94,6 +128,8 @@ export default function CompraDetalhe() {
   // Mesma consulta do quadro "Empresas que disputaram" (cache compartilhado): desclassificadas e inabilitadas por item.
   const controleAta = q.data?.controle && /^\d{14}-1-\d+\/\d{4}$/.test(q.data.controle) ? q.data.controle : null
   const atas = useQuery({ queryKey: ['atas-compra', controleAta], enabled: !!controleAta, staleTime: 3_600_000, retry: 1, queryFn: ({ signal }) => atasDaCompra(controleAta!, signal) })
+  const enviadas = useQuery({ queryKey: ['atas-enviadas', idCompra], enabled: valido, staleTime: 300_000, retry: 1, queryFn: ({ signal }) => atasEnviadas(idCompra, signal) })
+  const atasJuntas = juntarAtas(atas.data, enviadas.data)
   if (!valido) return <Vazio titulo="Compra não encontrada" texto="O código desta compra está incompleto." />
   const c: CompraFederal | undefined = q.data
   const rota = c?.controle ? rotaPorControle(c.controle) : null
@@ -125,7 +161,8 @@ export default function CompraDetalhe() {
         </Card>
         <EmpresasDisputa controle={c.controle} colocacoes={colocacoesDa(c)} />
         <h2 className="mb-3 flex items-center gap-2 text-lg font-semibold"><Tag className="h-5 w-5 text-sky-400" />Itens, vencedores e marcas</h2>
-        <div className="space-y-2">{c.itens.map((i) => <Item key={i.numero} item={i} todos={c.itens} atas={atas.data} atasCarregando={atas.isLoading && atas.fetchStatus !== 'idle'} />)}</div>
+        <EnviarAta idCompra={idCompra} controle={c.controle} enviadas={enviadas.data ?? []} />
+        <div className="space-y-2">{c.itens.map((i) => <Item key={i.numero} item={i} todos={c.itens} atas={atasJuntas} atasCarregando={(atas.isLoading && atas.fetchStatus !== 'idle') || enviadas.isLoading} />)}</div>
       </>}
     </>
   )

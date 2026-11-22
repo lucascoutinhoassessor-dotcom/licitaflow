@@ -48,6 +48,25 @@ describe('concorrentes do item', () => {
     expect(semItem).toEqual([])
   })
 
+  it('traz todas as propostas do item lidas no termo de julgamento enviado', () => {
+    const i11 = item(11, null, [res('MAGIBE LTDA', '42923049000247', 1, 4730)]), i12 = item(12, null)
+    const atas = ata({
+      participantes: [{ cnpj: '77777777000177', nome: 'H LTDA', mencoes: 1, documento: 'Termo', url: '' }],
+      itens: [
+        { tipo: 'item', numero: 11, empresas: [
+          { cnpj: '42923049000247', nome: 'MAGIBE', valor: 4730, situacao: 'classificada', motivo: null },
+          { cnpj: '11222333000181', nome: 'ALFA LTDA', valor: 3900, situacao: 'recusa', motivo: 'Marca não atende' },
+          { cnpj: '33000167000101', nome: 'BETA LTDA', valor: 5100, situacao: 'classificada', motivo: null },
+        ] },
+        { tipo: 'item', numero: 12, empresas: [{ cnpj: '77777777000177', nome: 'H LTDA', valor: 10, situacao: 'classificada', motivo: null }] },
+      ],
+    })
+    const { lista, semItem } = concorrentesDoItem(i11, [i11, i12], atas)
+    expect(lista.map((c) => [c.nome, c.situacao, c.valorUnitario])).toEqual([['MAGIBE LTDA', 'vencedora', 4730], ['BETA LTDA', 'classificada', 5100], ['ALFA LTDA', 'recusa', 3900]])
+    // H é do item 12: não aparece como "sem item" no 11.
+    expect(semItem).toEqual([])
+  })
+
   it('não muda a situação oficial com o que a ata diz', () => {
     const i = item(1, null, [res('A LTDA', '11111111000111', 1, 10)])
     const atas = ata({ ocorrencias: [{ tipo: 'desclassificacao', empresa: 'A LTDA', cnpj: '11111111000111', itens: 'Item 1', data: null, motivo: 'Antes do recurso', documento: 'Ata', url: '' }] })

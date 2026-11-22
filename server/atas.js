@@ -1,5 +1,6 @@
 import { emCache, excedeuLimite, guardarNoNavegador, usuarioLogado } from './protecao.js'
 import { cnpjBloqueado } from './bloqueio.js'
+import { createHash } from 'node:crypto'
 // Leitura das atas de sessão publicadas no PNCP: abre os PDFs (ata da sessão, julgamento, homologação)
 // e separa os trechos de desclassificação, inabilitação e recusa, com empresa, itens e motivo.
 // As atas do Compras.gov.br (federais) ficam atrás de captcha e normalmente não vão para o PNCP;
@@ -9,6 +10,7 @@ const PNCP = 'https://pncp.gov.br/api/pncp/v1/orgaos'
 const MAX_DOCS = 2
 const MAX_BYTES = 12 * 1024 * 1024
 const MAX_PAGINAS = 80
+const MAX_ENVIO = 3 * 1024 * 1024 // PDF enviado pelo usuário (o corpo da requisição na Vercel vai até 4,5 MB)
 
 /** Documento com cara de ata/relatório da sessão (não minuta de ARP, edital ou contrato). Menor = mais relevante. */
 export function prioridadeDocumento(titulo = '', tipo = '') {
@@ -222,10 +224,15 @@ async function textoDoPdf(url) {
   if (Number(r.headers.get('content-length')) > MAX_BYTES) return { erro: 'Arquivo grande demais para ler aqui.' }
   const bytes = new Uint8Array(await r.arrayBuffer())
   if (bytes.length > MAX_BYTES) return { erro: 'Arquivo grande demais para ler aqui.' }
+  return textoDosBytes(bytes)
+}
+
+/** Texto de um PDF já baixado (ou enviado pelo usuário). */
+async function textoDosBytes(bytes, maxPaginas = MAX_PAGINAS) {
   if (String.fromCharCode(...bytes.slice(0, 4)) !== '%PDF') return { erro: 'O arquivo não é PDF (pode ser compactado ou Word).' }
   const { getDocumentProxy } = await import('unpdf')
   const pdf = await getDocumentProxy(bytes)
-  const paginas = Math.min(pdf.numPages, MAX_PAGINAS)
+  const paginas = Math.min(pdf.numPages, maxPaginas)
   let texto = ''
   for (let p = 1; p <= paginas; p++) {
     const c = await (await pdf.getPage(p)).getTextContent()
@@ -289,6 +296,126 @@ export function falaDaEmpresa(o, cnpj, nome) {
   return chave.every((p) => new RegExp(`\\b${p}\\b`).test(texto))
 }
 
+// ---------------------------------------------------------------- Leitura por item (termo de julgamento / ata enviada)
+
+const CNPJ_G = /\b\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}\b|\b\d{14}\b/g
+const CABECALHO_ITEM = /\b(Item|Grupo|Lote)\s+(?:n[º°o]\.?\s*)?(\d{1,4})(?![.,]?\d)\s*[-–:]/gi
+const DATA_HORA = /\b\d{2}\/\d{2}\/\d{4}\s*(?:-|às)?\s*\d{2}:\d{2}/g
+// Título de evento do termo de julgamento no fim do trecho ("Aceite de proposta", "Inabilitação de fornecedor").
+const TITULO_EVENTO = /\s(?:Recusa|Aceite|Inabilita[çc][ãa]o|Habilita[çc][ãa]o|Desclassifica[çc][ãa]o|Adjudica[çc][ãa]o|Homologa[çc][ãa]o|Reabertura|Encerramento|Convoca[çc][ãa]o|Cancelamento|Registro|Intercorr[êe]ncia|Item)\s+(?:de|do|da|dos|das)\s+[\wÀ-ü]+(?:\s+[\wÀ-ü]+)?\s*$/i
+const GRAVIDADE = { inabilitacao: 5, desclassificacao: 4, recusa: 3, classificada: 2, participou: 1 }
+
+/** Situação dita num trecho do evento ("Recusa da proposta", "Inabilitação", "Aceite"...). */
+function situacaoDoTrecho(t) {
+  if (NEGACAO.test(t)) return 'participou'
+  if (/inabilit/i.test(t)) return 'inabilitacao'
+  if (/desclassific/i.test(t)) return 'desclassificacao'
+  if (/recus|n[ãa]o\s+(?:foi\s+)?aceit/i.test(t)) return 'recusa'
+  if (/aceit|adjudica|homologa|habilitad|vencedor|arrematante|classificad/i.test(t)) return 'classificada'
+  return 'participou'
+}
+
+const valorBr = (s) => { const n = Number(s.replace(/\./g, '').replace(',', '.')); return Number.isFinite(n) && n > 0 ? n : null }
+
+/**
+ * Divide o texto em seções "Item N - ..." / "Grupo N - ..." e, em cada uma, junta as empresas (CNPJ e nome),
+ * o valor proposto ou lance mais próximo, a situação (classificada, recusada, desclassificada, inabilitada) e o motivo.
+ * Cada CNPJ fica com a situação mais grave que aparece para ele no item.
+ */
+export function lerPorItem(textoBruto, cnpjOrgao = null) {
+  const texto = limpar(textoBruto)
+  const cabecalhos = [...texto.matchAll(CABECALHO_ITEM)]
+  if (!cabecalhos.length) return []
+  const nomes = new Map(extrairParticipantes(texto, cnpjOrgao).map((p) => [p.cnpj, p.nome]))
+  const secoes = new Map()
+  cabecalhos.forEach((h, k) => {
+    const tipo = /^item/i.test(h[1]) ? 'item' : 'grupo'
+    const chave = `${tipo}:${Number(h[2])}`
+    const fim = k + 1 < cabecalhos.length ? cabecalhos[k + 1].index : texto.length
+    const sec = secoes.get(chave) ?? { tipo, numero: Number(h[2]), texto: '' }
+    sec.texto += ' ' + texto.slice(h.index, fim)
+    secoes.set(chave, sec)
+  })
+  const saida = []
+  for (const sec of secoes.values()) {
+    const t = sec.texto
+    const achados = [...t.matchAll(CNPJ_G)]
+    const datas = [...t.matchAll(DATA_HORA)].map((d) => d.index)
+    const empresas = new Map()
+    achados.forEach((m, k) => {
+      const cnpj = m[0].replace(/\D/g, '')
+      if (!cnpjValido(cnpj) || cnpj === cnpjOrgao || cnpjBloqueado(cnpj)) return
+      const fimCnpj = m.index + m[0].length
+      // O evento vai da última data/hora antes do CNPJ até a próxima data/hora (ou o próximo CNPJ).
+      const iniEvento = Math.max(k ? achados[k - 1].index + achados[k - 1][0].length : 0, ...datas.filter((d) => d < m.index), m.index - 250)
+      const proxData = datas.find((d) => d > fimCnpj) ?? t.length
+      const fimEvento = Math.min(k + 1 < achados.length ? achados[k + 1].index : t.length, proxData, fimCnpj + 400)
+      const antes = t.slice(iniEvento, m.index), depois = t.slice(fimCnpj, fimEvento)
+      // Termo do Compras.gov: "Recusa da proposta. Fornecedor: X, CNPJ ..." (a situação vem antes do CNPJ);
+      // atas em texto corrido: "a empresa X, CNPJ ..., foi desclassificada" (vem logo depois, na mesma frase).
+      // O título do próximo evento ("Inabilitação de fornecedor 03/09...") fica antes da data e não pode contar.
+      const depoisLimpo = depois.replace(TITULO_EVENTO, ' ')
+      const frase = depoisLimpo.split(/\.\s+(?=[A-ZÀ-Ü])/)[0]
+      let situacao = situacaoDoTrecho(antes)
+      if (situacao === 'participou' || situacao === 'classificada') { const s2 = situacaoDoTrecho(frase); if (GRAVIDADE[s2] > GRAVIDADE[situacao]) situacao = s2 }
+      const valor = /R\$\s*([\d.]+,\d{2,4})/.exec(depois)?.[1] ?? /R\$\s*([\d.]+,\d{2,4})/.exec(antes)?.[1] ?? null
+      const motivo = /Motivo\s*:?\s*(.{5,300}?)(?=\s*(?:Fornecedor|CNPJ|Valor)\s*:|$)/i.exec(depoisLimpo)?.[1] ?? null
+      const atual = empresas.get(cnpj)
+      const nova = { cnpj, nome: nomes.get(cnpj) ?? null, valor: valor ? valorBr(valor) : null, situacao, motivo: motivo ? limpar(motivo).slice(0, 300) : null }
+      if (!atual) { empresas.set(cnpj, nova); return }
+      if (GRAVIDADE[situacao] > GRAVIDADE[atual.situacao]) { atual.situacao = situacao; atual.motivo = nova.motivo ?? atual.motivo }
+      atual.valor ??= nova.valor
+      atual.motivo ??= nova.motivo
+    })
+    if (empresas.size) saida.push({ tipo: sec.tipo, numero: sec.numero, empresas: [...empresas.values()].slice(0, 100) })
+  }
+  return saida.sort((a, b) => a.tipo.localeCompare(b.tipo) || a.numero - b.numero).slice(0, 1000)
+}
+
+/** Lê um PDF enviado pelo usuário: empresas por item, participantes, desclassificações e motivos. */
+export async function lerAtaEnviada(bytes, arquivo, cnpjOrgao = null) {
+  const lido = await textoDosBytes(bytes, 300)
+  if (lido.erro) throw Object.assign(new Error(lido.erro), { status: 422 })
+  const ocorrencias = extrairOcorrencias(lido.texto).filter((o) => !falaDeBloqueada(o)).map((o) => ({ ...o, documento: arquivo, url: null }))
+  const colocacoes = colocacoesNoTexto(lido.texto)
+  const participantes = extrairParticipantes(lido.texto, cnpjOrgao).filter((p) => !cnpjBloqueado(p.cnpj)).map((p) => ({
+    ...p, documento: arquivo, url: null, colocacao: colocacoes[p.cnpj] ?? null,
+    situacoes: ocorrencias.filter((o) => falaDaEmpresa(o, p.cnpj, p.nome)).map((o) => ({ tipo: o.tipo, itens: o.itens, motivo: o.motivo.slice(0, 240) })),
+  }))
+  const itens = lerPorItem(lido.texto, cnpjOrgao)
+  if (!itens.length && !participantes.length && !ocorrencias.length) throw Object.assign(new Error('O arquivo foi lido, mas não traz empresas com CNPJ. Envie o termo de julgamento ou a ata da sessão.'), { status: 422 })
+  return { documentos: [{ titulo: arquivo, url: null, lido: true, paginas: lido.paginas, ocorrencias: ocorrencias.length }], ocorrencias, participantes, itens }
+}
+
+async function atasEnviadas({ base, anon, token, servico, req, res, q, usuario }) {
+  const idCompra = String(q.idCompra ?? '')
+  if (!/^\d{15,20}$/.test(idCompra)) return res.status(400).json({ error: 'Código da compra inválido.' })
+  if (q.acao === 'enviadas') {
+    const r = await fetch(`${base}/rest/v1/atas_enviadas?id_compra=eq.${idCompra}&select=hash,arquivo,resultado,created_at&order=created_at.desc&limit=10`, { headers: { apikey: anon, Authorization: token }, signal: AbortSignal.timeout(15000) })
+    if (!r.ok) return res.status(502).json({ error: 'Não foi possível buscar as atas enviadas.' })
+    return res.json({ enviadas: await r.json() })
+  }
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Método não permitido' })
+  if (!servico) return res.status(503).json({ error: 'Envio de atas indisponível no momento.' })
+  if (excedeuLimite('atas-enviar', usuario, 5)) return res.status(429).json({ error: 'Muitos envios em pouco tempo. Aguarde um minuto.' })
+  const corpo = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : req.body ?? {}
+  const arquivo = String(corpo.arquivo ?? 'ata.pdf').replace(/[^\wÀ-ÿ .()-]/g, '_').slice(0, 200) || 'ata.pdf'
+  const pdf = String(corpo.pdf ?? '')
+  if (!pdf || pdf.length > MAX_ENVIO * 1.4) return res.status(413).json({ error: 'Envie um PDF de até 3 MB.' })
+  const bytes = new Uint8Array(Buffer.from(pdf, 'base64'))
+  if (!bytes.length || bytes.length > MAX_ENVIO) return res.status(413).json({ error: 'Envie um PDF de até 3 MB.' })
+  const cnpjOrgao = /^(\d{14})-1-\d+\/\d{4}$/.exec(String(corpo.controle ?? ''))?.[1] ?? null
+  const hash = createHash('sha256').update(bytes).digest('hex')
+  const resultado = await lerAtaEnviada(bytes, arquivo, cnpjOrgao)
+  const linha = { id_compra: idCompra, hash, arquivo, resultado, enviado_por: /^[0-9a-f-]{36}$/i.test(usuario) ? usuario : null }
+  const r = await fetch(`${base}/rest/v1/atas_enviadas?on_conflict=id_compra,hash`, {
+    method: 'POST', body: JSON.stringify(linha), signal: AbortSignal.timeout(15000),
+    headers: { apikey: servico, Authorization: `Bearer ${servico}`, 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates,return=minimal' },
+  })
+  if (!r.ok) return res.status(502).json({ error: 'A ata foi lida, mas não foi possível guardá-la. Tente de novo.' })
+  return res.json({ hash, arquivo, resultado, created_at: new Date().toISOString() })
+}
+
 async function emLotes(lista, n, fn) {
   const saida = []
   for (let i = 0; i < lista.length; i += n) saida.push(...(await Promise.all(lista.slice(i, i + n).map(fn))))
@@ -297,14 +424,25 @@ async function emLotes(lista, n, fn) {
 
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store')
-  if (req.method !== 'GET') return res.status(405).json({ error: 'Método não permitido' })
+  const q = req.query ?? {}
+  const envio = q.acao === 'enviar' || q.acao === 'enviadas'
+  if (req.method !== 'GET' && !(q.acao === 'enviar' && req.method === 'POST')) return res.status(405).json({ error: 'Método não permitido' })
   const env = process.env
   const base = env.SUPABASE_URL || env.VITE_SUPABASE_URL
   const anon = env.SUPABASE_ANON_KEY || env.VITE_SUPABASE_ANON_KEY
   const token = req.headers.authorization
   if (!base || !anon) return res.status(503).json({ error: 'Configuração Supabase ausente no servidor' })
   if (!/^Bearer \S+$/.test(token ?? '')) return res.status(401).json({ error: 'Entre na sua conta' })
-  const q = req.query ?? {}
+  // Atas enviadas pelos usuários (termo de julgamento / ata da sessão baixados no portal da compra).
+  if (envio) {
+    try {
+      const usuario = await usuarioLogado(base, anon, token)
+      if (!usuario) return res.status(401).json({ error: 'Entre na sua conta' })
+      return await atasEnviadas({ base, anon, token, servico: env.SUPABASE_SERVICE_ROLE_KEY, req, res, q, usuario })
+    } catch (e) {
+      return res.status(e.status ?? 500).json({ error: e.status ? e.message : 'Não foi possível ler o arquivo enviado.' })
+    }
+  }
   const controle = String(q.controle ?? '')
   const cnpj = String(q.cnpj ?? '').replace(/\D/g, '')
   const controles = String(q.controles ?? '').split(',').map((c) => c.trim()).filter((c) => /^\d{14}-1-\d+\/\d{4}$/.test(c))

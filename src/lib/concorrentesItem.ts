@@ -5,6 +5,7 @@ import type { ItemCompraFederal } from './compraFederal'
 // - resultados homologados (vencedora e cadastro de reserva, com colocação e valores);
 // - resultados cancelados (com o motivo publicado);
 // - desclassificadas, inabilitadas, recusadas e sem proposta lidas nas atas do PNCP, quando a ata cita o item ou o grupo;
+// - empresas por item lidas no termo de julgamento enviado pelo usuário (valor, situação e motivo de cada uma);
 // - demais empresas citadas na ata, que só se ligam ao item quando a compra tem um item (ou um grupo) só.
 
 export type SituacaoConcorrente = 'vencedora' | 'classificada' | 'cancelado' | TipoOcorrencia | 'participou'
@@ -84,6 +85,24 @@ export function concorrentesDoItem(item: ItemCompraFederal, todos: ItemCompraFed
     }
     lista.push({ chave: `a${lista.length}`, cnpj, nome, porte: null, meEpp: false, colocacao, valorUnitario: null, valorTotal: null, situacao: tipo, motivo, fonte: 'ata' })
   }
+
+  // Termo de julgamento enviado: seção do próprio item (ou do grupo dele) traz todas as propostas com valor.
+  for (const sec of atas?.itens ?? []) {
+    const doItem = sec.tipo === 'item' ? sec.numero === item.numero : item.grupo != null && item.grupo > 0 ? sec.numero === item.grupo : unico
+    for (const e of sec.empresas) {
+      if (!doItem) { deOutroItem.add(e.cnpj); continue }
+      const atual = achar(e.cnpj, e.nome)
+      if (atual) {
+        if (atual.fonte === 'oficial') continue
+        if (e.situacao !== 'participou' && e.situacao !== 'classificada' && PRIORIDADE[e.situacao] > PRIORIDADE[atual.situacao]) atual.situacao = e.situacao
+        atual.valorUnitario ??= e.valor
+        atual.motivo ??= e.motivo
+        continue
+      }
+      lista.push({ chave: `t${lista.length}`, cnpj: e.cnpj, nome: e.nome, porte: null, meEpp: false, colocacao: null, valorUnitario: e.valor, valorTotal: null, situacao: e.situacao, motivo: e.motivo, fonte: 'ata' })
+    }
+  }
+  for (const c of lista) if (c.cnpj) deOutroItem.delete(c.cnpj)
 
   for (const p of atas?.participantes ?? []) for (const s of p.situacoes ?? []) juntar(p.cnpj, p.nome, s.tipo, s.itens, s.motivo)
   for (const o of atas?.ocorrencias ?? []) if (o.empresa || o.cnpj) juntar(o.cnpj, o.empresa, o.tipo, o.itens, o.motivo)

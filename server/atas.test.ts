@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import handler, { cnpjValido, colocacoesNoTexto, extrairOcorrencias, extrairParticipantes, falaDaEmpresa, prioridadeDocumento } from './atas.js'
+import handler, { cnpjValido, colocacoesNoTexto, extrairOcorrencias, extrairParticipantes, falaDaEmpresa, lerPorItem, prioridadeDocumento } from './atas.js'
 
 const resposta = () => ({ setHeader: vi.fn(), status: vi.fn().mockReturnThis(), json: vi.fn() })
 
@@ -95,5 +95,49 @@ describe('participantes da ata', () => {
     expect(cnpjValido('11222333000181')).toBe(true)
     expect(cnpjValido('11222333000182')).toBe(false)
     expect(cnpjValido('11111111111111')).toBe(false)
+  })
+})
+
+describe('leitura por item (termo de julgamento enviado)', () => {
+  const termo = `Termo de Julgamento PREGÃO ELETRÔNICO Nº 90035/2024 UASG 160062 COMANDO DO EXERCITO CNPJ 00.394.452/0001-03
+    Item 11 - MICROCOMPUTADOR Quantidade: 16 Valor estimado (unitário): R$ 17.400,0000 Situação: Adjudicado e Homologado
+    Eventos do Item
+    Recusa de proposta 02/09/2025 10:12 Recusa da proposta. Fornecedor: ALFA COMERCIO LTDA, CNPJ 11.222.333/0001-81, Valor: R$ 3.900,0000. Motivo: Marca ofertada não atende ao processador exigido.
+    Inabilitação de fornecedor 03/09/2025 09:00 Inabilitação do fornecedor BETA SERVICOS EIRELI, CNPJ 44.555.666/0001-81, Valor: R$ 4.100,0000. Motivo: Atestado de capacidade técnica insuficiente.
+    Aceite de proposta 04/09/2025 14:30 Aceite individual da proposta. Fornecedor: MAGIBE INDUSTRIA E COMERCIO DE ELETRONICOS LTDA, CNPJ 42.923.049/0002-47, Valor: R$ 4.730,0000
+    Item 12 - MICROCOMPUTADOR Situação: Adjudicado e Homologado
+    Aceite de proposta 04/09/2025 14:40 Aceite individual da proposta. Fornecedor: MAGIBE INDUSTRIA E COMERCIO DE ELETRONICOS LTDA, CNPJ 42.923.049/0002-47, Valor: R$ 4.730,0000`
+
+  it('separa as empresas de cada item com valor, situação e motivo, sem o órgão', () => {
+    const itens = lerPorItem(termo, '00394452000103')
+    expect(itens.map((i) => [i.tipo, i.numero, i.empresas.length])).toEqual([['item', 11, 3], ['item', 12, 1]])
+    const i11 = itens[0].empresas
+    expect(i11[0]).toMatchObject({ cnpj: '11222333000181', nome: 'ALFA COMERCIO LTDA', valor: 3900, situacao: 'recusa' })
+    expect(i11[0].motivo).toContain('Marca ofertada')
+    expect(i11[1]).toMatchObject({ cnpj: '44555666000181', valor: 4100, situacao: 'inabilitacao' })
+    expect(i11[2]).toMatchObject({ cnpj: '42923049000247', valor: 4730, situacao: 'classificada' })
+  })
+
+  it('sem seções de item, não inventa nada', () => {
+    expect(lerPorItem('ALFA COMERCIO LTDA, CNPJ 11.222.333/0001-81 desclassificada.')).toEqual([])
+  })
+})
+
+describe('envio de ata', () => {
+  beforeEach(() => { process.env.SUPABASE_URL = 'https://exemplo.supabase.co'; process.env.SUPABASE_ANON_KEY = 'anon' })
+  afterEach(() => vi.unstubAllGlobals())
+  it('recusa arquivo que não é PDF e não grava nada', async () => {
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'servico'
+    const f = vi.fn(async (url: string) => url.includes('/auth/v1/user') ? new Response(JSON.stringify({ id: '0f8fad5b-d9cb-469f-a165-70867728950e' })) : new Response('{}'))
+    vi.stubGlobal('fetch', f)
+    const res = resposta()
+    await handler({ method: 'POST', headers: { authorization: 'Bearer t' }, query: { acao: 'enviar', idCompra: '16006205900352024' }, body: { arquivo: 'x.pdf', pdf: Buffer.from('não é pdf').toString('base64') } }, res)
+    expect(res.status).toHaveBeenCalledWith(422)
+    expect(f.mock.calls.some(([u]) => String(u).includes('atas_enviadas'))).toBe(false)
+  })
+  it('só aceita POST no envio', async () => {
+    const res = resposta()
+    await handler({ method: 'POST', headers: { authorization: 'Bearer t' }, query: { controle: '00394452000103-1-023239/2024' } }, res)
+    expect(res.status).toHaveBeenCalledWith(405)
   })
 })
