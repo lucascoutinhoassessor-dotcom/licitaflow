@@ -6,6 +6,7 @@ import { supabase, mensagemErro } from '@/lib/supabase'
 import { formatarMoeda, formatarDataHora } from '@/lib/format'
 import { Aviso, Badge, Button, CabecalhoPagina, Campo, Card, Carregando, Input, Modal, Select } from '@/components/ui'
 import { AssinaturaPainel } from '@/components/AssinaturaPainel'
+import { LimitesIACliente } from '@/components/LimitesIACliente'
 import { EditarOrg, type OrgAdmin } from './Organizacoes'
 
 interface Membro { id:string; nome:string|null; email:string; papel:string; ultimo_acesso:string|null }
@@ -54,6 +55,7 @@ export default function ClienteDetalhe() {
       {conta.dono_email && <Badge>Dono: {conta.dono_email}</Badge>}
     </div>}
     {id && <div className="mb-6"><AssinaturaPainel org={id} master/></div>}
+    {id && <LimitesIACliente org={id}/>}
     <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-3">{[
       ['Processos',c.processos],['Contratos',c.contratos],['Documentos',c.documentos],['Prazos pendentes',c.prazos_pendentes],['Recebido nos contratos',formatarMoeda(c.recebido)],['A receber nos contratos',formatarMoeda(c.a_receber)],
     ].map(([r,v])=><Card className="p-4" key={r}><p className="text-sm text-muted-foreground">{r}</p><p className="mt-1 text-2xl font-semibold">{v}</p></Card>)}</div>

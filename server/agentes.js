@@ -8,7 +8,8 @@ import { excedeuLimite } from './protecao.js'
 //   POST &org=…&controle=…  → lê o edital e os anexos publicados no PNCP e devolve o checklist
 //                              (datas, habilitação, proposta, participação e riscos), cada item com o trecho de origem.
 // A leitura de um edital público é a mesma para todos: fica guardada e é reaproveitada sem novo custo.
-// Exige o módulo "agentes" liberado para a organização (painel master → Liberação de módulos).
+// Exige o módulo "agentes" liberado para a organização (painel master → Funcionalidades).
+// O limite mensal de cada agente vem do plano, ou da exceção do cliente (master → Planos / ficha do cliente).
 
 const PNCP = 'https://pncp.gov.br/api/pncp/v1/orgaos'
 const CONSULTA = 'https://pncp.gov.br/api/consulta/v1/orgaos'
@@ -211,7 +212,6 @@ export async function lerEdital(controle, { fetcher = fetch, cliente } = {}) {
   }
 }
 
-const inicioDoMes = (agora = new Date()) => new Date(Date.UTC(agora.getUTCFullYear(), agora.getUTCMonth(), 1)).toISOString()
 
 export function criarHandler({ fetcher = fetch, cliente } = {}) {
   return async function handler(req, res) {
@@ -252,11 +252,10 @@ export function criarHandler({ fetcher = fetch, cliente } = {}) {
       const estados = await mod.json().catch(() => ({}))
       if (estados?.agentes !== 'liberado') return res.status(403).json({ error: 'Os agentes de IA ainda não estão liberados para a sua conta.' })
 
-      const limite = Math.max(0, Number(env.IA_LEITOR_LIMITE_MENSAL ?? 20) || 0)
+      // Limite do plano (ou exceção do cliente, definida no master) e usos novos do mês. limite null = sem limite.
       const usoMes = async () => {
-        const r = await banco(`ia_uso?org_id=eq.${org}&agente=eq.${AGENTE_LEITOR}&nova=eq.true&created_at=gte.${encodeURIComponent(inicioDoMes())}&select=id`, { prefer: 'count=exact' })
-        const total = Number(/\/(\d+)$/.exec(r.headers.get('content-range') ?? '')?.[1] ?? 0)
-        return { usadas: total, limite }
+        const u = await (await banco('rpc/ia_limite_e_uso', { metodo: 'POST', corpo: { p_org: org, p_agente: AGENTE_LEITOR } })).json()
+        return { usadas: Number(u?.usadas ?? 0), limite: u?.limite ?? null, origem: u?.origem ?? 'plano' }
       }
       const guardada = async () => (await (await banco(`ia_leituras_edital?controle=eq.${encodeURIComponent(controle)}&select=*`)).json())[0] ?? null
       const registrar = (l, nova) => banco('ia_uso', { metodo: 'POST', prefer: 'return=minimal', corpo: {
@@ -278,7 +277,8 @@ export function criarHandler({ fetcher = fetch, cliente } = {}) {
       if (!env.ANTHROPIC_API_KEY && !cliente) return res.status(503).json({ error: 'O Leitor de editais ainda não foi ativado no servidor (chave da IA ausente).' })
       if (excedeuLimite('leitor', usuario, 3, 5 * 60_000)) return res.status(429).json({ error: 'Muitas leituras em pouco tempo. Aguarde alguns minutos.' })
       const uso = await usoMes()
-      if (uso.usadas >= limite) return res.status(429).json({ error: `A sua organização já fez ${uso.usadas} leituras novas neste mês (limite ${limite}). Editais já lidos continuam disponíveis.`, uso })
+      if (uso.limite === 0) return res.status(403).json({ error: 'O seu plano não inclui leituras novas de editais. Fale com o atendimento para incluir.', uso })
+      if (uso.limite !== null && uso.usadas >= uso.limite) return res.status(429).json({ error: `A sua organização já usou as ${uso.limite} leituras novas do mês. Editais já lidos continuam disponíveis; para mais leituras, fale com o atendimento ou mude de plano.`, uso })
 
       const lida = await lerEdital(controle, { fetcher, cliente })
       const r = await banco('ia_leituras_edital?on_conflict=controle', { metodo: 'POST', prefer: 'resolution=merge-duplicates,return=representation', corpo: {
@@ -288,7 +288,7 @@ export function criarHandler({ fetcher = fetch, cliente } = {}) {
       } })
       const salva = (await r.json().catch(() => []))[0] ?? { ...lida, created_at: new Date().toISOString() }
       await registrar(lida, true)
-      return res.status(200).json({ leitura: publica(salva), uso: { usadas: uso.usadas + 1, limite } })
+      return res.status(200).json({ leitura: publica(salva), uso: { ...uso, usadas: uso.usadas + 1 } })
     } catch (e) {
       if (e instanceof Anthropic.RateLimitError) return res.status(429).json({ error: 'A IA está com muita demanda agora. Tente de novo em alguns minutos.' })
       if (e instanceof Anthropic.AuthenticationError) return res.status(503).json({ error: 'A chave da IA no servidor é inválida.' })

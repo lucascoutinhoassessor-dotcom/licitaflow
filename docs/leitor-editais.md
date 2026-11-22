@@ -16,14 +16,24 @@ Em **Agentes de IA → Leitor de editais** (`/app/agentes`), o cliente cola o li
 
 ## Liberação e limites
 
-- O Leitor só funciona com o módulo **agentes** em "liberado" para a organização. Para testar sem abrir para todos, use o estado "teste" no painel master, em Liberação de módulos.
-- O limite padrão é de **20 leituras novas por organização por mês**. Ele muda pela variável `IA_LEITOR_LIMITE_MENSAL`. Leituras reaproveitadas não contam.
+- O Leitor só funciona com o módulo **agentes** em "liberado" para a organização. Para testar sem abrir para todos, use o estado "teste" no painel master, em **Funcionalidades**.
+- **O limite mensal vem do plano.** No master, em **Planos e limites**, cada plano tem um campo por agente de IA:
+  - um número define quantos usos novos por mês;
+  - em branco quer dizer sem limite;
+  - 0 quer dizer que o agente fica fora do plano.
+
+  Os valores iniciais do Leitor são: teste grátis 3, Essencial 10, Profissional 30, Assessoria 100.
+- **Exceção por cliente.** Na ficha do cliente no master, o card "Agentes de IA" mostra o limite do plano e o uso do mês. Ali dá para gravar um limite próprio para aquele cliente ou voltar ao do plano. As exceções ficam na auditoria.
+- **Consumo de IA** (master): usos novos e reaproveitados, custo estimado em US$ e mensalidade do plano, por cliente e por mês.
+- Só contam os usos novos. Leituras reaproveitadas não gastam limite. O mês segue o horário de Brasília e renova no dia 1º.
+- O cliente vê o próprio uso em **Meu plano** e na tela do Leitor.
 - Cada usuário pode fazer no máximo 3 leituras novas a cada 5 minutos.
+- Para um agente novo usar a mesma regra, basta acrescentá-lo em `src/lib/agentesIA.ts` e o servidor gravar o uso em `ia_uso` com o mesmo id. O limite vem de `ia_limite_e_uso`.
 
 ## Implantação
 
-1. Aplicar a migração `supabase/migrations/20261121000037_leitor_editais.sql`.
-2. Na Vercel, cadastrar `ANTHROPIC_API_KEY` e, se quiser, `IA_LEITOR_LIMITE_MENSAL`. Também é preciso que `SUPABASE_SERVICE_ROLE_KEY` já exista. Nunca use variáveis `VITE_` para essas chaves.
+1. Aplicar as migrações `20261121000037_leitor_editais.sql` e `20261121000041_limites_ia.sql`, nessa ordem. A 041 precisa estar no banco antes de publicar o código que a usa.
+2. Na Vercel, cadastrar `ANTHROPIC_API_KEY`. Também é preciso que `SUPABASE_SERVICE_ROLE_KEY` já exista. Nunca use variáveis `VITE_` para essas chaves.
 3. Publicar e liberar o módulo **agentes** primeiro como "teste" para a organização master.
 4. Ler 3 ou 4 editais reais de tamanhos diferentes, incluindo um escaneado, e conferir os itens com o edital antes de liberar para os clientes.
 

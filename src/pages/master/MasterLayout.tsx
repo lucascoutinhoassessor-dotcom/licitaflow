@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
-import { Settings, Wallet, Plug, CreditCard, Headphones, Megaphone, BarChart3, Activity, FileText, History, Building2, LayoutDashboard, LogOut, ShieldCheck, Users, Repeat, Receipt, Trophy, ExternalLink, Download, ToggleRight } from 'lucide-react'
+import { Settings, Wallet, Plug, CreditCard, Headphones, Megaphone, BarChart3, Activity, FileText, History, Building2, LayoutDashboard, LogOut, ShieldCheck, Users, Repeat, Receipt, Trophy, ExternalLink, Download, ToggleRight, Bot } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { useFinanceiro } from './Financeiro'
@@ -22,6 +22,7 @@ const grupos: { titulo: string; abas: { rota: string; rotulo: string; icone: typ
     { rota: '/master/assinaturas', rotulo: 'Assinaturas', icone: Repeat },
     { rota: '/master/cobrancas', rotulo: 'Cobranças avulsas', icone: Receipt },
     { rota: '/master/planos', rotulo: 'Planos e limites', icone: CreditCard },
+    { rota: '/master/consumo-ia', rotulo: 'Consumo de IA', icone: Bot },
   ] },
   { titulo: 'Operação', abas: [
     { rota: '/master/funcionalidades', rotulo: 'Funcionalidades', icone: ToggleRight },

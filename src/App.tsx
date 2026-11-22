@@ -63,6 +63,7 @@ const MasterFinanceiro = lazy(() => import('@/pages/master/Financeiro'))
 const MasterAssinaturas = lazy(() => import('@/pages/master/Assinaturas'))
 const MasterRanking = lazy(() => import('@/pages/master/Ranking'))
 const MasterModulos = lazy(() => import('@/pages/master/Modulos'))
+const MasterConsumoIA = lazy(() => import('@/pages/master/ConsumoIA'))
 const NaoEncontrada = lazy(() => import('@/pages/NaoEncontrada'))
 
 function ExigeLogin({ children }: { children: ReactNode }) {
@@ -184,6 +185,7 @@ export default function App() {
             <Route path="cobrancas" element={<Cobrancas master />} />
             <Route path="ranking" element={<MasterRanking />} />
             <Route path="funcionalidades" element={<MasterModulos />} />
+            <Route path="consumo-ia" element={<MasterConsumoIA />} />
             <Route path="integracoes" element={<Integracoes />} />
             <Route path="configuracoes" element={<ConfiguracoesMaster />} />
             <Route path="atividade" element={<MasterAtividade />} />

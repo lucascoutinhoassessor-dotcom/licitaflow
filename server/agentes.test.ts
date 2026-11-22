@@ -121,17 +121,17 @@ describe('rota do Leitor de editais', () => {
   afterEach(() => { vi.unstubAllEnvs(); limparProtecoes() })
   const ambiente = () => {
     vi.stubEnv('SUPABASE_URL', 'https://db.exemplo'); vi.stubEnv('SUPABASE_ANON_KEY', 'anon'); vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', 'servico')
-    vi.stubEnv('ANTHROPIC_API_KEY', 'chave'); vi.stubEnv('IA_LEITOR_LIMITE_MENSAL', '2')
+    vi.stubEnv('ANTHROPIC_API_KEY', 'chave')
   }
   const req = (method: string, query: Record<string, string> = {}) => ({ method, headers: { authorization: 'Bearer token' }, query: { agente: 'leitor', org: ORG, controle: CONTROLE, ...query } })
 
-  function banco({ modulo = 'liberado', guardada = null as unknown, usadas = 0 } = {}) {
+  function banco({ modulo = 'liberado', guardada = null as unknown, usadas = 0, limite = 2 as number | null } = {}) {
     const gravados: { url: string; corpo: unknown }[] = []
     const base = pncp([{ titulo: 'Edital', tipoDocumentoNome: 'Edital', url: 'https://pncp/a1' }], { 'https://pncp/a1': pdf(EDITAL) })
     const fetcher = vi.fn(async (url: string, init?: RequestInit) => {
       if (url.endsWith('/auth/v1/user')) return json({ id: USER })
       if (url.endsWith('/rpc/modulos_da_org')) return json({ agentes: modulo })
-      if (url.includes('/rest/v1/ia_uso?')) return json([], 200, { 'content-range': `0-0/${usadas}` })
+      if (url.endsWith('/rpc/ia_limite_e_uso')) return json({ limite, origem: 'plano', usadas })
       if (url.includes('/rest/v1/ia_leituras_edital?controle=')) return json(guardada ? [guardada] : [])
       if (init?.method === 'POST' && url.includes('/rest/v1/')) { gravados.push({ url, corpo: JSON.parse(String(init.body)) }); return json(url.includes('ia_leituras') ? [{ ...JSON.parse(String(init.body)), created_at: '2026-11-21T10:00:00Z' }] : null, 201) }
       return base(url)
@@ -167,7 +167,7 @@ describe('rota do Leitor de editais', () => {
     expect(corpo.leitura.resultado.datas[0].trecho.conferido).toBe(true)
     expect(corpo.leitura.resultado.habilitacao[0].trecho.conferido).toBe(true)
     expect(corpo.leitura.documentos[0].texto).toBeUndefined()
-    expect(corpo.uso).toEqual({ usadas: 1, limite: 2 })
+    expect(corpo.uso).toEqual({ usadas: 1, limite: 2, origem: 'plano' })
     const chamada = c.beta.messages.parse.mock.calls[0] as unknown as [Record<string, unknown>]
     expect(chamada[0]).toMatchObject({ model: 'claude-opus-5-5', fallbacks: 'default', betas: ['server-side-fallback-2026-07-01'] })
     const uso = gravados.find((g) => g.url.includes('ia_uso'))!.corpo as Record<string, unknown>
@@ -194,11 +194,24 @@ describe('rota do Leitor de editais', () => {
     expect(c.beta.messages.parse).not.toHaveBeenCalled()
   })
 
+  it('plano sem o agente (limite 0) bloqueia; plano sem limite (null) libera', async () => {
+    ambiente()
+    let c = cliente()
+    let r = resposta(); await criarHandler({ fetcher: banco({ limite: 0 }).fetcher as unknown as typeof fetch, cliente: c })(req('POST'), r)
+    expect(r.status).toHaveBeenCalledWith(403)
+    expect(c.beta.messages.parse).not.toHaveBeenCalled()
+    limparProtecoes()
+    c = cliente()
+    r = resposta(); await criarHandler({ fetcher: banco({ limite: null, usadas: 500 }).fetcher as unknown as typeof fetch, cliente: c })(req('POST'), r)
+    expect(r.status).toHaveBeenCalledWith(200)
+    expect(c.beta.messages.parse).toHaveBeenCalled()
+  })
+
   it('GET devolve a leitura guardada (ou null) e o consumo do mês', async () => {
     ambiente()
     const { fetcher } = banco({ usadas: 1 })
     const r = resposta(); await criarHandler({ fetcher: fetcher as unknown as typeof fetch })(req('GET'), r)
-    expect(r.json.mock.calls[0][0]).toEqual({ leitura: null, uso: { usadas: 1, limite: 2 } })
+    expect(r.json.mock.calls[0][0]).toEqual({ leitura: null, uso: { usadas: 1, limite: 2, origem: 'plano' } })
   })
 
   it('sem a chave da IA no servidor avisa que o agente não foi ativado', async () => {

@@ -13,7 +13,8 @@ export interface ResultadoLeitor {
 }
 export interface DocumentoLido { id: string | null; titulo: string; url: string; lido: boolean; escaneado?: boolean; paginas?: number; paginasLidas?: number; aviso?: string }
 export interface LeituraEdital { controle: string; objeto: string | null; resultado: ResultadoLeitor; documentos: DocumentoLido[]; modelo: string; created_at: string }
-export interface UsoLeitor { usadas: number; limite: number }
+/** limite: número por mês, null = sem limite, 0 = fora do plano. origem: do plano ou exceção do cliente. */
+export interface UsoLeitor { usadas: number; limite: number | null; origem?: 'plano' | 'cliente' }
 export interface RespostaLeitor { leitura: LeituraEdital | null; uso: UsoLeitor; reaproveitada?: boolean }
 
 export const NOME_CATEGORIA: Record<CategoriaHabilitacao, string> = {

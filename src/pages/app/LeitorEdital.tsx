@@ -157,8 +157,16 @@ export default function LeitorEdital() {
               <p className="max-w-lg text-sm text-muted-foreground">
                 A IA vai abrir o edital, o termo de referência e os anexos publicados no PNCP e montar o checklist com o trecho de origem de cada item.
               </p>
-              <Button onClick={() => ler.mutate()}><FileSearch className="h-4 w-4" />Ler edital com IA</Button>
-              {uso && <p className="text-xs text-muted-foreground">Leituras novas neste mês: {uso.usadas} de {uso.limite}. Editais que já foram lidos abrem sem contar.</p>}
+              {uso?.limite === 0 ? (
+                <Aviso tipo="info">O seu plano não inclui leituras de editais com IA. <Link to="/app/plano" className="font-semibold underline">Ver planos</Link> ou fale com o atendimento.</Aviso>
+              ) : uso && uso.limite !== null && uso.usadas >= uso.limite ? (
+                <Aviso tipo="info">Você já usou as {uso.limite} leituras novas deste mês. O limite renova no dia 1º. Para ler mais agora, <Link to="/app/plano" className="font-semibold underline">mude de plano</Link> ou fale com o atendimento.</Aviso>
+              ) : (
+                <>
+                  <Button onClick={() => ler.mutate()}><FileSearch className="h-4 w-4" />Ler edital com IA</Button>
+                  {uso && <p className="text-xs text-muted-foreground">{uso.limite === null ? `Leituras novas neste mês: ${uso.usadas}.` : `Leituras novas neste mês: ${uso.usadas} de ${uso.limite}.`} Editais que já foram lidos abrem sem contar.</p>}
+                </>
+              )}
             </>
           )}
           {ler.isError && (
