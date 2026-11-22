@@ -25,4 +25,11 @@
 - Trocar de plano atualiza o valor da assinatura e das faturas em aberto no Asaas e aplica o plano na hora se a assinatura estiver ativa. Não há cálculo proporcional (pró-rata).
 - O teste grátis vencido não bloqueia o acesso automaticamente (comportamento anterior mantido); o painel mostra quantos estão vencidos para abordagem.
 - "Sincronizar com Asaas" reprocessa as últimas 100 cobranças da assinatura, útil se algum webhook se perdeu.
-- Pendentes para próximas etapas: cupons e promoções, afiliados, colaboradores do master com permissão por área, e-mail/WhatsApp automáticos de cobrança, pró-rata.
+- Pendentes para próximas etapas: cupons e promoções, afiliados, colaboradores do master com permissão por área, WhatsApp automático de cobrança, pró-rata.
+
+## E-mail de acesso liberado (SMTP)
+
+- Migração `20261121000042_email_plataforma.sql`. Configuração em **Master → Integrações → E-mail da plataforma (SMTP)** (Gmail com senha de app, Resend, Brevo ou outro). A senha é cifrada como a chave do Asaas.
+- No primeiro pagamento confirmado de cada assinatura, o webhook envia "Pagamento confirmado: seu acesso está liberado" para quem contratou (ou o criador da organização). Uma vez por assinatura; se o SMTP falhar, o próximo aviso do Asaas tenta de novo. O resultado aparece nos últimos avisos do Asaas ("e-mail enviado" / "e-mail falhou").
+- Assinaturas já pagas antes da migração não recebem e-mail retroativo.
+- Cadastro e "Esqueci minha senha" saem pelo **Supabase**: configure o mesmo SMTP em Authentication → Emails → SMTP Settings, a Site URL/Redirect URLs `https://licitaflow-prod.vercel.app/**` e o limite de e-mails por hora.

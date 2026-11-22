@@ -1,6 +1,25 @@
 // Webhook do Asaas. Configure em Asaas → Integrações → Webhooks com a URL e o token exibidos no master.
 // Idempotente: cada evento é gravado uma vez (id do evento); reenvios do Asaas são ignorados com 200.
 import {decifrar,mesmoToken} from '../server/asaas.js'
+import {emailAcessoLiberado,enviarEmail,montarSmtp} from '../server/email.js'
+
+// Primeiro pagamento confirmado da assinatura: e-mail de acesso liberado (uma vez). Nunca derruba o webhook.
+async function boasVindas(sv,pagamento,env) {
+  let d=null
+  try {
+    d=await sv('/rest/v1/rpc/reservar_boas_vindas',{method:'POST',body:JSON.stringify({p_pagamento:pagamento})})
+    if(!d?.email) return ''
+    const [linha]=await sv('/rest/v1/plataforma_email?select=*&id=eq.smtp')
+    const cfg=montarSmtp(linha,env)
+    if(!cfg?.ativo) throw new Error('SMTP incompleto')
+    await enviarEmail(cfg,{para:d.email,...emailAcessoLiberado(d)})
+    return '; e-mail enviado'
+  } catch {
+    // Libera a marcação para que o próximo aviso do Asaas (ou a sincronização) tente de novo.
+    if(d?.assinatura) await sv('/rest/v1/assinaturas?id=eq.'+d.assinatura,{method:'PATCH',body:JSON.stringify({boas_vindas_em:null})}).catch(()=>{})
+    return d?.email?'; e-mail falhou':''
+  }
+}
 
 export default async function handler(req,res) {
   res.setHeader('Cache-Control','no-store')
@@ -36,6 +55,7 @@ export default async function handler(req,res) {
       await sv('/rest/v1/gateway_eventos?id=eq.'+encodeURIComponent(id),{method:'DELETE'}).catch(()=>{})
       throw e
     }
+    if(resultado==='acesso liberado') resultado+=await boasVindas(sv,body.payment,env)
     await sv('/rest/v1/gateway_eventos?id=eq.'+encodeURIComponent(id),{method:'PATCH',body:JSON.stringify({resultado:String(resultado).slice(0,200)})}).catch(()=>{})
     // Sempre 200 para eventos válidos: o Asaas pausa a fila depois de erros repetidos.
     return res.json({recebido:true,resultado})
