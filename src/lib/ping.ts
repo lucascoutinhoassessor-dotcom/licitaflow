@@ -1,15 +1,22 @@
-// Som do aviso com o app aberto: vinheta de três notas + voz (neural Antonio, pt-BR) dizendo "licitaforce!"
-// (public/sons/licitaforce.mp3, ~1,1 s).
+// Som do aviso com o app aberto: o áudio enviado pelo master em /master/som-aviso ou, sem ele, o padrão
+// (vinheta de três notas + voz dizendo "licitaforce!", public/sons/licitaforce.mp3). Ver src/lib/somAviso.ts.
 // Toca pelo Web Audio, então só soa se o navegador já liberou áudio (houve um toque/clique na página).
-// Se o arquivo não carregar, cai no "ping" de duas notas gerado na hora.
+// Se nada carregar, cai no "ping" de duas notas gerado na hora.
+import { baixarSomAviso } from './somAviso'
+
 let ctx: AudioContext | null = null
 let voz: Promise<AudioBuffer | null> | null = null
+let carregadoEm = 0
 
 function carregarVoz(c: AudioContext) {
-  voz = voz || fetch('/sons/licitaforce.mp3')
-    .then(r => (r.ok ? r.arrayBuffer() : Promise.reject(new Error('sem áudio'))))
-    .then(b => c.decodeAudioData(b))
-    .catch(() => { voz = null; return null })
+  // Recarrega a cada 10 min para pegar um som novo trocado pelo master sem precisar recarregar a página.
+  if (voz && Date.now() - carregadoEm > 600_000) voz = null
+  if (!voz) {
+    carregadoEm = Date.now()
+    voz = baixarSomAviso()
+      .then(({ dados }) => c.decodeAudioData(dados))
+      .catch(() => { voz = null; return null })
+  }
   return voz
 }
 
