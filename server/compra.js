@@ -49,15 +49,18 @@ export function gruposDosItens(itens) {
 
 /** Junta contratação, itens, resultados e marcas no formato da tela. */
 export function montarCompra(contratacao, itens, resultados, marcas) {
-  const porItem = new Map()
+  const porItem = new Map(), canceladosPorItem = new Map()
   for (const r of resultados) {
-    if (r.dataCancelamentoPncp || cnpjBloqueado(r.niFornecedor)) continue
+    if (cnpjBloqueado(r.niFornecedor)) continue
     const n = Number(r.numeroItemPncp)
-    porItem.set(n, [...(porItem.get(n) ?? []), {
+    // Resultado cancelado (ex.: vencedora que caiu depois da homologação): fica à parte, com o motivo.
+    const destino = r.dataCancelamentoPncp || r.situacaoCompraItemResultadoId === 2 ? canceladosPorItem : porItem
+    destino.set(n, [...(destino.get(n) ?? []), {
       fornecedor: r.nomeRazaoSocialFornecedor ?? null, cnpj: r.niFornecedor ?? null, porte: r.porteFornecedorNome ?? null,
       quantidade: Number(r.quantidadeHomologada) || null, valorUnitario: Number(r.valorUnitarioHomologado) || null,
       valorTotal: Number(r.valorTotalHomologado) || null, ordem: r.ordemClassificacaoSrp ?? null, meEpp: !!r.aplicacaoBeneficioMeepp,
       desconto: Number(r.percentualDesconto) || null, situacao: r.situacaoCompraItemResultadoNome ?? null,
+      ...(destino === canceladosPorItem ? { motivoCancelamento: r.motivoCancelamento ?? null, cancelamento: r.dataCancelamentoPncp ?? null } : {}),
     }])
   }
   for (const lista of porItem.values()) lista.sort((a, b) => (a.ordem ?? 999) - (b.ordem ?? 999) || (a.valorUnitario ?? 0) - (b.valorUnitario ?? 0))
@@ -77,6 +80,7 @@ export function montarCompra(contratacao, itens, resultados, marcas) {
       criterio: i.criterioJulgamentoNome ?? null, beneficio: i.tipoBeneficioNome ?? null, grupo: i.numeroGrupo ?? null,
       marca: marcas[i.numeroItemCompra]?.marca ?? marcas[i.numeroItemPncp]?.marca ?? null,
       resultados: porItem.get(Number(i.numeroItemPncp)) ?? [],
+      cancelados: canceladosPorItem.get(Number(i.numeroItemPncp)) ?? [],
     })),
   }
 }
@@ -108,7 +112,7 @@ export default async function handler(req, res) {
       guardarNoNavegador(res, 3600)
       return res.json({ grupos })
     }
-    const corpo = await emCache('compra', idCompra, 10 * 60_000, async () => {
+    const corpo = await emCache('compra-v2', idCompra, 10 * 60_000, async () => {
     const [contratacoes, itens, resultados] = await Promise.all([
       obter('modulo-contratacoes/1.1_consultarContratacoes_PNCP_14133_Id', { tipo: 'idCompra', codigo: idCompra }),
       obter('modulo-contratacoes/2.1_consultarItensContratacoes_PNCP_14133_Id', { tipo: 'idCompra', codigo: idCompra }),

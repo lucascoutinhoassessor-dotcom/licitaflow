@@ -12,7 +12,7 @@ describe('detalhe de compra federal', () => {
       [
         { numeroItemPncp: 1, nomeRazaoSocialFornecedor: 'B', niFornecedor: '22222222000122', valorUnitarioHomologado: 20, ordemClassificacaoSrp: 2 },
         { numeroItemPncp: 1, nomeRazaoSocialFornecedor: 'A', niFornecedor: '11111111000111', valorUnitarioHomologado: 15.55, ordemClassificacaoSrp: 1 },
-        { numeroItemPncp: 1, nomeRazaoSocialFornecedor: 'Cancelado', valorUnitarioHomologado: 1, dataCancelamentoPncp: '2026-11-01' },
+        { numeroItemPncp: 1, nomeRazaoSocialFornecedor: 'Cancelado', valorUnitarioHomologado: 1, dataCancelamentoPncp: '2026-11-01', motivoCancelamento: 'Conforme solicitação.' },
       ],
       { 1: { marca: 'PILOT' } },
     )
@@ -20,7 +20,9 @@ describe('detalhe de compra federal', () => {
     expect(c.itens.map((i) => i.numero)).toEqual([1, 2])
     expect(c.itens[0]).toMatchObject({ descricao: 'Caneta azul', marca: 'PILOT', quantidade: 10 })
     expect(c.itens[0].resultados.map((r) => r.fornecedor)).toEqual(['A', 'B'])
+    expect(c.itens[0].cancelados).toMatchObject([{ fornecedor: 'Cancelado', motivoCancelamento: 'Conforme solicitação.' }])
     expect(c.itens[1].resultados).toEqual([])
+    expect(c.itens[1].cancelados).toEqual([])
   })
 })
 

@@ -3,11 +3,15 @@ import { supabase } from './supabase'
 export interface ResultadoItemFederal {
   fornecedor: string | null; cnpj: string | null; porte: string | null; quantidade: number | null
   valorUnitario: number | null; valorTotal: number | null; ordem: number | null; meEpp: boolean; desconto: number | null; situacao: string | null
+  /** Só nos resultados cancelados. */
+  motivoCancelamento?: string | null; cancelamento?: string | null
 }
 export interface ItemCompraFederal {
   numero: number; descricao: string; resumo: string | null; tipo: string | null; quantidade: number | null; unidade: string | null
   valorEstimado: number | null; sigiloso: boolean; situacao: string | null; criterio: string | null; beneficio: string | null
   grupo: number | null; marca: string | null; resultados: ResultadoItemFederal[]
+  /** Resultados cancelados depois de informados (ex.: vencedora que caiu). Ausente em respostas antigas do cache. */
+  cancelados?: ResultadoItemFederal[]
 }
 export interface CompraFederal {
   idCompra: string | null; controle: string | null; objeto: string | null; orgao: string | null; unidade: string | null
