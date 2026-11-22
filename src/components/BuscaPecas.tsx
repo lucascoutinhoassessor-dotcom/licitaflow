@@ -87,7 +87,7 @@ export default function BuscaPecas({ tipoInicial, aoUsarModelo }: { tipoInicial:
           As do Compras.gov.br (federais) ficam atrás de captcha e não entram.
           {s && s.pecas > 0 && <> Hoje: <strong>{s.pecas.toLocaleString('pt-BR')} peças</strong> de {s.processos.toLocaleString('pt-BR')} processos{s.desde && s.ate ? `, sessões de ${formatarData(s.desde)} a ${formatarData(s.ate)}` : ''}.</>}
           {s && s.diasPendentes > 0 && <> Carga em andamento: {s.diasConcluidos} de {s.diasConcluidos + s.diasPendentes} dias lidos.</>}
-          {' '}A palavra-chave procura no objeto, no órgão, na empresa e no título da peça. O texto do arquivo abre na hora, em “Ler peça”.
+          {' '}A palavra-chave procura no objeto, no órgão, na empresa, no título e no começo do texto de cada peça. O texto completo abre na hora, em “Ler peça”.
         </p>
       </div>
 

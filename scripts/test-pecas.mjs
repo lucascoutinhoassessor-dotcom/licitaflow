@@ -5,7 +5,7 @@ const db = new PGlite()
 await db.exec(`create role anon nologin;create role authenticated nologin;create role service_role nologin bypassrls;create schema auth;
  create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.sub',true),'')::uuid$$;
  grant usage on schema auth,public to authenticated,anon,service_role;`)
-for (const f of ['20261117035403_indice_oportunidades', '20261121000032_pecas_juridicas', '20261121000033_pecas_data_sessao']) await db.exec(readFileSync(`supabase/migrations/${f}.sql`, 'utf8'))
+for (const f of ['20261117035403_indice_oportunidades', '20261121000032_pecas_juridicas', '20261121000033_pecas_data_sessao', '20261121000034_pecas_texto']) await db.exec(readFileSync(`supabase/migrations/${f}.sql`, 'utf8'))
 await db.exec(`create schema net;create table net.pedidos(id bigint generated always as identity,url text,headers jsonb);
  create function net.http_get(url text,params jsonb default '{}',headers jsonb default '{}',timeout_milliseconds integer default 2000) returns bigint language plpgsql as $$declare v bigint;begin insert into net.pedidos(url,headers) values(url,headers) returning id into v;return v;end$$;`)
 
@@ -47,15 +47,15 @@ const proc = (codigo, extra = {}) => ({ codigo, orgao: 'Prefeitura Municipal de 
 const peca = (tipo, extra = {}) => ({ tipo, papel: 'pedido', titulo: tipo, empresa: null, item: null, arquivo_url: 'https://arquivos.portaldecompraspublicas.com.br/v1/download/abc', trecho: null, data: '2026-08-01T10:00:00-03:00', ...extra })
 const gravar = (pagina, paginas, processos, d = prox) => como('service_role', 'select public.pecas_coleta_gravar($1,$2,$3,$4,$5,$6,$7::jsonb) r', [token, d.dia, d.passada, pagina, paginas, 50, JSON.stringify(processos)])
 await gravar(1, 2, [
-  { ...proc(1), pecas: [peca('recurso', { empresa: 'AUTOMAX PECAS LTDA', item: 'Item 1', data: '2026-08-03T10:00:00-03:00' }), peca('contrarrazoes', { empresa: 'VICENZO PNEUS LTDA', item: 'Item 1' }), peca('invalido')] },
+  { ...proc(1), pecas: [peca('recurso', { empresa: 'AUTOMAX PECAS LTDA', item: 'Item 1', data: '2026-08-03T10:00:00-03:00', texto: 'RECURSO ADMINISTRATIVO. O televisor ofertado pela recorrida não atende à especificação.' }), peca('contrarrazoes', { empresa: 'VICENZO PNEUS LTDA', item: 'Item 1' }), peca('invalido')] },
   { ...proc(2, { orgao: 'Câmara de Varginha', municipio: 'Varginha', uf: 'MG', objeto: 'Serviços de limpeza', lei14133: false }), pecas: [peca('impugnacao'), peca('intencao-recurso', { arquivo_url: null, trecho: 'O fornecedor LIMPA BEM LTDA declarou intenção de recurso para o item 2.', empresa: 'LIMPA BEM LTDA' })] },
   { codigo: 3, pecas: [] },
 ])
 ok((await db.query('select count(*)::int n from public.pecas_juridicas')).rows[0].n === 4, 'grava as peças válidas e ignora tipo desconhecido')
 ok((await db.query('select count(*)::int n from public.pecas_processos')).rows[0].n === 2, 'processo sem peças não entra no índice')
 let estado = (await db.query('select proxima_pagina,paginas,concluido_em,tentado_em,com_pecas from licitaflow_juridico.dias where dia=$1 and passada=1', [prox.dia])).rows[0]
-ok(estado.proxima_pagina === 2 && estado.paginas === 2 && !estado.concluido_em && !estado.tentado_em && estado.com_pecas === 3, 'fila avança para a página seguinte do dia')
-await gravar(2, 2, [{ ...proc(1), pecas: [peca('recurso', { empresa: 'AUTOMAX PECAS LTDA', item: 'Item 1', data: '2026-08-03T10:00:00-03:00' })] }])
+ok(estado.proxima_pagina === 2 && estado.paginas === 2 && !estado.concluido_em && !estado.tentado_em && estado.com_pecas === 2, 'fila avança para a página seguinte do dia')
+await gravar(2, 2, [{ ...proc(1), pecas: [peca('recurso', { empresa: 'AUTOMAX PECAS LTDA', item: 'Item 1', data: '2026-08-03T10:00:00-03:00', texto: 'RECURSO ADMINISTRATIVO. O televisor ofertado pela recorrida não atende à especificação.' })] }])
 ok((await db.query('select count(*)::int n from public.pecas_juridicas where codigo=1')).rows[0].n === 1, 'regravar um processo substitui as peças dele')
 ok((await db.query('select concluido_em from licitaflow_juridico.dias where dia=$1 and passada=1', [prox.dia])).rows[0].concluido_em, 'última página conclui o dia')
 await falha(como('service_role', "select public.pecas_coleta_gravar('x',current_date,1::smallint,1,1,0,'[]')"), 'gravar exige o token')
@@ -66,6 +66,8 @@ ok(r.total === 3 && r.data[0].tipo === 'recurso' && r.data[0].processo.orgao ===
 ok(r.porTipo.recurso === 1 && r.porTipo.impugnacao === 1 && r.porTipo['intencao-recurso'] === 1, 'conta por tipo de peça')
 ok((await buscar({ busca: 'pneu' })).total === 1, 'palavra-chave acha pelo objeto do processo')
 ok((await buscar({ busca: 'automax' })).total === 1, 'palavra-chave acha pela empresa')
+ok((await buscar({ busca: 'televisores' })).total === 1, 'palavra-chave acha no texto do PDF (só o índice fica guardado)')
+ok((await db.query("select count(*)::int n from information_schema.columns where table_name='pecas_juridicas' and column_name in ('texto','conteudo_texto')")).rows[0].n === 0, 'o texto em si não é guardado')
 ok((await buscar({ busca: 'intencao' })).total === 1, 'palavra-chave acha no texto da intenção, sem acento')
 ok((await buscar({ busca: 'pneu;limpeza' })).total === 3, 'termos com ";" valem como qualquer um deles')
 ok((await buscar({ tipos: ['impugnacao', 'intencao-recurso'] })).total === 2, 'filtra por tipo de peça')
@@ -76,9 +78,16 @@ await falha(buscar({ tipos: [] }), 'exige ao menos um tipo')
 await falha(buscar({ uf: 'XYZ' }), 'UF inválida é recusada')
 await falha(buscar({ busca: '   ;  ' }), 'termo só com separador pede uma palavra-chave')
 const st = (await como('authenticated', 'select public.pecas_status() r')).rows[0].r
-ok(st.pecas === 3 && st.processos === 2 && st.diasConcluidos === 1 && st.ultimaColeta, 'status mostra a cobertura e a última coleta')
+ok(st.comTexto === 1 && st.pecas === 3 && st.processos === 2 && st.diasConcluidos === 1 && st.ultimaColeta, 'status mostra a cobertura e a última coleta')
 await falha(como('authenticated', 'insert into public.pecas_juridicas(codigo,tipo,titulo) values(1,\'recurso\',\'x\')'), 'cliente não escreve no índice')
 await falha(como('authenticated', 'select * from licitaflow_juridico.config'), 'cliente não lê o token')
+
+// Texto desligado.
+await db.exec('update licitaflow_juridico.config set texto_chars=0')
+const p3 = (await como('service_role', 'select public.pecas_coleta_proximo($1) r', [token])).rows[0].r
+await gravar(1, 9, [{ ...proc(7), pecas: [peca('impugnacao', { texto: 'impugnação sobre geladeira' })] }], p3)
+ok((await buscar({ busca: 'geladeira' })).total === 0, 'texto_chars=0 não indexa o texto')
+await db.exec('update licitaflow_juridico.config set texto_chars=2000')
 
 // Retenção.
 await db.query("update public.pecas_processos set sessao=current_date-200 where codigo=2")

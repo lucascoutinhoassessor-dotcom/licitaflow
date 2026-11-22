@@ -14,6 +14,8 @@ const MAX_BYTES = 12 * 1024 * 1024
 const MAX_PAGINAS_PDF = 40
 const POR_PAGINA = 50
 const ORCAMENTO_MS = 42_000
+/** Caracteres do começo de cada PDF mandados ao banco para a busca por palavra (o banco corta em config.texto_chars). */
+export const TEXTO_INDICE = 2500
 
 const sem = (s) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
 const limpar = (s) => String(s ?? '').replace(/\s+/g, ' ').trim()
@@ -138,7 +140,7 @@ async function emLotes(lista, n, fn) {
 const ehDisputa = (r) => !/dispensa|inexigib|credenciamento|chamamento|leil[ãa]o|chamada p[úu]blica/i.test(`${r?.tipoLicitacao?.tipoLicitacao ?? ''} ${r?.tipoLicitacao?.modalidadeLicitacao ?? ''}`)
 
 /** Lê uma página de processos com sessão no dia e devolve os que têm peças, prontos para gravar. */
-export async function coletarPagina({ dia, pagina }, fetcher = fetch) {
+export async function coletarPagina({ dia, pagina, prazo = Infinity }, fetcher = fetch) {
   const qs = new URLSearchParams({ pagina: String(pagina), limitePagina: String(POR_PAGINA), dataInicial: dia, dataFinal: dia, tipoData: '1', filtroOrdenacao: '4' })
   const lista = await pedir(fetcher, `${PCP}/v2/licitacao/processos?${qs}`)
   const resultado = Array.isArray(lista?.result) ? lista.result : []
@@ -171,11 +173,18 @@ export async function coletarPagina({ dia, pagina }, fetcher = fetch) {
       pecas,
     }
   })).filter(Boolean)
+  // Começo do texto de cada PDF, para a palavra-chave achar o assunto da peça. Só o índice de busca fica no banco.
+  const comArquivo = processos.flatMap((p) => p.pecas).filter((x) => x.arquivo_url)
+  await emLotes(comArquivo, 6, async (x) => {
+    if (Date.now() > prazo) return // sem tempo: a passada 2 lê depois
+    const lido = await lerTexto(x.arquivo_url, fetcher, { maxPaginas: 3 }).catch(() => null)
+    if (lido?.texto) x.texto = lido.texto.slice(0, TEXTO_INDICE)
+  })
   return { paginas, lidos: resultado.length, processos }
 }
 
 /** Texto do PDF da peça (para ler e usar como modelo). */
-export async function lerTexto(url, fetcher = fetch) {
+export async function lerTexto(url, fetcher = fetch, { maxPaginas = MAX_PAGINAS_PDF } = {}) {
   if (!ARQUIVO.test(url)) { const e = new Error('Arquivo inválido.'); e.status = 400; throw e }
   const r = await fetcher(url, { headers: { 'User-Agent': 'LicitaFlow/1.0' }, signal: AbortSignal.timeout(20000) })
   if (!r.ok) { const e = new Error('O portal não entregou o arquivo agora.'); e.status = 502; throw e }
@@ -187,7 +196,7 @@ export async function lerTexto(url, fetcher = fetch) {
   if (!ehPdf) return { texto: null, motivo: 'Este arquivo não é PDF (Word, ZIP ou imagem). Abra no portal.' }
   const { getDocumentProxy } = await import('unpdf')
   const pdf = await getDocumentProxy(buf)
-  const paginas = Math.min(pdf.numPages, MAX_PAGINAS_PDF)
+  const paginas = Math.min(pdf.numPages, maxPaginas)
   const partes = []
   for (let i = 1; i <= paginas; i++) {
     const pg = await pdf.getPage(i)
@@ -237,10 +246,10 @@ export function criarHandler({ fetcher = fetch } = {}) {
         }
         const inicio = Date.now()
         const feitos = []
-        while (Date.now() - inicio < ORCAMENTO_MS / 2) {
+        while (Date.now() - inicio < 15_000) {
           const prox = await rpc('pecas_coleta_proximo', { p_token: token })
           if (!prox) break
-          const pg = await coletarPagina({ dia: prox.dia, pagina: prox.pagina }, fetcher)
+          const pg = await coletarPagina({ dia: prox.dia, pagina: prox.pagina, prazo: inicio + 32_000 }, fetcher)
           const comPecas = pg.processos.filter((p) => p.pecas.length)
           // Vai a página inteira: quem ficou sem peças (o órgão apagou o arquivo) sai do índice.
           const r = await rpc('pecas_coleta_gravar', { p_token: token, p_dia: prox.dia, p_passada: prox.passada, p_pagina: prox.pagina, p_paginas: pg.paginas, p_lidos: pg.lidos, p_processos: pg.processos })

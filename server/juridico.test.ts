@@ -109,6 +109,10 @@ describe('coleta de uma página', () => {
       url: 'https://www.portaldecompraspublicas.com.br/processos/rs/gramado/pe-18-2026-10' })
     expect(r.processos[0].pecas).toHaveLength(1)
     expect(r.processos[1]).toMatchObject({ codigo: 11, pecas: [] })
+    expect(chamadas.some((u) => u.startsWith('https://arquivos.'))).toBe(true) // tenta ler o começo do PDF para a busca
+    chamadas.length = 0
+    await coletarPagina({ dia: '2026-07-24', pagina: 2, prazo: 0 }, fetcher as unknown as typeof fetch)
+    expect(chamadas.some((u) => u.startsWith('https://arquivos.'))).toBe(false) // sem tempo, deixa para a passada 2
   })
 })
 
