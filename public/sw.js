@@ -16,21 +16,35 @@ self.addEventListener('fetch', event => {
   }
 })
 
-// Avisos do LicitaFlow por push: aparece na hora, mesmo com o app fechado.
+// Nome que aparece no topo de toda notificação (trocar aqui quando virar LicitaForce).
+const NOME_APP = 'LicitaFlow'
+
+// Avisos por push: aparece na hora, mesmo com o app fechado. Estilo "app de mensagens": o título é
+// sempre o nome do app e o assunto do aviso vem no corpo, antes do texto.
 self.addEventListener('push', event => {
   let d = {}
-  try { d = event.data ? event.data.json() : {} } catch { d = { titulo: 'LicitaFlow', texto: event.data ? event.data.text() : '' } }
-  event.waitUntil(self.registration.showNotification(d.titulo || 'LicitaFlow', {
-    body: d.texto || '',
-    icon: '/icons/icone-192.png',
-    // Ícone pequeno da barra de status (Android): silhueta branca transparente, senão vira um quadrado branco.
-    badge: '/icons/badge-96.png',
-    tag: d.tag || 'licitaflow-aviso',
-    renotify: true,
-    vibrate: [200, 100, 200],
-    timestamp: Date.now(),
-    data: { url: d.url || '/app/avisos' },
-  }))
+  try { d = event.data ? event.data.json() : {} } catch { d = { texto: event.data ? event.data.text() : '' } }
+  const titulo = String(d.titulo || '').trim()
+  const texto = String(d.texto || '').trim()
+  const corpo = titulo && titulo !== NOME_APP ? (texto ? `${titulo}: ${texto}` : titulo) : texto
+  event.waitUntil(Promise.all([
+    self.registration.showNotification(NOME_APP, {
+      body: corpo,
+      // Som do sistema (o "ping" do celular/computador). A Web Push não deixa escolher um arquivo de som.
+      silent: false,
+      icon: '/icons/icone-192.png',
+      // Ícone pequeno da barra de status (Android): silhueta branca transparente, senão vira um quadrado branco.
+      badge: '/icons/badge-96.png',
+      tag: d.tag || 'licitaflow-aviso',
+      renotify: true,
+      vibrate: [200, 100, 200],
+      timestamp: Date.now(),
+      data: { url: d.url || '/app/avisos' },
+    }),
+    // Com o app aberto na tela, ele mesmo toca o ping (src/main.tsx).
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+      .then(lista => lista.forEach(c => c.postMessage({ tipo: 'push-ping' }))).catch(() => undefined),
+  ]))
 })
 self.addEventListener('notificationclick', event => {
   event.notification.close()

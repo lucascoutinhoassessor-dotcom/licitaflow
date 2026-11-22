@@ -6,6 +6,7 @@ import App from './App'
 import { AuthProvider } from './providers/AuthProvider'
 import { InstalacaoProvider } from './providers/InstalacaoProvider'
 import './index.css'
+import { tocarPing } from './lib/ping'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -38,4 +39,10 @@ else if (splash) {
 
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => { navigator.serviceWorker.register('/sw.js').catch(() => { /* A aplicação online continua disponível. */ }) })
+}
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('message', e => {
+    if (e.data?.tipo === 'push-ping' && document.visibilityState === 'visible') void tocarPing()
+  })
 }
