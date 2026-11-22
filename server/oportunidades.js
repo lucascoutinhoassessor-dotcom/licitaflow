@@ -1,17 +1,17 @@
 // /api/oportunidades: a pesquisa antiga (que percorria a fonte externa) saiu; clientes antigos recebem 410.
-// O mesmo endereço agora serve a camada de dados brutos no Turso (server/turso.js):
-//   POST ?acao=turso-coletar   (cron, cabeçalho x-coleta conferido no banco) → grava no Turso o que mudou no PNCP
-//   GET  ?acao=turso-situacao  (master)                                          → configurado? quantos editais? última coleta
-//   GET  ?acao=turso-buscar&q=&uf= (usuário logado)                              → busca rápida no bruto
-import { usuarioLogado, excedeuLimite, guardarNoNavegador } from './protecao.js'
-import { buscarBruto, clienteTurso, coletarRodada, situacaoTurso } from './turso.js'
+// O mesmo endereço agora serve a base de editais no Turso (server/turso.js):
+//   POST ?acao=turso-coletar   (pg_cron, cabeçalho x-coleta conferido no banco) → grava no Turso o que mudou no PNCP
+//   GET  ?acao=turso-situacao  (master)                                          → conectado? quantos editais? última coleta
+//   POST ?acao=turso-buscar    (usuário logado) {filtros, pagina}                → busca no mesmo formato do buscar_oportunidades
+import { emCache, usuarioLogado, excedeuLimite } from './protecao.js'
+import { buscarTurso, clienteTurso, coletarRodada, FiltroInvalido, situacaoTurso } from './turso.js'
 
 async function rpcServico(fetcher, base, chave, nome, corpo) {
   const r = await fetcher(`${base}/rest/v1/rpc/${nome}`, { method: 'POST', headers: { apikey: chave, Authorization: `Bearer ${chave}`, 'Content-Type': 'application/json' }, body: JSON.stringify(corpo), signal: AbortSignal.timeout(10000) })
   return r.ok ? r.json().catch(() => null) : null
 }
 
-export function criarHandler({ fetcher = fetch, env = process.env } = {}) {
+export function criarHandler({ fetcher = fetch, env = process.env, validarSessao = usuarioLogado } = {}) {
   return async function handler(req, res) {
     res.setHeader('Cache-Control', 'no-store')
     const acao = String(req.query?.acao ?? '')
@@ -33,10 +33,11 @@ export function criarHandler({ fetcher = fetch, env = process.env } = {}) {
       }
       const token = req.headers.authorization
       if (!/^Bearer \S+$/.test(token ?? '')) return res.status(401).json({ error: 'Entre na sua conta' })
-      const usuario = await usuarioLogado(base, anon, token)
-      if (!usuario) return res.status(401).json({ error: 'Entre na sua conta' })
+      // A sessão confirmada fica 5 minutos em memória: a busca não espera o Supabase a cada página.
+      const sessao = emCache('sessao', token, 5 * 60_000, () => validarSessao(base, anon, token), 2000)
 
       if (acao === 'turso-situacao') {
+        if (!(await sessao)) return res.status(401).json({ error: 'Entre na sua conta' })
         const r = await fetcher(`${base}/rest/v1/rpc/is_platform_admin`, { method: 'POST', headers: { apikey: anon, Authorization: token, 'Content-Type': 'application/json' }, body: '{}' })
         if ((await r.json().catch(() => false)) !== true) return res.status(403).json({ error: 'Acesso restrito ao master' })
         const coletaAgendada = env.SUPABASE_SERVICE_ROLE_KEY ? (await rpcServico(fetcher, base, env.SUPABASE_SERVICE_ROLE_KEY, 'turso_coleta_ativa', {}).catch(() => false)) === true : false
@@ -44,14 +45,27 @@ export function criarHandler({ fetcher = fetch, env = process.env } = {}) {
         return res.status(200).json({ configurado: true, coletaAgendada, ...(await situacaoTurso(turso)) })
       }
       if (acao === 'turso-buscar') {
-        if (!turso) return res.status(503).json({ error: 'A base rápida ainda não foi conectada.' })
-        if (excedeuLimite('turso-buscar', usuario, 60)) return res.status(429).json({ error: 'Muitas consultas em pouco tempo. Aguarde um minuto.' })
-        const editais = await buscarBruto(turso, { termo: String(req.query?.q ?? '').slice(0, 200), uf: String(req.query?.uf ?? '').toUpperCase() })
-        guardarNoNavegador(res, 60)
-        return res.status(200).json({ editais })
+        if (req.method !== 'POST') return res.status(405).json({ error: 'Método não permitido' })
+        if (!turso) return res.status(409).json({ error: 'A base rápida ainda não foi conectada.', codigo: 'turso_indisponivel' })
+        const corpo = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : req.body ?? {}
+        const filtros = corpo.filtros && typeof corpo.filtros === 'object' ? corpo.filtros : {}
+        const pagina = Number(corpo.pagina) || 1
+        // Consulta e login em paralelo; o resultado só sai se a sessão for válida.
+        const chave = JSON.stringify([filtros, pagina])
+        const consulta = emCache('turso-busca', chave, 60_000, () => buscarTurso(turso, filtros, pagina), 500)
+        consulta.catch(() => undefined)
+        const usuario = await sessao
+        if (!usuario) return res.status(401).json({ error: 'Entre na sua conta' })
+        if (excedeuLimite('turso-buscar', usuario, 90)) return res.status(429).json({ error: 'Muitas consultas em pouco tempo. Aguarde um minuto.' })
+        const r = await consulta
+        // Enquanto a carga completa não terminou (ou os itens estão atrasados), quem responde é o Postgres.
+        if (!r.catalogo.carga_inicial_concluida) return res.status(409).json({ error: 'A base rápida ainda está carregando.', codigo: 'turso_carregando' })
+        if (r.detalhesPendentes > Math.max(20, r.totalRegistros * 0.1)) return res.status(409).json({ error: 'Itens ainda em coleta na base rápida.', codigo: 'turso_itens' })
+        return res.status(200).json(r)
       }
       return res.status(400).json({ error: 'Ação inválida' })
     } catch (e) {
+      if (e instanceof FiltroInvalido) return res.status(400).json({ error: e.message })
       return res.status(e.status ?? 500).json({ error: e.status ? e.message : 'Não foi possível concluir agora.' })
     }
   }

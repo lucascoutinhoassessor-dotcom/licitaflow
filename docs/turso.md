@@ -30,9 +30,36 @@ Para desligar: `update licitaflow_turso.config set ativo = false where id;`
 
 ## Limites e próximos passos
 
-- Cada rodada dura até 40 s e lê até 50 editais por página do PNCP. A última página do dia é relida a cada
-  rodada, para pegar o que entrou depois.
-- Os itens dos editais ainda vêm do Supabase. O próximo passo é levar a fila de itens para o Turso, quando a
-  coleta de editais estiver estável.
-- A busca do app (`buscar_oportunidades`) continua no Supabase. Só depois de comparar a velocidade com dados
-  reais vale trocar a fonte da tela de Oportunidades para `turso-buscar`.
+### Cada rodada (até ~40 s)
+
+1. **Atualizações do dia:** lê uma página por modalidade e deixa a última aberta, para pegar o que entrar depois.
+2. **Carga completa:** uma vez por dia, lê todos os editais com proposta aberta (cerca de 32 mil, ou 650 páginas)
+   e continua de onde parou. Só grava o edital que é novo ou que mudou na fonte.
+3. **Itens:** coleta os itens dos editais que abrem em até 30 dias, os mais próximos primeiro, 4 por vez.
+4. **Limpeza:** apaga os editais encerrados há mais de 2 dias.
+
+Se o PNCP responder 429 (pedido para esperar), a coleta pausa por 5 minutos.
+
+### Busca
+
+`POST /api/oportunidades?acao=turso-buscar` usa os mesmos filtros e devolve o mesmo formato do
+`buscar_oportunidades` do Postgres, só no modo "por data de abertura". Os resultados ficam guardados em cache por
+60 s para cada combinação de filtros.
+
+O app tenta o Turso primeiro e volta para o Postgres quando:
+- a primeira carga completa ainda não terminou (resposta 409 `turso_carregando`);
+- os filtros por item esbarram em mais de 10% de editais sem itens (resposta 409 `turso_itens`);
+- o Turso falha.
+
+O modo "por data de publicação" continua no Postgres.
+
+### Próximo passo
+
+Depois que a busca no Turso estiver conferida, enxugar no Supabase `oportunidades_indice`,
+`oportunidades_itens_indice` e a fila de itens, medindo `pg_database_size` antes e depois.
+
+### Limites do plano grátis do Turso
+
+- 500 milhões de linhas lidas e 10 milhões de linhas escritas por mês, e 5 GB de espaço.
+- Cada busca conta e agrupa os editais que passam pelo filtro, então lê milhares de linhas.
+- O cache de 60 s e a gravação só do que mudou seguram o consumo. Acompanhe em Turso → Usage.
