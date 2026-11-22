@@ -11,6 +11,7 @@ const PNCP_ITENS = 'https://pncp.gov.br/api/pncp/v1/orgaos'
 // Todas as modalidades da Lei 14.133 que a tela oferece (as sem edital aberto respondem vazio e passam rápido).
 export const MODALIDADES = [6, 8, 4, 12, 5, 7, 9, 1, 2, 3, 10, 11, 13]
 const VERSAO_ESQUEMA = '2'
+const LIMITE_CARGA = '20991231'
 const UA = { Accept: 'application/json', 'User-Agent': 'licitaflow-turso' }
 
 export const ESQUEMA = [
@@ -212,8 +213,16 @@ export async function coletarRodada(turso, { prazo = Date.now() + 40_000, fetche
   await etapa('carga', async () => {
     let [diaCarga, im, pg] = String(estado.carga ?? '').split(':')
     if (diaCarga !== data && !(estado.carga_completa_em ?? '').startsWith(hoje.toISOString().slice(0, 10))) { diaCarga = data; im = 0; pg = 1 }
+    // Credenciamentos ficam abertos por anos: a lista vai até 2099 (até 2027 faltavam ~3,4 mil).
+    // Na troca do limite, refaz já a partir do credenciamento, sem esperar o dia seguinte.
+    const comandosLimite = []
+    if (estado.carga_limite !== LIMITE_CARGA) {
+      if (estado.carga) { diaCarga = data; im = MODALIDADES.indexOf(12); pg = 1 }
+      comandosLimite.push(guardar('carga_limite', LIMITE_CARGA))
+    }
     im = Number(im) || 0; pg = Number(pg) || 1
-    const limiteData = `${hoje.getUTCFullYear() + 1}1231`
+    if (comandosLimite.length) await turso.pipeline([...comandosLimite, guardar('carga', `${diaCarga}:${im}:${pg}`)])
+    const limiteData = LIMITE_CARGA
     while (diaCarga === data && im < MODALIDADES.length && tempoAte(0.55) && pncp.restantes() > Math.floor(maxConsultas / 2)) {
       const { lista, paginas } = await lerPagina(pncp, `${PNCP}/contratacoes/proposta?dataFinal=${limiteData}&codigoModalidadeContratacao=${MODALIDADES[im]}&pagina=${pg}&tamanhoPagina=50`)
       const gravados = await gravarEditais(turso, lista)
