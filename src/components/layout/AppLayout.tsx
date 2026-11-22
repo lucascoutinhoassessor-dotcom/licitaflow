@@ -223,11 +223,11 @@ export function AppLayout({ children }: { children: ReactNode }) {
           <Logo claro />
         </Link>
         <nav aria-label="Módulos do usuário" className="hidden flex-1 items-center justify-center gap-1 lg:flex">
-          {nav.ia && <Link to={IA.rota} className={cn('mr-2 inline-flex h-9 items-center gap-2 rounded-full border px-3.5 text-sm font-semibold outline-none transition-colors hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-white/40', iaAtiva ? 'border-accent/60 bg-white/10 text-white' : 'border-white/15 text-white')}>
-            <span className="grid h-3.5 w-3.5 grid-cols-2 gap-[2px]" aria-hidden>
+          {nav.ia && <Link to={IA.rota} className={cn('lf-ia mr-2 inline-flex h-9 items-center gap-2 rounded-full px-3.5 text-sm font-semibold text-white outline-none focus-visible:ring-2 focus-visible:ring-white/40', iaAtiva && 'lf-ia-ativa')}>
+            <span className="lf-ia-icone grid h-3.5 w-3.5 grid-cols-2 gap-[2px]" aria-hidden>
               <span className="rounded-[1px] bg-sky-400" /><span className="rounded-[1px] bg-emerald-400" /><span className="rounded-[1px] bg-amber-400" /><span className="rounded-[1px] bg-rose-400" />
             </span>
-            IA
+            <span className="lf-ia-texto">IA</span>
           </Link>}
           {nav.grupos.map((g) => <GrupoSuspenso key={g.id} grupo={g} />)}
         </nav>

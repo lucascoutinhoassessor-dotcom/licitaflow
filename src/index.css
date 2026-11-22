@@ -192,3 +192,34 @@
   .lf-icone-ponto { animation: none; transform: none; }
   .lf-icone-luz, .lf-icone-onda, .lf-icone-brilho { animation: none; opacity: 0; }
 }
+
+/* Botão "IA" do cabeçalho: borda em degradê girando, quadrados pulsando em sequência e girando a cada
+   ciclo, brilho no texto. Parado para quem pede menos movimento. */
+@property --lf-ia-angulo { syntax: '<angle>'; initial-value: 0deg; inherits: false; }
+.lf-ia {
+  position: relative; border: 1.5px solid transparent;
+  background: linear-gradient(#0a0a0c, #0a0a0c) padding-box,
+    conic-gradient(from var(--lf-ia-angulo), #38bdf8, #34d399, #fbbf24, #fb7185, #38bdf8) border-box;
+  animation: lf-ia-borda 4s linear infinite, lf-ia-aura 3s ease-in-out infinite;
+  transition: transform .2s ease;
+}
+.lf-ia:hover { transform: translateY(-1px); }
+.lf-ia-ativa { background: linear-gradient(#18181d, #18181d) padding-box, conic-gradient(from var(--lf-ia-angulo), #38bdf8, #34d399, #fbbf24, #fb7185, #38bdf8) border-box; }
+.lf-ia-icone { animation: lf-ia-gira 6s cubic-bezier(.68,-.4,.27,1.4) infinite; }
+.lf-ia-icone > span { animation: lf-ia-pulso 1.6s ease-in-out infinite; }
+.lf-ia-icone > span:nth-child(2) { animation-delay: .2s; }
+.lf-ia-icone > span:nth-child(4) { animation-delay: .4s; }
+.lf-ia-icone > span:nth-child(3) { animation-delay: .6s; }
+.lf-ia-texto {
+  background: linear-gradient(100deg, #fff 40%, #a7f3d0 50%, #fff 60%) 0 0 / 250% 100%;
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  animation: lf-ia-brilho 3.5s ease-in-out infinite;
+}
+@keyframes lf-ia-borda { to { --lf-ia-angulo: 360deg; } }
+@keyframes lf-ia-aura { 0%, 100% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0); } 50% { box-shadow: 0 0 14px 1px rgba(56, 189, 248, .28); } }
+@keyframes lf-ia-gira { 0%, 80% { transform: rotate(0); } 100% { transform: rotate(90deg); } }
+@keyframes lf-ia-pulso { 0%, 100% { transform: scale(1); filter: brightness(1); } 40% { transform: scale(.65); filter: brightness(1.5); } }
+@keyframes lf-ia-brilho { 0%, 30% { background-position: 100% 0; } 70%, 100% { background-position: 0 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .lf-ia, .lf-ia-icone, .lf-ia-icone > span, .lf-ia-texto { animation: none; }
+}
