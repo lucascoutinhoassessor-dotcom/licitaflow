@@ -76,7 +76,7 @@ export default function HistoricoPrecos() {
               })}
             </div>
             <span className="text-xs text-muted-foreground">Atualiza ao mudar.</span>
-            <MenuFiltros className="sm:ml-auto" ativos={filtros.uf ? 1 : 0} aoLimpar={() => setFiltros((f) => ({ ...f, uf: '' }))}>
+            <MenuFiltros className="sm:ml-auto" colunas={2} ativos={filtros.uf ? 1 : 0} aoLimpar={() => setFiltros((f) => ({ ...f, uf: '' }))}>
               <SecaoFiltro icone={MapPin} cor="azul" titulo="Estado do órgão" descricao={filtros.uf ? `Só ${filtros.uf}` : 'Brasil inteiro'}>
                 <div className="grid grid-cols-6 gap-1.5"><ChipFiltro ativo={!filtros.uf} onClick={() => setFiltros((f) => ({ ...f, uf: '' }))} className="col-span-2 rounded-md">Todos</ChipFiltro>
                   {UFS.map((u) => <ChipFiltro key={u} ativo={filtros.uf === u} onClick={() => setFiltros((f) => ({ ...f, uf: f.uf === u ? '' : u }))} className="rounded-md px-1">{u}</ChipFiltro>)}</div>

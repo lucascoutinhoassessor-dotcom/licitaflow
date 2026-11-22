@@ -90,7 +90,7 @@ export default function AnaliseMercado() {
               className={cn('h-8 rounded-full border px-3 text-xs font-semibold sm:text-sm', ativo ? 'border-primary bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:text-foreground')}>{rotulo}</button>
           })}
         </div>
-        <MenuFiltros className="ml-auto" ativos={filtrosAtivos.length} aoLimpar={() => mudar({ uf: null, esfera: null, poder: null, mod: null })}>
+        <MenuFiltros className="ml-auto" colunas={2} ativos={filtrosAtivos.length} aoLimpar={() => mudar({ uf: null, esfera: null, poder: null, mod: null })}>
           <SecaoFiltro icone={CalendarRange} cor="verde" titulo="Período personalizado" descricao="Até 3 anos; a análise atualiza ao mudar">
             <div className="grid grid-cols-2 gap-2 px-1">
               <label className="text-xs"><span className="mb-1 block font-medium">De</span><Input type="date" value={de} max={ate} onChange={(e) => e.target.value && mudar({ de: e.target.value })} /></label>

@@ -50,7 +50,7 @@ export default function OportunidadesDesertas({atalho}:{atalho?:{portal:string;v
             <span className="text-sm text-muted-foreground">Sessões nos últimos</span>
             {PERIODOS_DESERTAS.map(([d,rotulo])=><button key={d} type="button" aria-pressed={f.dias===d} onClick={()=>aplicar({...f,dias:d})} className={chip(f.dias===d)}>{rotulo}</button>)}
           </div>
-          <MenuFiltros className="sm:ml-auto" ativos={ativos} aoLimpar={()=>aplicar({...f,tipo:'',uf:'',portal:''})}>
+          <MenuFiltros className="sm:ml-auto" colunas={2} ativos={ativos} aoLimpar={()=>aplicar({...f,tipo:'',uf:'',portal:''})}>
             <SecaoFiltro icone={TriangleAlert} cor="ambar" titulo="Situação dos itens" descricao="Deserto: ninguém propôs. Fracassado: nenhuma proposta aceita">
               <div className="grid grid-cols-3 gap-1.5">{([['','Os dois'],['4','Só desertos'],['5','Só fracassados']] as const).map(([id,rotulo])=>
                 <ChipFiltro key={id} ativo={f.tipo===id} onClick={()=>aplicar({...f,tipo:id})} className="rounded-md">{rotulo}</ChipFiltro>)}</div>

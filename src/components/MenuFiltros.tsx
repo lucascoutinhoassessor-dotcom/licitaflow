@@ -1,55 +1,60 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { ChevronDown, SlidersHorizontal, X, type LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 /**
- * Botão "Filtros" no mesmo formato do menu Atalhos: no computador abre suspenso sob o botão;
- * no celular, como gaveta de baixo para cima. O conteúdo vem em seções (SecaoFiltro) com chips (ChipFiltro).
+ * Botão "Filtros" no mesmo formato do menu Atalhos. No computador abre uma janela centralizada na frente da tela;
+ * no celular, uma gaveta de baixo para cima. O conteúdo vem em seções (SecaoFiltro) com chips (ChipFiltro).
+ * `colunas={2}` divide as seções em duas colunas na janela do computador (telas com muitos filtros).
  * `children` pode ser uma função que recebe `fechar`, para botões do rodapé que aplicam e fecham.
  */
-export default function MenuFiltros({ ativos = 0, rotulo = 'Filtros', aoLimpar, rodape, children, largura = 'sm:w-[26rem]', className, alinhar = 'direita' }: {
+export default function MenuFiltros({ ativos = 0, rotulo = 'Filtros', aoLimpar, rodape, children, colunas = 1, className }: {
   ativos?: number
   rotulo?: string
   aoLimpar?: () => void
   rodape?: (fechar: () => void) => ReactNode
   children: ReactNode | ((fechar: () => void) => ReactNode)
-  largura?: string
+  colunas?: 1 | 2
   className?: string
-  alinhar?: 'direita' | 'esquerda'
 }) {
   const [aberto, setAberto] = useState(false)
-  const caixa = useRef<HTMLDivElement>(null)
+  const botao = useRef<HTMLButtonElement>(null)
+  const fechar = () => { setAberto(false); botao.current?.focus() }
   useEffect(() => {
     if (!aberto) return
-    const fora = (e: PointerEvent) => { if (!caixa.current?.contains(e.target as Node)) setAberto(false) }
     const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setAberto(false) }
-    document.addEventListener('pointerdown', fora); document.addEventListener('keydown', esc)
-    return () => { document.removeEventListener('pointerdown', fora); document.removeEventListener('keydown', esc) }
+    // Trava a rolagem da página enquanto a janela está aberta.
+    const antes = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    document.addEventListener('keydown', esc)
+    return () => { document.removeEventListener('keydown', esc); document.body.style.overflow = antes }
   }, [aberto])
-  const fechar = () => setAberto(false)
 
-  return <div ref={caixa} className={cn('relative', className)}>
-    <button type="button" aria-haspopup="dialog" aria-expanded={aberto} onClick={() => setAberto((v) => !v)}
+  return <div className={className}>
+    <button ref={botao} type="button" aria-haspopup="dialog" aria-expanded={aberto} onClick={() => setAberto(true)}
       className={cn('inline-flex h-10 w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-full border bg-card px-4 text-sm font-semibold hover:bg-muted sm:w-auto', ativos > 0 && 'border-primary text-primary')}>
       <SlidersHorizontal className="h-4 w-4 text-sky-500" />{rotulo}
       {ativos > 0 && <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-bold text-primary-foreground">{ativos}</span>}
       <ChevronDown className={cn('h-4 w-4 transition-transform', aberto && 'rotate-180')} />
     </button>
-    {aberto && <div aria-hidden className="fixed inset-0 z-50 bg-black/50 sm:hidden" onClick={fechar} />}
-    {aberto && <div role="dialog" aria-label={rotulo} className={cn('fixed inset-x-0 bottom-0 z-50 flex max-h-[85dvh] flex-col rounded-t-2xl border-t bg-card text-left text-card-foreground shadow-2xl sm:absolute sm:inset-x-auto sm:bottom-auto sm:z-30 sm:mt-2 sm:max-h-[70vh] sm:rounded-xl sm:border sm:shadow-lg', alinhar === 'direita' ? 'sm:right-0' : 'sm:left-0', largura)}>
-      <div className="px-2 pt-2 sm:hidden">
-        <div className="mx-auto mb-2 h-1.5 w-10 rounded-full bg-muted" aria-hidden />
-        <div className="flex items-center justify-between pb-1 pl-3">
-          <p className="text-base font-semibold">{rotulo}</p>
+    {aberto && createPortal(<div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-6">
+    <div aria-hidden className="absolute inset-0 bg-black/60 sm:backdrop-blur-[2px]" onClick={fechar} />
+    <div role="dialog" aria-modal="true" aria-label={rotulo} className={cn('relative flex max-h-[85dvh] w-full flex-col rounded-t-2xl border-t bg-card text-left text-card-foreground shadow-2xl sm:max-h-[85vh] sm:rounded-2xl sm:border', colunas === 2 ? 'sm:max-w-4xl' : 'sm:max-w-lg')}>
+      <div className="px-2 pt-2 sm:border-b sm:px-4 sm:py-3">
+        <div className="mx-auto mb-2 h-1.5 w-10 rounded-full bg-muted sm:hidden" aria-hidden />
+        <div className="flex items-center justify-between pb-1 pl-3 sm:p-0">
+          <p className="flex items-center gap-2 text-base font-semibold sm:text-lg"><SlidersHorizontal className="hidden h-5 w-5 text-sky-500 sm:block" />{rotulo}</p>
           <button type="button" aria-label={`Fechar ${rotulo.toLowerCase()}`} onClick={fechar} className="inline-flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground hover:bg-muted"><X className="h-5 w-5" /></button>
         </div>
       </div>
-      <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto p-2 sm:p-1.5">{typeof children === 'function' ? children(fechar) : children}</div>
-      {(aoLimpar || rodape) && <div className="flex items-center gap-2 border-t p-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] sm:pb-2">
+      <div className={cn('min-h-0 flex-1 space-y-1.5 overflow-y-auto p-2 sm:p-4', colunas === 2 && 'sm:columns-2 sm:gap-3 sm:space-y-0 sm:[&>*]:mb-3 sm:[&>*]:break-inside-avoid')}>{typeof children === 'function' ? children(fechar) : children}</div>
+      {(aoLimpar || rodape) && <div className="flex items-center gap-2 border-t p-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] sm:px-4 sm:py-3">
         {aoLimpar && <button type="button" disabled={!ativos} onClick={aoLimpar} className="inline-flex h-10 items-center rounded-full px-3 text-sm font-semibold text-rose-500 hover:bg-rose-500/10 disabled:pointer-events-none disabled:opacity-40 sm:h-9">Limpar filtros</button>}
         <div className="ml-auto flex items-center gap-2">{rodape ? rodape(fechar) : <button type="button" onClick={fechar} className="inline-flex h-10 items-center rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground hover:bg-primary/90 sm:h-9">Pronto</button>}</div>
       </div>}
-    </div>}
+    </div>
+    </div>, document.body)}
   </div>
 }
 
