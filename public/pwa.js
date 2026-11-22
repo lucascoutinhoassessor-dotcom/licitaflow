@@ -24,7 +24,7 @@
     el.name = name; el.content = content; head.appendChild(el);
   }
   link('manifest', master ? '/master.webmanifest' : '/manifest.webmanifest');
-  link('apple-touch-icon', master ? '/icons/master-192.png' : '/icons/app-192.png');
+  link('apple-touch-icon', master ? '/icons/master-192.png' : '/icons/icone-192.png');
   meta('apple-mobile-web-app-title', master ? 'LF Master' : 'LicitaFlow');
   meta('theme-color', master ? '#09090b' : '#0f172a');
 })();

@@ -53,7 +53,7 @@ export async function ativarPush(): Promise<EstadoPush> {
   if (sub && atual && btoa(String.fromCharCode(...new Uint8Array(atual))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '') !== chave) { await sub.unsubscribe(); sub = null }
   sub = sub || (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: chaveParaBytes(chave) }))
   await chamar({ acao: 'inscrever', inscricao: sub.toJSON() })
-  reg.showNotification('Notificações ativadas', { body: 'Os avisos do LicitaFlow vão chegar aqui na hora, mesmo com o app fechado.', icon: '/icons/app-192.png', badge: '/icons/badge-96.png', tag: 'licitaflow-ativado' }).catch(() => undefined)
+  reg.showNotification('Notificações ativadas', { body: 'Os avisos do LicitaFlow vão chegar aqui na hora, mesmo com o app fechado.', icon: '/icons/icone-192.png', badge: '/icons/badge-96.png', tag: 'licitaflow-ativado' }).catch(() => undefined)
   return 'ativo'
 }
 

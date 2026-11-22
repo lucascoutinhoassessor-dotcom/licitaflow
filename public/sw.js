@@ -22,7 +22,7 @@ self.addEventListener('push', event => {
   try { d = event.data ? event.data.json() : {} } catch { d = { titulo: 'LicitaFlow', texto: event.data ? event.data.text() : '' } }
   event.waitUntil(self.registration.showNotification(d.titulo || 'LicitaFlow', {
     body: d.texto || '',
-    icon: '/icons/app-192.png',
+    icon: '/icons/icone-192.png',
     // Ícone pequeno da barra de status (Android): silhueta branca transparente, senão vira um quadrado branco.
     badge: '/icons/badge-96.png',
     tag: d.tag || 'licitaflow-aviso',

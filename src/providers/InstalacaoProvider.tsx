@@ -91,7 +91,7 @@ export function InstalacaoProvider({ children }: { children: ReactNode }) {
     {children}
     {mostrarAviso && <section ref={aviso} aria-label="Instalação do LicitaFlow" className="fixed inset-x-3 bottom-[calc(var(--barra-inferior,0px)+max(.75rem,env(safe-area-inset-bottom)))] z-30 mx-auto max-w-lg rounded-xl border border-slate-600 bg-slate-900 p-4 text-white shadow-2xl">
       <div className="flex items-start gap-3">
-        <img src="/icons/app-192.png" alt="" className="h-10 w-10 shrink-0 rounded-lg"/>
+        <img src="/icons/icone-192.png" alt="" className="h-10 w-10 shrink-0 rounded-lg"/>
         <div className="min-w-0 flex-1"><h2 className="text-sm font-semibold">Use o LicitaFlow como aplicativo</h2><p className="mt-1 text-xs leading-relaxed text-slate-300">Abra pelo ícone da tela inicial. Se ainda não estiver instalado, instale para usar sem a barra de endereço.</p></div>
         <button aria-label="Fechar aviso de instalação" onClick={() => { setDescartado(true); setAjuda(false) }} className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"><X className="h-5 w-5"/></button>
       </div>
@@ -102,7 +102,7 @@ export function InstalacaoProvider({ children }: { children: ReactNode }) {
         <Dialog.Overlay className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm" />
         <Dialog.Content className="fixed inset-x-3 bottom-[max(.75rem,env(safe-area-inset-bottom))] z-[60] mx-auto max-w-md rounded-2xl border border-slate-700 bg-slate-900 p-5 text-white shadow-2xl focus:outline-none sm:inset-x-auto sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:w-full sm:-translate-x-1/2 sm:-translate-y-1/2">
           <div className="flex items-start gap-3">
-            <img src={master ? '/icons/master-192.png' : '/icons/app-192.png'} alt="" className="h-11 w-11 shrink-0 rounded-xl"/>
+            <img src={master ? '/icons/master-192.png' : '/icons/icone-192.png'} alt="" className="h-11 w-11 shrink-0 rounded-xl"/>
             <div className="min-w-0 flex-1">
               <Dialog.Title className="font-semibold">Instalar {master ? 'LicitaFlow Master' : 'LicitaFlow'}</Dialog.Title>
               <Dialog.Description className="mt-1 text-sm text-slate-300">{master ? 'O app abre direto no painel master.' : 'O app abre direto no seu painel.'}</Dialog.Description>

@@ -1,8 +1,10 @@
 // Gera os ícones PNG de public/icons sem dependências:
-//  app-192/512     → app do usuário (fundo azul em degradê, traço verde), o mesmo desenho da abertura em index.html
+//  icone-192/512   → app do usuário (fundo azul em degradê, traço verde), o mesmo desenho da abertura em index.html
 //  master-192/512  → painel master (fundo escuro, traço âmbar)
 //  badge-96        → ícone pequeno da barra de notificações do Android: só a silhueta branca sobre fundo
 //                    transparente. O Android pinta o badge de uma cor só; um ícone opaco vira um quadrado branco.
+// O nome do arquivo do app do usuário mudou de app-* para icone-* para o Chrome atualizar o ícone do app já
+// instalado (o antigo tinha cantos brancos). Ao redesenhar, troque o nome de novo no manifesto.
 // Uso: node scripts/gerar-icones.mjs
 import { writeFileSync } from 'node:fs'
 import { deflateSync } from 'node:zlib'
@@ -78,5 +80,5 @@ function png(tam, pixel) {
 }
 
 const saida = (nome, buf) => writeFileSync(new URL(`../public/icons/${nome}.png`, import.meta.url), buf)
-for (const t of [192, 512]) { saida(`app-${t}`, png(t, desenhos.app)); saida(`master-${t}`, png(t, desenhos.master)) }
+for (const t of [192, 512]) { saida(`icone-${t}`, png(t, desenhos.app)); saida(`master-${t}`, png(t, desenhos.master)) }
 saida('badge-96', png(96, desenhos.badge))
