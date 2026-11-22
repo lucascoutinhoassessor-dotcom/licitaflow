@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createRequire } from 'node:module'
-import { buscarTurso, clienteTurso, coletarRodada, linhas, montarFiltros, urlHttp } from './turso.js'
+import { buscarTurso, clienteTurso, coletarRodada, itensTurso, linhas, montarFiltros, urlHttp } from './turso.js'
 import { consultaFts, diaUtil, portalDe, raiz, tempo, tipoPeloObjeto } from './turso-regras.js'
 import { criarHandler } from './oportunidades.js'
 
@@ -99,6 +99,13 @@ describe('coleta e busca no Turso', () => {
     const { gravarEditais } = await import('./turso.js')
     expect(await gravarEditais(turso as never, [edital(1, { objetoCompra: 'Aquisição de computadores e notebooks para a secretaria' })])).toBe(0)
     expect(await gravarEditais(turso as never, [edital(1, { dataAtualizacaoGlobal: pncpData(dias(0)) })])).toBe(1)
+  })
+
+  it('devolve os itens guardados no formato do PNCP (reserva da página do edital)', async () => {
+    const { turso } = await preparar()
+    const itens = await itensTurso(turso as never, '12345678000199-1-000003/2026')
+    expect(itens?.map((i) => [i.numeroItem, i.descricao, i.valorUnitarioEstimado, i.materialOuServico])).toEqual([[1, 'Notebook i5 16GB', 4500, 'M'], [2, 'Grampeador', 30, 'M']])
+    expect(await itensTurso(turso as never, '12345678000199-1-000999/2026')).toBeNull()
   })
 
   it('busca com os mesmos filtros da tela', async () => {

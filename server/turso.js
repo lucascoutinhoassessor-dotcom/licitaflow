@@ -268,6 +268,21 @@ export async function coletarRodada(turso, { prazo = Date.now() + 40_000, fetche
   return feitos
 }
 
+/** Itens de um edital guardados no Turso, no formato do PNCP (reserva da página do edital). null se ainda não coletados. */
+export async function itensTurso(turso, controle) {
+  const [[e], itens] = await turso.lote([
+    ['select itens_completos from editais where controle = ?', [controle]],
+    ['select numero, descricao, valor_unitario, beneficio, sigiloso, tipo, quantidade, unidade, valor_total, beneficio_nome, criterio, situacao, grupo, lote from itens where controle = ? order by numero', [controle]],
+  ])
+  if (!e?.itens_completos) return null
+  return itens.map((i) => ({
+    numeroItem: i.numero, descricao: i.descricao ?? '', valorUnitarioEstimado: i.valor_unitario, valorTotal: i.valor_total, orcamentoSigiloso: !!i.sigiloso,
+    tipoBeneficio: i.beneficio ?? undefined, tipoBeneficioNome: i.beneficio_nome ?? undefined, materialOuServico: i.tipo ?? undefined,
+    quantidade: i.quantidade ?? undefined, unidadeMedida: i.unidade ?? undefined, criterioJulgamentoNome: i.criterio ?? undefined,
+    situacaoCompraItemNome: i.situacao ?? undefined, numeroGrupo: i.grupo ?? undefined, numeroLote: i.lote ?? undefined,
+  }))
+}
+
 // ======================================================================================= busca
 
 const TODAS_MODALIDADES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]

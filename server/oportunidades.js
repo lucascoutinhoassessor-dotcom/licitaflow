@@ -3,8 +3,9 @@
 //   POST ?acao=turso-coletar   (pg_cron, cabeçalho x-coleta conferido no banco) → grava no Turso o que mudou no PNCP
 //   GET  ?acao=turso-situacao  (master)                                          → conectado? quantos editais? última coleta
 //   POST ?acao=turso-buscar    (usuário logado) {filtros, pagina}                → busca no mesmo formato do buscar_oportunidades
+//   GET  ?acao=turso-itens&controle= (usuário logado)                            → itens guardados de um edital (reserva da página)
 import { emCache, usuarioLogado, excedeuLimite } from './protecao.js'
-import { buscarTurso, clienteTurso, coletarRodada, FiltroInvalido, situacaoTurso } from './turso.js'
+import { buscarTurso, clienteTurso, coletarRodada, FiltroInvalido, itensTurso, situacaoTurso } from './turso.js'
 
 async function rpcServico(fetcher, base, chave, nome, corpo) {
   const r = await fetcher(`${base}/rest/v1/rpc/${nome}`, { method: 'POST', headers: { apikey: chave, Authorization: `Bearer ${chave}`, 'Content-Type': 'application/json' }, body: JSON.stringify(corpo), signal: AbortSignal.timeout(10000) })
@@ -65,6 +66,18 @@ export function criarHandler({ fetcher = fetch, env = process.env, validarSessao
         if (r.comTermo && r.coberturaItens < 0.9) return res.status(409).json({ error: 'Itens ainda em coleta na base rápida.', codigo: 'turso_itens' })
         const { coberturaItens, comTermo, ...resposta } = r
         return res.status(200).json({ ...resposta, catalogo: { ...resposta.catalogo, cobertura_itens: Math.round(coberturaItens * 100) } })
+      }
+      if (acao === 'turso-itens') {
+        const controle = String(req.query?.controle ?? '')
+        if (!/^\d{14}-\d-\d+\/\d{4}$/.test(controle)) return res.status(400).json({ error: 'Edital inválido' })
+        if (!turso) return res.status(409).json({ error: 'A base rápida ainda não foi conectada.' })
+        const itens = itensTurso(turso, controle)
+        itens.catch(() => undefined)
+        if (!(await sessao)) return res.status(401).json({ error: 'Entre na sua conta' })
+        const lista = await itens
+        if (!lista) return res.status(404).json({ error: 'Itens ainda não coletados.' })
+        res.setHeader('Cache-Control', 'private, max-age=300'); res.setHeader('Vary', 'Authorization')
+        return res.status(200).json({ itens: lista })
       }
       return res.status(400).json({ error: 'Ação inválida' })
     } catch (e) {
