@@ -5,6 +5,8 @@ import { PORTAIS } from '@/lib/portais'
 import IconePortal from '@/components/IconePortal'
 import type { CompraPNCP } from '@/lib/pncp'
 import { FiltroLiberado as F, useAlgumFiltroVisivel } from '@/components/FiltroLiberado'
+import { useFiltrosLiberados } from '@/hooks/useModulos'
+import { estadoModalidade } from '@/lib/filtrosLiberacao'
 
 /** Botão que liga/desliga um filtro (no lugar da caixa de marcar). */
 function Pilula({ ativo, onClick, children }: { ativo: boolean; onClick: () => void; children: React.ReactNode }) {
@@ -20,6 +22,9 @@ export default function FiltrosOportunidades({ f, mudar, compras, orgaos: opcoes
   const checkbox = (k: 'naoDivulgado' | 'exclusivo' | 'excluirSrp', texto: string) => <Pilula ativo={f[k]} onClick={()=>set(k,!f[k])}>{texto}</Pilula>
   const alternarModo = (id: string) => set('modosDisputa', f.modosDisputa.includes(id) ? f.modosDisputa.filter(x=>x!==id) : [...f.modosDisputa,id])
   const visivel = useAlgumFiltroVisivel()
+  const { estados } = useFiltrosLiberados()
+  // Só as modalidades que o master liberou para este cliente; em breve aparece desativada.
+  const modalidades = MODALIDADES.map(([id,nome])=>({id,nome,estado:estadoModalidade(estados,id)})).filter(m=>m.estado!=='oculto')
   return <div className="col-span-full space-y-3">
     {visivel('filtro-excluir-palavras','filtro-tipo-item','filtro-modo-disputa')&&<details open className="rounded-lg border p-3"><summary className="cursor-pointer font-medium">Palavras, tipo e modo de disputa</summary>
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -39,9 +44,11 @@ export default function FiltrosOportunidades({ f, mudar, compras, orgaos: opcoes
       <div className="flex flex-wrap gap-4 text-sm"><button type="button" className="text-primary underline" onClick={()=>set('portais',PORTAIS.map(p=>p[0]))}>Marcar todos os portais</button><button type="button" className="text-primary underline" onClick={()=>set('portais',[])}>Desmarcar todos os portais</button></div>
     </details></F>
     <F id="filtro-modalidades"><details className="rounded-lg border p-3"><summary className="cursor-pointer font-medium">Modalidades</summary>
-      <div className="my-3 flex flex-wrap gap-3">{MODALIDADES.map(([id,nome])=><Pilula key={id} ativo={f.modalidades.includes(id)} onClick={()=>marcar('modalidades',id)}>{nome}</Pilula>)}</div>
+      <div className="my-3 flex flex-wrap gap-3">{modalidades.map(({id,nome,estado})=>estado==='em_breve'
+        ?<span key={id} title="Em breve" className="inline-flex min-h-10 cursor-not-allowed items-center gap-2 rounded-full border border-dashed px-4 py-1.5 text-sm font-semibold text-muted-foreground opacity-60">{nome}<span className="text-[10px] uppercase">em breve</span></span>
+        :<Pilula key={id} ativo={f.modalidades.includes(id)} onClick={()=>marcar('modalidades',id)}>{nome}</Pilula>)}</div>
       <p className="mb-3 text-xs text-muted-foreground">Dispensa inclui os registros divulgados nessa modalidade; confirme no edital se há disputa eletrônica.</p>
-      <div className="flex flex-wrap gap-4 text-sm"><button type="button" className="text-primary underline" onClick={()=>set('modalidades',MODALIDADES.map(m=>m[0]))}>Marcar todas as modalidades</button><button type="button" className="text-primary underline" onClick={()=>set('modalidades',[])}>Desmarcar todas as modalidades</button></div>
+      <div className="flex flex-wrap gap-4 text-sm"><button type="button" className="text-primary underline" onClick={()=>set('modalidades',modalidades.filter(m=>m.estado==='liberado').map(m=>m.id))}>Marcar todas as modalidades</button><button type="button" className="text-primary underline" onClick={()=>set('modalidades',[])}>Desmarcar todas as modalidades</button></div>
     </details></F>
     {visivel('filtro-orgao','filtro-max-itens','filtro-valor-total','filtro-valor-item','filtro-nao-divulgado')&&<details className="rounded-lg border p-3"><summary className="cursor-pointer font-medium">Órgãos e valores</summary>
       <div className="mt-3 grid gap-3 sm:grid-cols-2">

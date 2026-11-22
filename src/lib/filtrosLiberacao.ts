@@ -1,4 +1,4 @@
-import { filtrosExtras, type FiltrosOportunidades } from './filtrosOportunidades'
+import { filtrosExtras, MODALIDADES, type FiltrosOportunidades } from './filtrosOportunidades'
 import type { EstadoModulo, Estados } from './modulos'
 
 /** Um filtro que o master pode liberar, testar, deixar em breve ou ocultar para os clientes. */
@@ -44,6 +44,26 @@ export function estadoFiltro(estados: Estados, id: string): EstadoModulo {
   return e === 'liberado' || e === 'em_breve' ? e : 'oculto'
 }
 
+/** Cada modalidade de licitação também é liberada pelo master (id "modalidade-<código PNCP>"), para montar pacotes por cliente. */
+export const CATALOGO_MODALIDADES = MODALIDADES.map(([codigo, rotulo]) => ({ id: `modalidade-${codigo}`, codigo: codigo as string, rotulo: rotulo as string }))
+
+/**
+ * Estado efetivo de uma modalidade. Enquanto nenhuma modalidade estiver cadastrada no banco (migração não aplicada)
+ * ou a consulta falhar, todas ficam liberadas; depois disso, modalidade sem cadastro nasce oculta.
+ */
+export function estadoModalidade(estados: Estados, codigo: string): EstadoModulo {
+  if (estados === undefined) return 'liberado'
+  if (estados === null) return 'oculto'
+  if (!Object.keys(estados).some((k) => k.startsWith('modalidade-'))) return 'liberado'
+  const e = estados[`modalidade-${codigo}`]
+  return e === 'liberado' || e === 'em_breve' ? e : 'oculto'
+}
+
+/** Códigos das modalidades que o cliente pode pesquisar. */
+export function modalidadesLiberadas(estados: Estados): string[] {
+  return CATALOGO_MODALIDADES.filter((m) => estadoModalidade(estados, m.codigo) === 'liberado').map((m) => m.codigo)
+}
+
 /** Volta ao padrão os campos dos filtros que o cliente não pode usar (ex.: valor guardado de uma busca antiga). */
 export function aplicarLiberacao<T extends FiltrosOportunidades>(f: T, estados: Estados): T {
   const r = { ...f }
@@ -51,5 +71,8 @@ export function aplicarLiberacao<T extends FiltrosOportunidades>(f: T, estados: 
     if (estadoFiltro(estados, filtro.id) === 'liberado') continue
     for (const c of filtro.campos) if (c in PADRAO) (r as Record<string, unknown>)[c] = PADRAO[c]
   }
+  // Modalidade não liberada nunca entra na busca, nem quando o cliente não pode escolher modalidades.
+  const liberadas = new Set(modalidadesLiberadas(estados))
+  r.modalidades = r.modalidades.filter((m) => liberadas.has(m))
   return r
 }

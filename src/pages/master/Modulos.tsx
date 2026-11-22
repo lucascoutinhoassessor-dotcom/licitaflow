@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Eye, EyeOff, FlaskConical, Hourglass, SlidersHorizontal } from 'lucide-react'
+import { Eye, EyeOff, FlaskConical, Gavel, Hourglass, SlidersHorizontal } from 'lucide-react'
 import { supabase, mensagemErro } from '@/lib/supabase'
 import { CATALOGO_MODULOS, type EstadoModulo, type ModuloCatalogo } from '@/lib/modulos'
-import { CATALOGO_FILTROS } from '@/lib/filtrosLiberacao'
+import { CATALOGO_FILTROS, CATALOGO_MODALIDADES } from '@/lib/filtrosLiberacao'
 import { cn } from '@/lib/utils'
 import { Aviso, Badge, Button, CabecalhoPagina, Card, Carregando, Input, Modal } from '@/components/ui'
 
@@ -20,6 +20,7 @@ const ESTADOS: { id: EstadoModulo; rotulo: string; ajuda: string; icone: typeof 
 const ITENS: ModuloCatalogo[] = [
   ...CATALOGO_MODULOS,
   ...CATALOGO_FILTROS.map((f) => ({ id: f.id, rotulo: f.rotulo, descricao: f.descricao, grupo: 'Filtros de Oportunidades', icone: SlidersHorizontal })),
+  ...CATALOGO_MODALIDADES.map((m) => ({ id: m.id, rotulo: m.rotulo, descricao: 'Editais desta modalidade em Oportunidades. "Em teste" libera só para os clientes escolhidos (pacotes).', grupo: 'Modalidades de licitação', icone: Gavel })),
 ]
 
 export default function Modulos() {
@@ -92,7 +93,7 @@ export default function Modulos() {
           </div>
         })}</Card>
       </section>)}</div>
-      <p className="mt-6 text-xs text-muted-foreground">Módulos novos chegam ocultos: só aparecem para os clientes quando você liberar aqui. Painel, empresas, equipe, plano, cobranças, avisos, suporte e configurações ficam sempre disponíveis. Ocultar um módulo esconde o menu e bloqueia a abertura pelo endereço; os dados do cliente não são apagados. Filtro oculto some da busca e não é aplicado; em breve aparece desativado.</p>
+      <p className="mt-6 text-xs text-muted-foreground">Módulos novos chegam ocultos: só aparecem para os clientes quando você liberar aqui. Painel, empresas, equipe, plano, cobranças, avisos, suporte e configurações ficam sempre disponíveis. Ocultar um módulo esconde o menu e bloqueia a abertura pelo endereço; os dados do cliente não são apagados. Filtro oculto some da busca e não é aplicado; em breve aparece desativado. Modalidade oculta some da escolha e os editais dela não aparecem para o cliente.</p>
     </>}
 
     <Modal aberto={!!teste} aoFechar={() => { if (!ocupado) setTeste(null) }} titulo={`Testar "${teste?.modulo.rotulo ?? ''}" com quem?`}>

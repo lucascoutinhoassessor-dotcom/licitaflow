@@ -19,7 +19,7 @@ import IconePortal from '@/components/IconePortal'
 import CodigoComprasnet from '@/components/CodigoComprasnet'
 import { FiltroLiberado } from '@/components/FiltroLiberado'
 import { useFiltrosLiberados } from '@/hooks/useModulos'
-import { aplicarLiberacao } from '@/lib/filtrosLiberacao'
+import { aplicarLiberacao, modalidadesLiberadas } from '@/lib/filtrosLiberacao'
 import { formatarData, formatarMoeda, prazoRelativo } from '@/lib/format'
 import type { Processo } from '@/types/db'
 
@@ -84,10 +84,10 @@ export default function Oportunidades() {
   const catalogo=q.data?.catalogo
   const set=(k:keyof Filtros)=>(e:{target:{value:string}})=>setF(x=>({...x,[k]:e.target.value}))
   const fv=aplicarLiberacao(f,estados)
-  const extras=(fv.portais.length!==PORTAIS.length?1:0)+(fv.modalidades.length!==MODALIDADES.length?1:0)+[fv.orgao,fv.minimo,fv.maximo,fv.itemMinimo,fv.itemMaximo,fv.maxItens,fv.naoDivulgado,fv.exclusivo,fv.excluirSrp,fv.excluir.trim(),fv.tipoItem,fv.modosDisputa.length].filter(Boolean).length
+  const extras=(fv.portais.length!==PORTAIS.length?1:0)+(fv.modalidades.length!==modalidadesLiberadas(estados).length?1:0)+[fv.orgao,fv.minimo,fv.maximo,fv.itemMinimo,fv.itemMaximo,fv.maxItens,fv.naoDivulgado,fv.exclusivo,fv.excluirSrp,fv.excluir.trim(),fv.tipoItem,fv.modosDisputa.length].filter(Boolean).length
   function pesquisar(e:FormEvent) {
     e.preventDefault()
-    try{validarFiltros(f)}catch(erro){toast.error((erro as Error).message);return}
+    try{validarFiltros(aplicarLiberacao(f,estados))}catch(erro){toast.error((erro as Error).message);return}
     setPagina(1);setAvancados(false)
     if(consulta&&JSON.stringify(f)===JSON.stringify(consulta)&&pagina===1)void q.refetch()
     else setConsulta({...f})
