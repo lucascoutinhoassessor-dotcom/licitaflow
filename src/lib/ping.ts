@@ -1,4 +1,5 @@
-// Som do aviso com o app aberto: a voz dizendo "licitaforce!" (public/sons/licitaforce.mp3, ~1 s).
+// Som do aviso com o app aberto: vinheta de três notas + voz (neural Antonio, pt-BR) dizendo "licitaforce!"
+// (public/sons/licitaforce.mp3, ~1,1 s).
 // Toca pelo Web Audio, então só soa se o navegador já liberou áudio (houve um toque/clique na página).
 // Se o arquivo não carregar, cai no "ping" de duas notas gerado na hora.
 let ctx: AudioContext | null = null
