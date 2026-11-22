@@ -1,7 +1,8 @@
 import { useState, type FormEvent } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import { Package, Search, Tag, Wrench } from 'lucide-react'
+import { CalendarRange, MapPin, Package, Search, Tag, Wrench } from 'lucide-react'
+import MenuFiltros, { ChipFiltro, SecaoFiltro } from '@/components/MenuFiltros'
 import BotaoInverterOrdem from '@/components/BotaoInverterOrdem'
 import { Badge, Button, CabecalhoPagina, Card, Carregando, Input, Select, Vazio } from '@/components/ui'
 import { buscarCatalogo, historicoPrecos, type ItemCatalogo } from '@/lib/precos'
@@ -65,12 +66,8 @@ export default function HistoricoPrecos() {
         </div>
 
         {item && <>
-          <Card className="mb-5 grid gap-3 p-4 sm:grid-cols-[repeat(3,minmax(0,1fr))_auto] sm:items-end">
-            <label className="text-sm"><span className="mb-1 block font-medium">UF do órgão</span><Select value={filtros.uf} onChange={(e) => setFiltros((f) => ({ ...f, uf: e.target.value }))}><option value="">Brasil inteiro</option>{UFS.map((u) => <option key={u}>{u}</option>)}</Select></label>
-            <label className="text-sm"><span className="mb-1 block font-medium">Compras de</span><Input type="date" value={filtros.de} min={limiteAntigo} max={filtros.ate} onChange={(e) => setFiltros((f) => ({ ...f, de: e.target.value < limiteAntigo ? limiteAntigo : e.target.value }))} /></label>
-            <label className="text-sm"><span className="mb-1 block font-medium">Até</span><Input type="date" value={filtros.ate} min={filtros.de} onChange={(e) => setFiltros((f) => ({ ...f, ate: e.target.value }))} /></label>
-            <span className="text-xs text-muted-foreground">Atualiza ao mudar.</span>
-            <div className="flex flex-wrap gap-2 sm:col-span-4" role="group" aria-label="Período rápido">
+          <Card className="mb-5 flex flex-col gap-2 p-4 sm:flex-row sm:items-center">
+            <div className="flex flex-wrap gap-2" role="group" aria-label="Período rápido">
               {[[1, '1 ano'], [2, '2 anos'], [6, '6 anos']].map(([anos, rotulo]) => {
                 const de = anosAtras(anos as number)
                 const ativo = filtros.de === de && filtros.ate === iso(new Date())
@@ -78,6 +75,19 @@ export default function HistoricoPrecos() {
                   className={cn('h-9 rounded-full border px-4 text-sm font-semibold', ativo ? 'border-primary bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:text-foreground')}>{rotulo}</button>
               })}
             </div>
+            <span className="text-xs text-muted-foreground">Atualiza ao mudar.</span>
+            <MenuFiltros className="sm:ml-auto" ativos={filtros.uf ? 1 : 0} aoLimpar={() => setFiltros((f) => ({ ...f, uf: '' }))}>
+              <SecaoFiltro icone={MapPin} cor="azul" titulo="Estado do órgão" descricao={filtros.uf ? `Só ${filtros.uf}` : 'Brasil inteiro'}>
+                <div className="grid grid-cols-6 gap-1.5"><ChipFiltro ativo={!filtros.uf} onClick={() => setFiltros((f) => ({ ...f, uf: '' }))} className="col-span-2 rounded-md">Todos</ChipFiltro>
+                  {UFS.map((u) => <ChipFiltro key={u} ativo={filtros.uf === u} onClick={() => setFiltros((f) => ({ ...f, uf: f.uf === u ? '' : u }))} className="rounded-md px-1">{u}</ChipFiltro>)}</div>
+              </SecaoFiltro>
+              <SecaoFiltro icone={CalendarRange} cor="verde" titulo="Período personalizado" descricao="Compras dos últimos 6 anos">
+                <div className="grid grid-cols-2 gap-2 px-1">
+                  <label className="text-xs"><span className="mb-1 block font-medium">Compras de</span><Input type="date" value={filtros.de} min={limiteAntigo} max={filtros.ate} onChange={(e) => setFiltros((f) => ({ ...f, de: e.target.value < limiteAntigo ? limiteAntigo : e.target.value }))} /></label>
+                  <label className="text-xs"><span className="mb-1 block font-medium">Até</span><Input type="date" value={filtros.ate} min={filtros.de} onChange={(e) => setFiltros((f) => ({ ...f, ate: e.target.value }))} /></label>
+                </div>
+              </SecaoFiltro>
+            </MenuFiltros>
           </Card>
 
           {precos.isLoading ? <Carregando texto="Consultando os preços…" /> : precos.isError ? <Card className="p-4 text-sm">{(precos.error as Error).message} <button className="font-semibold text-primary underline" onClick={() => precos.refetch()}>Tentar novamente</button></Card> : precos.data && <>

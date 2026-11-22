@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
-import { AlertTriangle, FileCheck2, FileText, Pencil, Plus, Search, Trash2 } from 'lucide-react'
+import { AlertTriangle, CalendarClock, FileCheck2, FileText, FolderOpen, Pencil, Plus, Search, Trash2 } from 'lucide-react'
+import MenuFiltros, { ChipFiltro, SecaoFiltro } from '@/components/MenuFiltros'
 import { toast } from 'sonner'
 import { Button, CabecalhoPagina, Card, Carregando, Input, Modal, Select, Vazio } from '@/components/ui'
 import { BadgeValidade } from '@/components/Situacoes'
@@ -69,17 +70,20 @@ export default function Documentos() {
           <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
           <Input className="pl-9" placeholder="Buscar documento" value={busca} onChange={(e) => setBusca(e.target.value)} />
         </div>
-        <Select className="sm:w-56" value={categoria} onChange={(e) => setCategoria(e.target.value)} aria-label="Categoria">
-          <option value="">Todas as categorias</option>
-          {Object.entries(CATEGORIAS_DOC).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-        </Select>
-        <Select className="sm:w-48" value={situacao} onChange={(e) => setSituacao(e.target.value)} aria-label="Situação">
-          <option value="">Qualquer situação</option>
-          <option value="vencido">Vencidos</option>
-          <option value="vence_em_breve">Vencendo</option>
-          <option value="valido">Válidos</option>
-          <option value="sem_validade">Sem validade</option>
-        </Select>
+        <MenuFiltros ativos={(categoria ? 1 : 0) + (situacao ? 1 : 0)} aoLimpar={() => { setCategoria(''); setSituacao('') }}>
+          <SecaoFiltro icone={CalendarClock} cor="rosa" titulo="Validade" descricao="Situação do documento hoje">
+            <div className="grid grid-cols-3 gap-1.5">
+              {([['', 'Qualquer'], ['vencido', 'Vencidos'], ['vence_em_breve', 'Vencendo'], ['valido', 'Válidos'], ['sem_validade', 'Sem validade']] as const).map(([k, v]) =>
+                <ChipFiltro key={k} ativo={situacao === k} onClick={() => setSituacao(k)} className="rounded-md">{v}</ChipFiltro>)}
+            </div>
+          </SecaoFiltro>
+          <SecaoFiltro icone={FolderOpen} cor="azul" titulo="Categoria" descricao={categoria ? CATEGORIAS_DOC[categoria as keyof typeof CATEGORIAS_DOC] : 'Todas as categorias'}>
+            <div className="grid grid-cols-2 gap-1.5">
+              <ChipFiltro ativo={!categoria} onClick={() => setCategoria('')} className="rounded-md">Todas</ChipFiltro>
+              {Object.entries(CATEGORIAS_DOC).map(([k, v]) => <ChipFiltro key={k} ativo={categoria === k} onClick={() => setCategoria(categoria === k ? '' : k)} className="rounded-md text-center leading-tight">{v}</ChipFiltro>)}
+            </div>
+          </SecaoFiltro>
+        </MenuFiltros>
       </div>
 
       {q.isLoading ? (

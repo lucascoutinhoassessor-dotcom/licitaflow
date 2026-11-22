@@ -1,6 +1,7 @@
 import { useMemo, useState, type DragEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { CalendarClock, Gavel, KanbanSquare, List, Plus, Search } from 'lucide-react'
+import MenuFiltros, { ChipFiltro, SecaoFiltro } from '@/components/MenuFiltros'
 import { AnimatePresence, LayoutGroup, motion } from 'framer-motion'
 import { toast } from 'sonner'
 import { Badge, Button, CabecalhoPagina, Card, Carregando, Input, Modal, Select, Vazio } from '@/components/ui'
@@ -156,14 +157,14 @@ export default function Processos() {
           <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
           <Input className="pl-9" placeholder="Buscar por objeto, órgão, número ou UASG" value={busca} onChange={(e) => setBusca(e.target.value)} />
         </div>
-        <Select className="sm:w-52" value={modalidade} onChange={(e) => setModalidade(e.target.value)} aria-label="Modalidade">
-          <option value="">Todas as modalidades</option>
-          {Object.entries(MODALIDADES).map(([k, v]) => (
-            <option key={k} value={k}>
-              {v}
-            </option>
-          ))}
-        </Select>
+        <MenuFiltros ativos={modalidade ? 1 : 0} aoLimpar={() => setModalidade('')}>
+          <SecaoFiltro icone={Gavel} cor="ambar" titulo="Modalidade" descricao={modalidade ? MODALIDADES[modalidade as keyof typeof MODALIDADES] : 'Todas as modalidades'}>
+            <div className="grid grid-cols-2 gap-1.5">
+              <ChipFiltro ativo={!modalidade} onClick={() => setModalidade('')} className="rounded-md">Todas</ChipFiltro>
+              {Object.entries(MODALIDADES).map(([k, v]) => <ChipFiltro key={k} ativo={modalidade === k} onClick={() => setModalidade(modalidade === k ? '' : k)} className="rounded-md">{v}</ChipFiltro>)}
+            </div>
+          </SecaoFiltro>
+        </MenuFiltros>
         <div className="flex rounded-md border bg-card p-0.5">
           {[
             ['kanban', KanbanSquare, 'Kanban'],

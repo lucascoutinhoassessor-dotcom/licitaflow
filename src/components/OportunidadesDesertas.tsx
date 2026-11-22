@@ -1,8 +1,9 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import { CalendarClock, ExternalLink, Info, Package, Search, SearchX } from 'lucide-react'
-import { Badge, Button, Card, Input, Select, Vazio } from '@/components/ui'
+import { CalendarClock, ExternalLink, Globe, Info, MapPin, Package, Search, SearchX, TriangleAlert } from 'lucide-react'
+import MenuFiltros, { ChipFiltro, SecaoFiltro } from '@/components/MenuFiltros'
+import { Badge, Button, Card, Input, Vazio } from '@/components/ui'
 import BotaoInverterOrdem from '@/components/BotaoInverterOrdem'
 import IconePortal from '@/components/IconePortal'
 import CodigoComprasnet from '@/components/CodigoComprasnet'
@@ -38,19 +39,31 @@ export default function OportunidadesDesertas({atalho}:{atalho?:{portal:string;v
   useEffect(()=>{if(atalho)aplicar({...f,portal:atalho.portal})},[atalho?.vez]) // eslint-disable-line react-hooks/exhaustive-deps
   function pesquisar(e:FormEvent){e.preventDefault();if(JSON.stringify(f)===JSON.stringify(consulta)&&pagina===1)void q.refetch();else aplicar({...f})}
   const lista=q.data?.data??[],total=q.data?.totalRegistros??0,totalPaginas=Math.max(1,q.data?.totalPaginas??1)
+  const ativos=(f.tipo?1:0)+(f.uf?1:0)+(porPortal&&f.portal?1:0)
   const chip=(ativo:boolean)=>`h-9 rounded-full border px-4 text-sm font-semibold transition-colors ${ativo?'border-primary bg-primary text-primary-foreground':'bg-card text-muted-foreground hover:text-foreground'}`
   return <>
     <Card className="mb-5 p-4">
       <form onSubmit={pesquisar} className="space-y-3">
         <div className="flex flex-col gap-2 sm:flex-row"><div className="relative min-w-0 flex-1"><Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input className="pl-9" aria-label="Pesquisar desertas" placeholder="O que sua empresa vende? Ex.: papel A4; toner" value={f.busca} onChange={e=>setF(x=>({...x,busca:e.target.value}))} maxLength={300} /></div><Button type="submit" carregando={q.isFetching}>Buscar desertas</Button></div>
-        <div className={`grid gap-2 ${porPortal?'sm:grid-cols-3':'sm:grid-cols-2'}`}>
-          <Select aria-label="Situação dos itens" value={f.tipo} onChange={e=>aplicar({...f,tipo:e.target.value as FiltrosDesertas['tipo']})}><option value="">Desertos e fracassados</option><option value="4">Só desertos (ninguém propôs)</option><option value="5">Só fracassados (nenhuma proposta válida)</option></Select>
-          <Select aria-label="UF" value={f.uf} onChange={e=>aplicar({...f,uf:e.target.value})}><option value="">Brasil inteiro</option>{UFS.map(u=><option key={u}>{u}</option>)}</Select>
-          <RecursoLiberado id="recurso-sem-vencedor-portal"><Select aria-label="Portal" value={f.portal} onChange={e=>aplicar({...f,portal:e.target.value})}><option value="">Todos os portais</option>{PORTAIS.map(p=><option key={p[0]} value={p[0]}>{p[1]}</option>)}</Select></RecursoLiberado>
-        </div>
-        <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Sessões realizadas nos últimos">
-          <span className="text-sm text-muted-foreground">Sessões nos últimos</span>
-          {PERIODOS_DESERTAS.map(([d,rotulo])=><button key={d} type="button" aria-pressed={f.dias===d} onClick={()=>aplicar({...f,dias:d})} className={chip(f.dias===d)}>{rotulo}</button>)}
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Sessões realizadas nos últimos">
+            <span className="text-sm text-muted-foreground">Sessões nos últimos</span>
+            {PERIODOS_DESERTAS.map(([d,rotulo])=><button key={d} type="button" aria-pressed={f.dias===d} onClick={()=>aplicar({...f,dias:d})} className={chip(f.dias===d)}>{rotulo}</button>)}
+          </div>
+          <MenuFiltros className="sm:ml-auto" ativos={ativos} aoLimpar={()=>aplicar({...f,tipo:'',uf:'',portal:''})}>
+            <SecaoFiltro icone={TriangleAlert} cor="ambar" titulo="Situação dos itens" descricao="Deserto: ninguém propôs. Fracassado: nenhuma proposta aceita">
+              <div className="grid grid-cols-3 gap-1.5">{([['','Os dois'],['4','Só desertos'],['5','Só fracassados']] as const).map(([id,rotulo])=>
+                <ChipFiltro key={id} ativo={f.tipo===id} onClick={()=>aplicar({...f,tipo:id})} className="rounded-md">{rotulo}</ChipFiltro>)}</div>
+            </SecaoFiltro>
+            <SecaoFiltro icone={MapPin} cor="azul" titulo="Estado do órgão" descricao={f.uf?`Só ${f.uf}`:'Brasil inteiro'}>
+              <div className="grid grid-cols-6 gap-1.5"><ChipFiltro ativo={!f.uf} onClick={()=>aplicar({...f,uf:''})} className="col-span-2 rounded-md">Todos</ChipFiltro>{UFS.map(u=>
+                <ChipFiltro key={u} ativo={f.uf===u} onClick={()=>aplicar({...f,uf:u})} className="rounded-md px-1">{u}</ChipFiltro>)}</div>
+            </SecaoFiltro>
+            <RecursoLiberado id="recurso-sem-vencedor-portal"><SecaoFiltro icone={Globe} cor="verde" titulo="Portal" descricao="Onde a compra foi publicada">
+              <div className="grid grid-cols-2 gap-1.5"><ChipFiltro ativo={!f.portal} onClick={()=>aplicar({...f,portal:''})} className="justify-start rounded-md">Todos os portais</ChipFiltro>{PORTAIS.map(([id,nome])=>
+                <ChipFiltro key={id} title={nome} ativo={f.portal===id} onClick={()=>aplicar({...f,portal:id})} className="justify-start rounded-md text-left"><IconePortal id={id} nome={nome} /><span className="line-clamp-2 min-w-0 leading-tight">{nome}</span></ChipFiltro>)}</div>
+            </SecaoFiltro></RecursoLiberado>
+          </MenuFiltros>
         </div>
       </form>
     </Card>

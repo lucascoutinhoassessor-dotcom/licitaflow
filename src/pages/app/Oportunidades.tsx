@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import BotaoInverterOrdem from '@/components/BotaoInverterOrdem'
 import { Link, useNavigate } from 'react-router-dom'
-import { Package, Radar, Search, SlidersHorizontal, ChevronDown } from 'lucide-react'
+import { Package, Radar, Search } from 'lucide-react'
 import { toast } from 'sonner'
 import { Badge, Button, CabecalhoPagina, Campo, Card, Input, Select, Vazio } from '@/components/ui'
 import { SeletorEmpresa, useEmpresaPadrao } from '@/components/Situacoes'
@@ -13,6 +13,7 @@ import { filtrosExtras, MODALIDADES, nomeModoDisputa, PERIODOS_ABERTURA, periodo
 import {pesquisarIndice,type ResultadoIndice} from '@/lib/buscaIndice'
 import CategoriasObjeto from '@/components/CategoriasObjeto'
 import FiltrosOportunidades from '@/components/FiltrosOportunidades'
+import MenuFiltros from '@/components/MenuFiltros'
 import OportunidadesDesertas from '@/components/OportunidadesDesertas'
 import LocalizarEdital from '@/components/LocalizarEdital'
 import AtalhosOportunidades, { type AcaoAtalho } from '@/components/AtalhosOportunidades'
@@ -64,7 +65,7 @@ export default function Oportunidades() {
     return salvo?{f:{...padraoFiltros,...salvo.f},consulta:salvo.consulta&&{...padraoFiltros,...salvo.consulta},pagina:salvo.pagina}:{f:padraoFiltros,consulta:padraoFiltros,pagina:1}
   })
   const [f,setF]=useState<Filtros>(inicial.f)
-  const [consulta,setConsulta]=useState<Filtros|null>(inicial.consulta),[avancados,setAvancados]=useState(false)
+  const [consulta,setConsulta]=useState<Filtros|null>(inicial.consulta)
   const [pagina,setPagina]=useState(inicial.pagina)
   const [abaEscolhida,setAba]=useState<Aba>(lerAba),[atalho,setAtalho]=useState<{portal:string;vez:number}>()
   const recursos=useRecursos()
@@ -76,7 +77,7 @@ export default function Oportunidades() {
     if(a.tipo==='proximas'){
       // Editais que ainda vão abrir: troca período e portal e já pesquisa. Num dia só (hoje/amanhã) mostra também fim de semana e feriado.
       const novo:Filtros={...f,situacao:'abertas',...periodoEntre(a.de,a.ate),portais:a.portal?[a.portal]:filtrosExtras.portais,diasUteis:a.de===a.ate?false:f.diasUteis,inverter:false}
-      setAba('abertas');setAtalho(undefined);setAvancados(false);setF(novo);setPagina(1);setConsulta(novo);return
+      setAba('abertas');setAtalho(undefined);setF(novo);setPagina(1);setConsulta(novo);return
     }
     setAba('desertas');setAtalho(x=>({portal:a.portal,vez:(x?.vez??0)+1}))
   }
@@ -104,10 +105,10 @@ export default function Oportunidades() {
   const set=(k:keyof Filtros)=>(e:{target:{value:string}})=>setF(x=>({...x,[k]:e.target.value}))
   const fv=aplicarLiberacao(f,estados)
   const extras=(fv.portais.length!==PORTAIS.length?1:0)+(fv.modalidades.length!==modalidadesLiberadas(estados).length?1:0)+[fv.orgao,fv.minimo,fv.maximo,fv.itemMinimo,fv.itemMaximo,fv.maxItens,fv.naoDivulgado,fv.exclusivo,fv.excluirSrp,fv.excluir.trim(),fv.tipoItem,fv.modosDisputa.length].filter(Boolean).length
-  function pesquisar(e:FormEvent) {
-    e.preventDefault()
+  function pesquisar(e?:FormEvent) {
+    e?.preventDefault()
     try{validarFiltros(aplicarLiberacao(f,estados))}catch(erro){toast.error((erro as Error).message);return}
-    setPagina(1);setAvancados(false)
+    setPagina(1)
     if(consulta&&JSON.stringify(f)===JSON.stringify(consulta)&&pagina===1)void q.refetch()
     else setConsulta({...f})
   }
@@ -131,7 +132,10 @@ export default function Oportunidades() {
     <Card className="mb-5 p-4">
       <form onSubmit={pesquisar} className="space-y-3">
         <div className="flex flex-col gap-2 sm:flex-row"><div className="relative min-w-0 flex-1"><Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input className="pl-9" aria-label="Pesquisar oportunidades" placeholder="O que sua empresa vende? Ex.: notebook; computador" value={f.busca} onChange={set('busca')} maxLength={300} /></div><Button type="submit" carregando={q.isFetching}>Buscar oportunidades</Button></div>
-        <div className="flex flex-col gap-2 sm:flex-row"><FiltroLiberado id="filtro-publicacao" className="min-w-0 flex-1"><Select aria-label="Situação dos editais" value={fv.situacao} onChange={set('situacao')}><option value="abertas">Por data de abertura</option><option value="publicacoes">Por data de publicação</option></Select></FiltroLiberado><FiltroLiberado id="filtro-uf" className="min-w-0 flex-1"><Select aria-label="UF" value={fv.uf} onChange={set('uf')}><option value="">Brasil inteiro</option>{'AC AL AP AM BA CE DF ES GO MA MT MS MG PA PB PR PE PI RJ RN RS RO RR SC SP SE TO'.split(' ').map(u=><option key={u}>{u}</option>)}</Select></FiltroLiberado><Button type="button" variante="contorno" aria-expanded={avancados} aria-controls="mais-filtros" onClick={()=>setAvancados(v=>!v)}><SlidersHorizontal className="h-4 w-4" />Mais filtros{extras?` (${extras})`:''}<ChevronDown className={`h-4 w-4 transition-transform ${avancados?'rotate-180':''}`} /></Button></div>
+        <div className="flex flex-col gap-2 sm:flex-row"><FiltroLiberado id="filtro-publicacao" className="min-w-0 flex-1"><Select aria-label="Situação dos editais" value={fv.situacao} onChange={set('situacao')}><option value="abertas">Por data de abertura</option><option value="publicacoes">Por data de publicação</option></Select></FiltroLiberado><FiltroLiberado id="filtro-uf" className="min-w-0 flex-1"><Select aria-label="UF" value={fv.uf} onChange={set('uf')}><option value="">Brasil inteiro</option>{'AC AL AP AM BA CE DF ES GO MA MT MS MG PA PB PR PE PI RJ RN RS RO RR SC SP SE TO'.split(' ').map(u=><option key={u}>{u}</option>)}</Select></FiltroLiberado><MenuFiltros ativos={extras} largura="sm:w-[32rem]" aoLimpar={()=>setF(x=>({...x,...filtrosExtras,busca:x.busca,aberturaDe:x.aberturaDe,aberturaAte:x.aberturaAte,diasUteis:x.diasUteis,inverter:x.inverter}))}
+          rodape={fechar=><Button type="button" carregando={q.isFetching} onClick={()=>{fechar();pesquisar()}}>Aplicar e buscar</Button>}>
+          <FiltrosOportunidades f={f} mudar={setF} compras={[]} orgaos={q.data?.orgaos??[]} />
+        </MenuFiltros></div>
         {fv.situacao==='abertas'&&<>
           <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Período de abertura">
             {PERIODOS_ABERTURA.map(([d,rotulo])=><button key={rotulo} type="button" onClick={()=>escolherPeriodo(d)} aria-pressed={periodoAtual===d}
@@ -142,7 +146,6 @@ export default function Oportunidades() {
           <div className="grid gap-3 sm:grid-cols-2"><Campo rotulo="Abertura a partir de" htmlFor="busca-abertura-de"><Input id="busca-abertura-de" type="date" value={f.aberturaDe} max={f.aberturaAte||undefined} onChange={set('aberturaDe')} /></Campo><Campo rotulo="Abertura até" htmlFor="busca-abertura-ate"><Input id="busca-abertura-ate" type="date" min={f.aberturaDe||undefined} value={f.aberturaAte} onChange={set('aberturaAte')} /></Campo></div>
         </>}
         {fv.situacao==='publicacoes'&&<div className="grid gap-3 sm:grid-cols-2"><Campo rotulo="Publicado desde" htmlFor="busca-inicio"><Input id="busca-inicio" type="date" required value={f.inicio} max={f.fim} onChange={set('inicio')} /></Campo><Campo rotulo="Publicado até" htmlFor="busca-fim"><Input id="busca-fim" type="date" required min={f.inicio} value={f.fim} onChange={set('fim')} /></Campo></div>}
-        {avancados&&<div id="mais-filtros" className="border-t pt-3"><FiltrosOportunidades f={f} mudar={setF} compras={[]} orgaos={q.data?.orgaos??[]} /><Button className="mt-3 w-full sm:w-auto" type="submit" carregando={q.isFetching}>Aplicar filtros e buscar</Button></div>}
       </form>
     </Card>
     {!consulta?<Vazio icone={Radar} titulo="Encontre sua próxima oportunidade" texto="Pesquise o produto ou serviço. Por padrão, a busca inclui o Brasil inteiro e editais recebendo propostas." />:<>

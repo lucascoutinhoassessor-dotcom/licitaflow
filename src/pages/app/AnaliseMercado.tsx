@@ -1,8 +1,9 @@
 import { useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowDown, ArrowRight, ArrowUp, BarChart3, BookOpen, Building2, Check, ExternalLink, FileSearch, Landmark, MapPin, Package, Search, SlidersHorizontal, Table2, Tag, Wrench, X } from 'lucide-react'
+import { ArrowDown, ArrowRight, ArrowUp, BarChart3, BookOpen, Building2, CalendarRange, Check, Gavel, ExternalLink, FileSearch, Landmark, MapPin, Package, Search, Table2, Tag, Wrench, X } from 'lucide-react'
 import CartaoCompraPreco from '@/components/CartaoCompraPreco'
+import MenuFiltros, { ChipFiltro, SecaoFiltro } from '@/components/MenuFiltros'
 import { Button, CabecalhoPagina, Card, Carregando, Input, Modal, Select, Vazio } from '@/components/ui'
 import { buscarCatalogo, linkPesquisaMarca, type ItemCatalogo } from '@/lib/precos'
 import { analisarMercado, ESFERA_NOME, MODALIDADE_NOME, PODER_NOME, UF_NOME, type AnaliseMercado } from '@/lib/mercado'
@@ -32,7 +33,6 @@ export default function AnaliseMercado() {
   const uf = sp.get('uf') ?? '', esfera = sp.get('esfera') ?? '', poder = sp.get('poder') ?? '', modalidade = sp.get('mod') ?? ''
   const [termo, setTermo] = useState(q), [tipoRascunho, setTipoRascunho] = useState(tipo)
   const [angulo, setAngulo] = useState<Angulo | null>(null)
-  const [filtrosAbertos, setFiltrosAbertos] = useState(false)
 
   function mudar(m: Record<string, string | null>) {
     const n = new URLSearchParams(sp)
@@ -90,21 +90,26 @@ export default function AnaliseMercado() {
               className={cn('h-8 rounded-full border px-3 text-xs font-semibold sm:text-sm', ativo ? 'border-primary bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:text-foreground')}>{rotulo}</button>
           })}
         </div>
-        <button type="button" onClick={() => setFiltrosAbertos((v) => !v)} aria-expanded={filtrosAbertos}
-          className={cn('ml-auto inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-xs font-semibold sm:text-sm', filtrosAtivos.length ? 'border-primary text-primary' : 'text-muted-foreground hover:text-foreground')}>
-          <SlidersHorizontal className="h-4 w-4" />Filtros{filtrosAtivos.length ? ` (${filtrosAtivos.length})` : ''}
-        </button>
+        <MenuFiltros className="ml-auto" ativos={filtrosAtivos.length} aoLimpar={() => mudar({ uf: null, esfera: null, poder: null, mod: null })}>
+          <SecaoFiltro icone={CalendarRange} cor="verde" titulo="Período personalizado" descricao="Até 3 anos; a análise atualiza ao mudar">
+            <div className="grid grid-cols-2 gap-2 px-1">
+              <label className="text-xs"><span className="mb-1 block font-medium">De</span><Input type="date" value={de} max={ate} onChange={(e) => e.target.value && mudar({ de: e.target.value })} /></label>
+              <label className="text-xs"><span className="mb-1 block font-medium">Até</span><Input type="date" value={ate} min={de} max={hoje} onChange={(e) => e.target.value && mudar({ ate: e.target.value })} /></label>
+            </div>
+          </SecaoFiltro>
+          <SecaoFiltro icone={MapPin} cor="azul" titulo="Estado do órgão" descricao={uf ? UF_NOME[uf] : 'Todos os estados'}>
+            <div className="grid grid-cols-6 gap-1.5"><ChipFiltro ativo={!uf} onClick={() => mudar({ uf: null })} className="col-span-2 rounded-md">Todos</ChipFiltro>
+              {UFS.map((u) => <ChipFiltro key={u} title={UF_NOME[u]} ativo={uf === u} onClick={() => mudar({ uf: uf === u ? null : u })} className="rounded-md px-1">{u}</ChipFiltro>)}</div>
+          </SecaoFiltro>
+          <SecaoFiltro icone={Landmark} cor="violeta" titulo="Esfera e poder" descricao="Quem fez a compra">
+            <div className="grid grid-cols-3 gap-1.5">{Object.entries(ESFERA_NOME).map(([k, v]) => <ChipFiltro key={k} ativo={esfera === k} onClick={() => mudar({ esfera: esfera === k ? null : k })} className="rounded-md">{v}</ChipFiltro>)}</div>
+            <div className="mt-1.5 grid grid-cols-3 gap-1.5">{Object.entries(PODER_NOME).map(([k, v]) => <ChipFiltro key={k} ativo={poder === k} onClick={() => mudar({ poder: poder === k ? null : k })} className="rounded-md">{v}</ChipFiltro>)}</div>
+          </SecaoFiltro>
+          <SecaoFiltro icone={Gavel} cor="ambar" titulo="Modalidade" descricao={modalidade ? MODALIDADE_NOME[Number(modalidade)] : 'Todas'}>
+            <div className="grid grid-cols-2 gap-1.5">{[5, 6, 7, 20, 3].map((k) => <ChipFiltro key={k} ativo={modalidade === String(k)} onClick={() => mudar({ mod: modalidade === String(k) ? null : String(k) })} className="rounded-md">{MODALIDADE_NOME[k]}</ChipFiltro>)}</div>
+          </SecaoFiltro>
+        </MenuFiltros>
       </div>
-
-      {filtrosAbertos && <div className="mt-3 grid grid-cols-2 gap-3 border-t pt-3 md:grid-cols-3 lg:grid-cols-6">
-        <label className="text-sm"><span className="mb-1 block font-medium">De</span><Input type="date" value={de} max={ate} onChange={(e) => e.target.value && mudar({ de: e.target.value })} /></label>
-        <label className="text-sm"><span className="mb-1 block font-medium">Até</span><Input type="date" value={ate} min={de} max={hoje} onChange={(e) => e.target.value && mudar({ ate: e.target.value })} /></label>
-        <label className="text-sm"><span className="mb-1 block font-medium">Estado do órgão</span><Select value={uf} onChange={(e) => mudar({ uf: e.target.value })}><option value="">Todos</option>{UFS.map((u) => <option key={u} value={u}>{u} · {UF_NOME[u]}</option>)}</Select></label>
-        <label className="text-sm"><span className="mb-1 block font-medium">Esfera</span><Select value={esfera} onChange={(e) => mudar({ esfera: e.target.value })}><option value="">Todas</option>{Object.entries(ESFERA_NOME).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</Select></label>
-        <label className="text-sm"><span className="mb-1 block font-medium">Poder</span><Select value={poder} onChange={(e) => mudar({ poder: e.target.value })}><option value="">Todos</option>{Object.entries(PODER_NOME).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</Select></label>
-        <label className="text-sm"><span className="mb-1 block font-medium">Modalidade</span><Select value={modalidade} onChange={(e) => mudar({ mod: e.target.value })}><option value="">Todas</option>{[5, 6, 7, 20, 3].map((k) => <option key={k} value={k}>{MODALIDADE_NOME[k]}</option>)}</Select></label>
-        <p className="col-span-2 text-xs text-muted-foreground md:col-span-3 lg:col-span-6">Período de até 3 anos. A análise atualiza ao mudar.</p>
-      </div>}
 
       {filtrosAtivos.length > 0 && <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
         <span className="font-semibold uppercase tracking-wide text-muted-foreground">Filtros aplicados</span>

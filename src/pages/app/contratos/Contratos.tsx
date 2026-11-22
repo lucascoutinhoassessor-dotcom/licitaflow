@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { FileSignature, Plus, Search } from 'lucide-react'
+import { CircleDot, FileSignature, Plus, Search } from 'lucide-react'
+import MenuFiltros, { ChipFiltro, SecaoFiltro } from '@/components/MenuFiltros'
 import { toast } from 'sonner'
 import { Badge, Button, CabecalhoPagina, Campo, Card, Carregando, Input, Modal, Select, Textarea, Vazio } from '@/components/ui'
 import { SeletorEmpresa, useEmpresaPadrao } from '@/components/Situacoes'
@@ -159,10 +160,14 @@ export default function Contratos() {
           <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
           <Input className="pl-9" placeholder="Buscar por número, órgão ou objeto" value={busca} onChange={(e) => setBusca(e.target.value)} />
         </div>
-        <Select className="sm:w-48" value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Status">
-          <option value="">Todos</option>
-          {Object.entries(STATUS_CONTRATO).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-        </Select>
+        <MenuFiltros ativos={status ? 1 : 0} aoLimpar={() => setStatus('')}>
+          <SecaoFiltro icone={CircleDot} cor="verde" titulo="Situação do contrato" descricao={status ? STATUS_CONTRATO[status as keyof typeof STATUS_CONTRATO] : 'Todos os contratos'}>
+            <div className="grid grid-cols-2 gap-1.5">
+              <ChipFiltro ativo={!status} onClick={() => setStatus('')} className="rounded-md">Todos</ChipFiltro>
+              {Object.entries(STATUS_CONTRATO).map(([k, v]) => <ChipFiltro key={k} ativo={status === k} onClick={() => setStatus(k)} className="rounded-md">{v}</ChipFiltro>)}
+            </div>
+          </SecaoFiltro>
+        </MenuFiltros>
       </div>
 
       {q.isLoading ? (
