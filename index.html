@@ -21,6 +21,7 @@
         position:fixed;inset:0;z-index:2147483000;overflow:hidden;background:var(--fundo);transition:opacity .45s ease,visibility .45s ease;font-family:Inter,system-ui,-apple-system,'Segoe UI',sans-serif}
       html.lf-master #lf-splash{--fundo:#09090b;--brilho:rgba(251,191,36,.16);--destaque:#fbbf24;--ponto:#fbbf24;--sombra:rgba(0,0,0,.6)}
       #lf-splash::before{content:'';position:absolute;inset:0;background:radial-gradient(circle at 50% 44%,var(--brilho) 0%,transparent 55%);opacity:0;animation:lf-aparece .8s .15s ease-out forwards}
+      html:not(.lf-instalado) #lf-splash{display:none}
       #lf-splash.sair{opacity:0;visibility:hidden}
       .lf-logo{position:absolute;left:50%;top:50%;width:min(53vw,240px);height:min(53vw,240px);transform:translate(-50%,-50%);animation:lf-encolhe .65s .15s cubic-bezier(.65,0,.35,1) forwards}
       #lf-splash.sair .lf-logo{transition:scale .45s ease;scale:1.08}

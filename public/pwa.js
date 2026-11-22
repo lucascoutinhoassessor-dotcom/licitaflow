@@ -14,6 +14,11 @@
   var master = rotaMaster;
   // A abertura animada de index.html usa as cores do master.
   if (master) document.documentElement.classList.add('lf-master');
+  // A abertura animada só aparece no app instalado (aberto pela tela inicial). No navegador comum, landing,
+  // login e painel abrem direto. Sem esta classe o CSS de index.html mantém a abertura escondida.
+  var instalado = navigator.standalone === true || ['standalone', 'fullscreen', 'minimal-ui', 'window-controls-overlay']
+    .some(function (m) { return window.matchMedia && window.matchMedia('(display-mode: ' + m + ')').matches; });
+  if (instalado) document.documentElement.classList.add('lf-instalado');
   var head = document.head;
   function link(rel, href) {
     var el = document.createElement('link');

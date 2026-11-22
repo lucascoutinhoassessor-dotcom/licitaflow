@@ -24,9 +24,11 @@ createRoot(document.getElementById('root')!).render(
   </StrictMode>,
 )
 
-// Abertura animada (desenhada em index.html antes do JavaScript): sai depois que a animação termina.
+// Abertura animada (desenhada em index.html antes do JavaScript), só no app instalado (classe posta por
+// public/pwa.js): sai depois que a animação termina. No navegador comum ela nunca aparece.
 const splash = document.getElementById('lf-splash')
-if (splash) {
+if (splash && !document.documentElement.classList.contains('lf-instalado')) splash.remove()
+else if (splash) {
   const animar = !window.matchMedia('(prefers-reduced-motion: reduce)').matches
   setTimeout(() => {
     splash.classList.add('sair')
