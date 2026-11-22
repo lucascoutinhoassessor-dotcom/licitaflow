@@ -1,16 +1,29 @@
-import { useState, type FormEvent } from 'react'
+import { useState, type FormEvent, type ReactNode } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { ScrollText } from 'lucide-react'
 import { supabase, mensagemErro } from '@/lib/supabase'
 import { formatarDataHora } from '@/lib/format'
 import { TIPOS_LOG, type LogPlataforma } from '@/lib/logsPlataforma'
-import { Aviso, Badge, Button, CabecalhoPagina, Campo, Card, Carregando, Input, Modal, Select, Textarea, Vazio } from '@/components/ui'
+import LogsUso from './LogsUso'
+import { Abas, Aviso, Badge, Button, CabecalhoPagina, Campo, Card, Carregando, Input, Modal, Select, Textarea, Vazio } from '@/components/ui'
 
 const VAZIO = { id: '', tipo: 'atualizacao' as LogPlataforma['tipo'], titulo: '', texto: '', publico: false }
 
-/** Logs da plataforma: o master registra atualizações, correções, incidentes e notas; os públicos aparecem para os clientes. */
+/** Logs: o uso automático de cada cliente (erros, lentidão, ações) e o registro manual da plataforma. */
 export default function Logs() {
+  const [aba, setAba] = useState<'uso' | 'plataforma'>('uso')
+  const abas = <Abas<'uso' | 'plataforma'> abas={[{ id: 'uso', rotulo: 'Uso dos clientes' }, { id: 'plataforma', rotulo: 'Registro da plataforma' }]} atual={aba} aoTrocar={setAba} />
+  if (aba === 'uso') return <>
+    <CabecalhoPagina titulo="Logs" descricao="Tudo o que cada usuário faz na plataforma, gravado automaticamente: páginas abertas, ações, erros e lentidão. Use para encontrar e corrigir falhas." />
+    {abas}
+    <LogsUso />
+  </>
+  return <LogsPlataforma abas={abas} />
+}
+
+/** Logs da plataforma: o master registra atualizações, correções, incidentes e notas; os públicos aparecem para os clientes. */
+function LogsPlataforma({ abas }: { abas: ReactNode }) {
   const qc = useQueryClient()
   const [filtro, setFiltro] = useState<'' | LogPlataforma['tipo']>('')
   const [busca, setBusca] = useState('')
@@ -39,6 +52,7 @@ export default function Logs() {
   }
   return <>
     <CabecalhoPagina titulo="Logs" descricao="Registro do que muda na plataforma: atualizações, correções, incidentes e notas internas. Marque como público para aparecer aos clientes em Avisos → Atualizações da plataforma." acoes={<Button onClick={() => { setF(VAZIO); setAberto(true) }}>Criar log</Button>} />
+    {abas}
     <div className="mb-4 flex flex-col gap-2 sm:flex-row">
       <Input aria-label="Pesquisar logs" placeholder="Pesquisar nos logs…" value={busca} onChange={(e) => setBusca(e.target.value)} />
       <Select aria-label="Tipo de log" className="sm:w-56" value={filtro} onChange={(e) => setFiltro(e.target.value as typeof filtro)}><option value="">Todos os tipos</option>{Object.entries(TIPOS_LOG).map(([k, [r]]) => <option key={k} value={k}>{r}</option>)}</Select>

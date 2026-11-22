@@ -4,7 +4,10 @@
 //   GET  ?acao=turso-situacao  (master)                                          → conectado? quantos editais? última coleta
 //   POST ?acao=turso-buscar    (usuário logado) {filtros, pagina}                → busca no mesmo formato do buscar_oportunidades
 //   GET  ?acao=turso-itens&controle= (usuário logado)                            → itens guardados de um edital (reserva da página)
+//   POST ?acao=turso-logs-registrar (usuário logado) {org, eventos}              → registro de uso, erros e lentidão (server/logs-uso.js)
+//   GET  ?acao=turso-logs&tipo=&horas=&usuario=&busca=&antes= (master)         → logs de uso dos clientes
 import { emCache, usuarioLogado, excedeuLimite } from './protecao.js'
+import { consultarLogs, registrarLogs } from './logs-uso.js'
 import { buscarTurso, clienteTurso, coletarRodada, FiltroInvalido, itensTurso, situacaoTurso } from './turso.js'
 
 async function rpcServico(fetcher, base, chave, nome, corpo) {
@@ -12,7 +15,15 @@ async function rpcServico(fetcher, base, chave, nome, corpo) {
   return r.ok ? r.json().catch(() => null) : null
 }
 
-export function criarHandler({ fetcher = fetch, env = process.env, validarSessao = usuarioLogado } = {}) {
+/** Sessão com e-mail (o registro de uso mostra quem foi). */
+async function dadosDaSessao(base, anon, token, fetcher) {
+  const r = await fetcher(`${base}/auth/v1/user`, { headers: { apikey: anon, Authorization: token }, signal: AbortSignal.timeout(10000) })
+  if (!r.ok) return null
+  const u = await r.json().catch(() => null)
+  return typeof u?.id === 'string' ? { id: u.id, email: typeof u.email === 'string' ? u.email : null } : null
+}
+
+export function criarHandler({ fetcher = fetch, env = process.env, validarSessao = usuarioLogado, sessaoCompleta = (b, a, t) => dadosDaSessao(b, a, t, fetcher) } = {}) {
   return async function handler(req, res) {
     res.setHeader('Cache-Control', 'no-store')
     const acao = String(req.query?.acao ?? '')
@@ -37,10 +48,30 @@ export function criarHandler({ fetcher = fetch, env = process.env, validarSessao
       // A sessão confirmada fica 5 minutos em memória: a busca não espera o Supabase a cada página.
       const sessao = emCache('sessao', token, 5 * 60_000, () => validarSessao(base, anon, token), 2000)
 
+      const ehMaster = async () => {
+        const r = await fetcher(`${base}/rest/v1/rpc/is_platform_admin`, { method: 'POST', headers: { apikey: anon, Authorization: token, 'Content-Type': 'application/json' }, body: '{}' })
+        return (await r.json().catch(() => false)) === true
+      }
+
+      if (acao === 'turso-logs-registrar') {
+        if (req.method !== 'POST') return res.status(405).json({ error: 'Método não permitido' })
+        if (!turso) return res.status(202).json({ gravados: 0 })
+        const quem = await emCache('sessao-email', token, 5 * 60_000, () => sessaoCompleta(base, anon, token), 2000)
+        if (!quem) return res.status(401).json({ error: 'Entre na sua conta' })
+        if (excedeuLimite('turso-logs', quem.id, 30)) return res.status(429).json({ error: 'Muitos registros em pouco tempo.' })
+        const corpo = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : req.body ?? {}
+        const gravados = await registrarLogs(turso, { usuario: quem.id, email: quem.email, org: corpo.org, navegador: req.headers['user-agent'] }, corpo.eventos)
+        return res.status(200).json({ gravados })
+      }
+      if (acao === 'turso-logs') {
+        if (!(await sessao)) return res.status(401).json({ error: 'Entre na sua conta' })
+        if (!(await ehMaster())) return res.status(403).json({ error: 'Acesso restrito ao master' })
+        if (!turso) return res.status(200).json({ configurado: false })
+        return res.status(200).json({ configurado: true, ...(await consultarLogs(turso, req.query ?? {})) })
+      }
       if (acao === 'turso-situacao') {
         if (!(await sessao)) return res.status(401).json({ error: 'Entre na sua conta' })
-        const r = await fetcher(`${base}/rest/v1/rpc/is_platform_admin`, { method: 'POST', headers: { apikey: anon, Authorization: token, 'Content-Type': 'application/json' }, body: '{}' })
-        if ((await r.json().catch(() => false)) !== true) return res.status(403).json({ error: 'Acesso restrito ao master' })
+        if (!(await ehMaster())) return res.status(403).json({ error: 'Acesso restrito ao master' })
         const coletaAgendada = env.SUPABASE_SERVICE_ROLE_KEY ? (await rpcServico(fetcher, base, env.SUPABASE_SERVICE_ROLE_KEY, 'turso_coleta_ativa', {}).catch(() => false)) === true : false
         if (!turso) return res.status(200).json({ configurado: false, coletaAgendada })
         return res.status(200).json({ configurado: true, coletaAgendada, ...(await situacaoTurso(turso)) })

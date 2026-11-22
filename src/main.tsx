@@ -7,6 +7,10 @@ import { AuthProvider } from './providers/AuthProvider'
 import { InstalacaoProvider } from './providers/InstalacaoProvider'
 import './index.css'
 import { tocarPing } from './lib/ping'
+import { iniciarRegistroUso } from './lib/registroUso'
+
+// Registro de uso, erros e lentidão por usuário (master → Logs → Uso dos clientes).
+iniciarRegistroUso()
 
 const queryClient = new QueryClient({
   defaultOptions: {
