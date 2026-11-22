@@ -1,6 +1,6 @@
 import type React from 'react'
-import { forwardRef, type ButtonHTMLAttributes, type HTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes } from 'react'
-import { Loader2 } from 'lucide-react'
+import { forwardRef, useId, useState, type ButtonHTMLAttributes, type HTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes } from 'react'
+import { Eye, EyeOff, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 type Variante = 'primario' | 'secundario' | 'fantasma' | 'perigo' | 'contorno'
@@ -61,6 +61,37 @@ export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputE
   />
 ))
 Input.displayName = 'Input'
+
+/** Campo de senha com botão para mostrar ou esconder o que foi digitado. */
+export const InputSenha = forwardRef<HTMLInputElement, Omit<InputHTMLAttributes<HTMLInputElement>, 'type'> & { classeBotao?: string }>(({ className, classeBotao, ...props }, ref) => {
+  const [ver, setVer] = useState(false)
+  return (
+    <div className="relative">
+      <input
+        ref={ref}
+        type={ver ? 'text' : 'password'}
+        className={cn(
+          'flex h-10 w-full rounded-xl border border-input bg-card py-2 pl-3 pr-11 text-sm',
+          'placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+          'disabled:cursor-not-allowed disabled:opacity-50',
+          className,
+        )}
+        {...props}
+      />
+      <button
+        type="button"
+        onClick={() => setVer(v => !v)}
+        aria-label={ver ? 'Esconder senha' : 'Mostrar senha'}
+        aria-pressed={ver}
+        title={ver ? 'Esconder senha' : 'Mostrar senha'}
+        className={cn('absolute inset-y-0 right-0 flex w-11 items-center justify-center rounded-r-xl text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring', classeBotao)}
+      >
+        {ver ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+      </button>
+    </div>
+  )
+})
+InputSenha.displayName = 'InputSenha'
 
 export const Select = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSelectElement>>(({ className, ...props }, ref) => (
   <select
@@ -206,10 +237,35 @@ export function Modal({ aberto, aoFechar, titulo, children, largo }: { aberto: b
   )
 }
 
+/** Ícone do LicitaFlow animado: o gráfico se desenha ao aparecer e, de tempos em tempos, uma luz percorre a
+ * linha e o ponto pulsa (estilos .lf-icone em index.css; parado para quem pede menos movimento). */
+export function IconeAnimado({ className }: { className?: string }) {
+  const id = useId().replace(/:/g, '')
+  return (
+    <svg viewBox="0 0 512 512" aria-hidden className={cn('lf-icone', className)}>
+      <defs>
+        <linearGradient id={`f${id}`} x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#3b82f6" /><stop offset="1" stopColor="#1e40af" /></linearGradient>
+        <linearGradient id={`v${id}`} x1="0" y1="1" x2="1" y2="0"><stop offset="0" stopColor="#10b981" /><stop offset="1" stopColor="#6ee7b7" /></linearGradient>
+        <clipPath id={`c${id}`}><rect width="512" height="512" rx="116" /></clipPath>
+      </defs>
+      <g clipPath={`url(#c${id})`}>
+        <rect width="512" height="512" fill={`url(#f${id})`} />
+        <rect width="512" height="256" fill="#fff" opacity=".07" />
+        <polyline className="lf-icone-eixo" pathLength={1} points="144,128 144,384 366,384" />
+        <polyline className="lf-icone-linha" pathLength={1} points="224,290 272,218 320,250 368,172" stroke={`url(#v${id})`} />
+        <polyline className="lf-icone-luz" pathLength={1} points="224,290 272,218 320,250 368,172" />
+        <circle className="lf-icone-onda" cx="368" cy="172" r="26" />
+        <circle className="lf-icone-ponto" cx="368" cy="172" r="32" />
+        <rect className="lf-icone-brilho" x="0" y="-60" width="110" height="640" fill="#fff" opacity=".22" />
+      </g>
+    </svg>
+  )
+}
+
 export function Logo({ className, claro }: { className?: string; claro?: boolean }) {
   return (
     <div className={cn('flex items-center gap-2 font-semibold tracking-tight', className)}>
-      <img src="/favicon.svg" alt="" className="h-7 w-7" />
+      <IconeAnimado className="h-7 w-7" />
       <span className={cn('text-lg', claro && 'text-white')}>
         Licita<span className="text-accent">Flow</span>
       </span>

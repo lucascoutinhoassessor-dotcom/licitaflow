@@ -9,21 +9,38 @@ interface InstallEvent extends Event {
 import { CtxInstalacao } from '@/hooks/useInstalacao'
 
 const ehIOS = () => /iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+/** Celular ou tablet. No computador o botão de instalar não aparece. */
+const ehMovel = () => (navigator as Navigator & { userAgentData?: { mobile?: boolean } }).userAgentData?.mobile === true
+  || /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || ehIOS()
+/** Pedido de instalação guardado por public/pwa.js antes do React carregar (o Chrome pode disparar cedo). */
+const pedidoAntecipado = () => ((window as Window & { __lfInstalar?: InstallEvent | null }).__lfInstalar ?? null)
+/** Android/Chrome: confere se o app deste endereço já está instalado (related_applications nos manifestos). */
+async function appJaInstalado() {
+  const nav = navigator as Navigator & { getInstalledRelatedApps?: () => Promise<{ platform: string }[]> }
+  if (!nav.getInstalledRelatedApps) return false
+  try { return (await nav.getInstalledRelatedApps()).some(a => a.platform === 'webapp') } catch { return false }
+}
 const emAplicativo = () => window.matchMedia('(display-mode: standalone)').matches || (navigator as Navigator & { standalone?: boolean }).standalone === true
 
 export function InstalacaoProvider({ children }: { children: ReactNode }) {
   const [standalone, setStandalone] = useState(emAplicativo)
   const [instaladoNestaVisita, setInstaladoNestaVisita] = useState(false)
-  const [mobile, setMobile] = useState(false)
+  const [mobile, setMobile] = useState(ehMovel)
+  const [jaInstalado, setJaInstalado] = useState(false)
+  // O Chrome só oferece a instalação (beforeinstallprompt) quando o app NÃO está instalado neste aparelho.
+  const [disponivel, setDisponivel] = useState(() => !!pedidoAntecipado())
   const [descartado, setDescartado] = useState(false)
   const [ajuda, setAjuda] = useState(false)
   const [instalando, setInstalando] = useState(false)
-  const evento = useRef<InstallEvent | null>(null)
+  const evento = useRef<InstallEvent | null>(pedidoAntecipado())
   const emAndamento = useRef(false)
   const aviso = useRef<HTMLElement | null>(null)
   const [ios] = useState(ehIOS)
   const [master, setMaster] = useState(false)
-  const ocultar = standalone || instaladoNestaVisita
+  // Some no computador, dentro do app e quando o app já está instalado. No Android só aparece quando o navegador
+  // pode instalar na hora (o botão abre a instalação direto). No iPhone/iPad não há como saber se já foi instalado
+  // nem instalar por botão: aparece com o passo a passo do Safari.
+  const ocultar = standalone || instaladoNestaVisita || !mobile || jaInstalado || (!ios && !disponivel)
   const mostrarAviso = mobile && !ocultar && !descartado
 
   useEffect(() => {
@@ -39,11 +56,14 @@ export function InstalacaoProvider({ children }: { children: ReactNode }) {
     const media = window.matchMedia('(display-mode: standalone)')
     const atualizar = () => {
       setStandalone(emAplicativo())
-      setMobile(navigator.maxTouchPoints > 0 || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent))
+      setMobile(ehMovel())
+      void appJaInstalado().then(setJaInstalado)
     }
     const receber = (e: Event) => {
       e.preventDefault()
       evento.current = e as InstallEvent
+      setDisponivel(true)
+      setJaInstalado(false)
       // Elegibilidade nova permite oferecer novamente, inclusive após uma desinstalação.
       setInstaladoNestaVisita(false)
       setDescartado(false)
@@ -51,6 +71,7 @@ export function InstalacaoProvider({ children }: { children: ReactNode }) {
     }
     const concluir = () => {
       evento.current = null
+      setDisponivel(false)
       setInstaladoNestaVisita(true)
       setAjuda(false)
     }
@@ -78,6 +99,8 @@ export function InstalacaoProvider({ children }: { children: ReactNode }) {
     emAndamento.current = true
     setInstalando(true)
     evento.current = null
+    ;(window as Window & { __lfInstalar?: InstallEvent | null }).__lfInstalar = null
+    setDisponivel(false)
     try {
       await disponivel.prompt()
       const resposta = await disponivel.userChoice
@@ -92,7 +115,7 @@ export function InstalacaoProvider({ children }: { children: ReactNode }) {
     {mostrarAviso && <section ref={aviso} aria-label="Instalação do LicitaFlow" className="fixed inset-x-3 bottom-[calc(var(--barra-inferior,0px)+max(.75rem,env(safe-area-inset-bottom)))] z-30 mx-auto max-w-lg rounded-xl border border-slate-600 bg-slate-900 p-4 text-white shadow-2xl">
       <div className="flex items-start gap-3">
         <img src="/icons/icone-192.png" alt="" className="h-10 w-10 shrink-0 rounded-lg"/>
-        <div className="min-w-0 flex-1"><h2 className="text-sm font-semibold">Use o LicitaFlow como aplicativo</h2><p className="mt-1 text-xs leading-relaxed text-slate-300">Abra pelo ícone da tela inicial. Se ainda não estiver instalado, instale para usar sem a barra de endereço.</p></div>
+        <div className="min-w-0 flex-1"><h2 className="text-sm font-semibold">Use o LicitaFlow como aplicativo</h2><p className="mt-1 text-xs leading-relaxed text-slate-300">Instale e abra pelo ícone da tela inicial, sem a barra de endereço do navegador.</p></div>
         <button aria-label="Fechar aviso de instalação" onClick={() => { setDescartado(true); setAjuda(false) }} className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"><X className="h-5 w-5"/></button>
       </div>
       <button onClick={instalar} disabled={instalando} className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-medium hover:bg-blue-500 disabled:opacity-50"><Download className="h-4 w-4"/>{instalando ? 'Aguarde…' : 'Instalar aplicativo'}</button>

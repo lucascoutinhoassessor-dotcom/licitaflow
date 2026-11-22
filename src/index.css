@@ -171,3 +171,24 @@
 @media (max-width: 1023px) {
   html:has([data-barra-inferior]) { --barra-inferior: 4rem; }
 }
+
+/* Ícone animado do LicitaFlow (IconeAnimado em components/ui): o gráfico se desenha ao aparecer e, a cada
+   6 s, uma luz percorre a linha, o ponto solta uma onda e um brilho cruza o ícone. */
+.lf-icone { overflow: visible; }
+.lf-icone polyline { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.lf-icone-eixo { stroke: #fff; stroke-width: 48; stroke-dasharray: 1; stroke-dashoffset: 1; animation: lf-icone-traco .5s .1s ease-out forwards; }
+.lf-icone-linha { stroke-width: 44; stroke-dasharray: 1; stroke-dashoffset: 1; animation: lf-icone-traco .5s .5s ease-out forwards; }
+.lf-icone-ponto { fill: #6ee7b7; transform-origin: 368px 172px; transform: scale(0); animation: lf-icone-ponto .35s .95s cubic-bezier(.34,1.56,.64,1) forwards; }
+.lf-icone-luz { stroke: #fff; stroke-width: 24; stroke-dasharray: .2 1.2; stroke-dashoffset: .2; opacity: 0; animation: lf-icone-luz 6s 1.4s ease-in-out infinite; }
+.lf-icone-onda { fill: none; stroke: #6ee7b7; stroke-width: 10; transform-origin: 368px 172px; opacity: 0; animation: lf-icone-onda 6s 1.9s ease-out infinite; }
+.lf-icone-brilho { transform: translateX(-520px) skewX(-20deg); animation: lf-icone-brilho 6s 1.6s ease-in-out infinite; }
+@keyframes lf-icone-traco { to { stroke-dashoffset: 0; } }
+@keyframes lf-icone-ponto { to { transform: scale(1); } }
+@keyframes lf-icone-luz { 0% { opacity: 1; stroke-dashoffset: .2; } 11% { opacity: 1; } 13% { opacity: 0; stroke-dashoffset: -1; } 100% { opacity: 0; stroke-dashoffset: -1; } }
+@keyframes lf-icone-onda { 0% { opacity: .9; transform: scale(.6); } 22% { opacity: 0; transform: scale(2.6); } 100% { opacity: 0; transform: scale(2.6); } }
+@keyframes lf-icone-brilho { 0% { transform: translateX(-520px) skewX(-20deg); } 15% { transform: translateX(620px) skewX(-20deg); } 100% { transform: translateX(620px) skewX(-20deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .lf-icone-eixo, .lf-icone-linha { animation: none; stroke-dashoffset: 0; }
+  .lf-icone-ponto { animation: none; transform: none; }
+  .lf-icone-luz, .lf-icone-onda, .lf-icone-brilho { animation: none; opacity: 0; }
+}

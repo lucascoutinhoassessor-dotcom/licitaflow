@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase, mensagemErro } from '@/lib/supabase'
-import { Aviso, Button, Campo, Input } from '@/components/ui'
+import { Aviso, Button, Campo, Input, InputSenha } from '@/components/ui'
 import { AuthShell } from './AuthShell'
 import { masterSeparado } from '@/lib/pwa'
 
@@ -51,7 +51,7 @@ export default function Entrar() {
           <Input id="email" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
         </Campo>
         <Campo rotulo="Senha" htmlFor="senha">
-          <Input id="senha" type="password" autoComplete="current-password" required value={senha} onChange={(e) => setSenha(e.target.value)} />
+          <InputSenha id="senha" autoComplete="current-password" required value={senha} onChange={(e) => setSenha(e.target.value)} />
         </Campo>
         <div className="flex justify-end">
           <Link to="/recuperar-senha" className="text-sm text-primary hover:underline">

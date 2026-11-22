@@ -19,6 +19,10 @@
   var instalado = navigator.standalone === true || ['standalone', 'fullscreen', 'minimal-ui', 'window-controls-overlay']
     .some(function (m) { return window.matchMedia && window.matchMedia('(display-mode: ' + m + ')').matches; });
   if (instalado) document.documentElement.classList.add('lf-instalado');
+  // O Chrome avisa que dá para instalar (só acontece quando o app ainda não está instalado). Guardamos o pedido
+  // desde já para o botão "Instalar app" aparecer na hora e abrir a instalação direto (InstalacaoProvider).
+  window.addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); window.__lfInstalar = e; });
+  window.addEventListener('appinstalled', function () { window.__lfInstalar = null; });
   var head = document.head;
   function link(rel, href) {
     var el = document.createElement('link');

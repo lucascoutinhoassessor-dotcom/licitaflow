@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { MailCheck } from 'lucide-react'
 import { supabase, mensagemErro } from '@/lib/supabase'
-import { Aviso, Button, Campo, Input } from '@/components/ui'
+import { Aviso, Button, Campo, Input, InputSenha } from '@/components/ui'
 import { AuthShell } from './AuthShell'
 import { useDiasTeste } from '@/hooks/useDiasTeste'
 
@@ -77,7 +77,7 @@ export default function Cadastro() {
           <Input id="email" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
         </Campo>
         <Campo rotulo="Senha" htmlFor="senha" ajuda="Mínimo de 8 caracteres.">
-          <Input id="senha" type="password" autoComplete="new-password" required minLength={8} value={senha} onChange={(e) => setSenha(e.target.value)} />
+          <InputSenha id="senha" autoComplete="new-password" required minLength={8} value={senha} onChange={(e) => setSenha(e.target.value)} />
         </Campo>
         <Button type="submit" className="w-full" carregando={enviando}>
           Criar conta

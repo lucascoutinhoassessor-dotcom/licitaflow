@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { supabase, mensagemErro } from '@/lib/supabase'
 import { useAuth } from '@/providers/AuthProvider'
-import { Aviso, Button, Campo, Carregando, Input } from '@/components/ui'
+import { Aviso, Button, Campo, Carregando, Input, InputSenha } from '@/components/ui'
 import { AuthShell } from './AuthShell'
 
 export default function RedefinirSenha() {
@@ -43,10 +43,10 @@ export default function RedefinirSenha() {
       <form onSubmit={enviar} className="space-y-4">
         {erro && <Aviso>{erro}</Aviso>}
         <Campo rotulo="Nova senha" htmlFor="senha" ajuda="Mínimo de 8 caracteres.">
-          <Input id="senha" type="password" autoComplete="new-password" required value={senha} onChange={(e) => setSenha(e.target.value)} />
+          <InputSenha id="senha" autoComplete="new-password" required value={senha} onChange={(e) => setSenha(e.target.value)} />
         </Campo>
         <Campo rotulo="Confirmar nova senha" htmlFor="confirma">
-          <Input id="confirma" type="password" autoComplete="new-password" required value={confirma} onChange={(e) => setConfirma(e.target.value)} />
+          <InputSenha id="confirma" autoComplete="new-password" required value={confirma} onChange={(e) => setConfirma(e.target.value)} />
         </Campo>
         <Button type="submit" className="w-full" carregando={enviando}>
           Salvar nova senha

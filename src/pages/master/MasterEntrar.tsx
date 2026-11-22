@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ShieldCheck } from 'lucide-react'
 import { supabase, mensagemErro } from '@/lib/supabase'
+import { InputSenha } from '@/components/ui'
 
 /** Login exclusivo do console master. Só administradores da plataforma passam daqui. */
 export default function MasterEntrar() {
@@ -63,14 +64,14 @@ export default function MasterEntrar() {
           </div>
           <div className="space-y-1.5">
             <label htmlFor="m-senha" className="text-sm font-medium text-zinc-300">Senha</label>
-            <input
+            <InputSenha
               id="m-senha"
-              type="password"
               autoComplete="current-password"
               required
               value={senha}
               onChange={(e) => setSenha(e.target.value)}
-              className="h-10 w-full rounded-md border border-zinc-700 bg-zinc-950 px-3 text-sm outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
+              className="rounded-md border-zinc-700 bg-zinc-950 text-zinc-100 focus-visible:ring-1 focus-visible:ring-amber-500 focus:border-amber-500"
+              classeBotao="rounded-r-md text-zinc-400 hover:text-zinc-100 focus-visible:ring-amber-500"
             />
           </div>
           <button
