@@ -2,11 +2,14 @@ import { Copy } from 'lucide-react'
 import { toast } from 'sonner'
 import { codigoComprasnet } from '@/lib/portais'
 import type { CompraPNCP } from '@/lib/pncp'
+import { useRecursos } from '@/hooks/useModulos'
 
 /** UASG e número da compra no ComprasNet, com cópia em um toque (o cliente cola no portal ao cadastrar a proposta). */
 export default function CodigoComprasnet({ compra, className = '' }: { compra: CompraPNCP; className?: string }) {
   const codigo = codigoComprasnet(compra)
-  if (!codigo) return null
+  // Controlado pelo master em Funcionalidades (recurso-codigo-comprasnet).
+  const liberado = useRecursos().estado('recurso-codigo-comprasnet') === 'liberado'
+  if (!codigo || !liberado) return null
   const copiar = async (rotulo: string, valor: string) => {
     try { await navigator.clipboard.writeText(valor); toast.success(`${rotulo} ${valor} copiado.`) } catch { toast.error('Não foi possível copiar.') }
   }

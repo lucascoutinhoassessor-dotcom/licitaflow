@@ -13,21 +13,29 @@ export interface CompraDeserta extends CompraPNCP {
 }
 export interface FiltrosDesertas {
  busca:string;uf:string
+ /** Portal de origem (id de portais.ts); '' = todos. */
+ portal:string
  /** Sessões dos últimos N dias (1 a 30). */
  dias:number
  /** '' = desertos e fracassados. */
  tipo:''|'4'|'5'
  inverter:boolean
 }
-export const FILTROS_DESERTAS:FiltrosDesertas={busca:'',uf:'',dias:30,tipo:'',inverter:false}
+export const FILTROS_DESERTAS:FiltrosDesertas={busca:'',uf:'',portal:'',dias:30,tipo:'',inverter:false}
 export const PERIODOS_DESERTAS=[[7,'7 dias'],[15,'15 dias'],[30,'30 dias']] as const
 export interface ResultadoDesertas {data:CompraDeserta[];totalRegistros:number;totalPaginas:number;catalogo:StatusCatalogo|null}
 
+/** Modalidades pesquisadas nas desertas (pregão, concorrência, dispensa etc.). */
+export const MODALIDADES_DESERTAS=['2','4','5','6','7','8']
+
 export function nomeSituacao(s:SituacaoDeserta){return s===4?'Deserto':'Fracassado'}
 
-export async function pesquisarDesertas(f:FiltrosDesertas,pagina:number,signal?:AbortSignal):Promise<ResultadoDesertas>{
+export async function pesquisarDesertas(f:FiltrosDesertas,pagina:number,signal?:AbortSignal,liberadas?:string[]):Promise<ResultadoDesertas>{
  if(f.busca.length>300)throw new Error('Use no máximo 300 caracteres nos termos da pesquisa.')
- const pedido=supabase.rpc('buscar_desertas',{p_filtros:f,p_pagina:pagina,p_tamanho:20})
+ // Só as modalidades que o master liberou para o cliente entram na busca.
+ const modalidades=liberadas?MODALIDADES_DESERTAS.filter(m=>liberadas.includes(m)):MODALIDADES_DESERTAS
+ if(!modalidades.length)throw new Error('Nenhuma modalidade está liberada para a sua conta.')
+ const pedido=supabase.rpc('buscar_desertas',{p_filtros:{...f,modalidades},p_pagina:pagina,p_tamanho:20})
  const {data,error}=await(signal?pedido.abortSignal(signal):pedido)
  if(error){
   if(signal?.aborted)throw signal.reason

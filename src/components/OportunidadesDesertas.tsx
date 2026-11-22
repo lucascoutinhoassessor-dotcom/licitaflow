@@ -6,7 +6,10 @@ import { Badge, Button, Card, Input, Select, Vazio } from '@/components/ui'
 import BotaoInverterOrdem from '@/components/BotaoInverterOrdem'
 import IconePortal from '@/components/IconePortal'
 import CodigoComprasnet from '@/components/CodigoComprasnet'
-import { codigoComprasnet, portalCompra } from '@/lib/portais'
+import { codigoComprasnet, portalCompra, PORTAIS } from '@/lib/portais'
+import { useRecursos } from '@/hooks/useModulos'
+import { modalidadesLiberadas } from '@/lib/filtrosLiberacao'
+import { RecursoLiberado } from '@/components/RecursoLiberado'
 import { linkCompra, rotaOportunidade } from '@/lib/pncp'
 import { formatarData, formatarMoeda } from '@/lib/format'
 import { FILTROS_DESERTAS, nomeSituacao, PERIODOS_DESERTAS, pesquisarDesertas, type CompraDeserta, type FiltrosDesertas } from '@/lib/desertas'
@@ -22,12 +25,17 @@ function lerSalvo():{f:FiltrosDesertas;pagina:number}{
 const UFS='AC AL AP AM BA CE DF ES GO MA MT MS MG PA PB PR PE PI RJ RN RS RO RR SC SP SE TO'.split(' ')
 
 /** Editais com itens desertos ou fracassados nas sessões recentes: chance de oferecer o produto ao órgão. */
-export default function OportunidadesDesertas() {
+export default function OportunidadesDesertas({atalho}:{atalho?:{portal:string;vez:number}}) {
   const [inicial]=useState(lerSalvo)
   const [f,setF]=useState<FiltrosDesertas>(inicial.f),[consulta,setConsulta]=useState<FiltrosDesertas>(inicial.f),[pagina,setPagina]=useState(inicial.pagina)
   useEffect(()=>{try{sessionStorage.setItem(CHAVE,JSON.stringify({f:consulta,pagina}))}catch{/* armazenamento indisponível */}},[consulta,pagina])
-  const q=useQuery({queryKey:['oportunidades-desertas',consulta,pagina],retry:1,staleTime:5*60_000,queryFn:({signal})=>pesquisarDesertas(consulta,pagina,signal)})
+  const {estados,estado}=useRecursos(),porPortal=estado('recurso-sem-vencedor-portal')==='liberado'
+  // Portal só entra na busca quando o master liberou o filtro de portal para o cliente.
+  const efetiva=porPortal?consulta:{...consulta,portal:''},liberadas=modalidadesLiberadas(estados)
+  const q=useQuery({queryKey:['oportunidades-desertas',efetiva,pagina,liberadas],enabled:estados!==null,retry:1,staleTime:5*60_000,queryFn:({signal})=>pesquisarDesertas(efetiva,pagina,signal,liberadas)})
   const aplicar=(novo:FiltrosDesertas)=>{setF(novo);setPagina(1);setConsulta(novo)}
+  // Atalho do menu (ex.: "Sem vencedor no Portal de Compras Públicas"): troca o portal e pesquisa.
+  useEffect(()=>{if(atalho)aplicar({...f,portal:atalho.portal})},[atalho?.vez]) // eslint-disable-line react-hooks/exhaustive-deps
   function pesquisar(e:FormEvent){e.preventDefault();if(JSON.stringify(f)===JSON.stringify(consulta)&&pagina===1)void q.refetch();else aplicar({...f})}
   const lista=q.data?.data??[],total=q.data?.totalRegistros??0,totalPaginas=Math.max(1,q.data?.totalPaginas??1)
   const chip=(ativo:boolean)=>`h-9 rounded-full border px-4 text-sm font-semibold transition-colors ${ativo?'border-primary bg-primary text-primary-foreground':'bg-card text-muted-foreground hover:text-foreground'}`
@@ -35,9 +43,10 @@ export default function OportunidadesDesertas() {
     <Card className="mb-5 p-4">
       <form onSubmit={pesquisar} className="space-y-3">
         <div className="flex flex-col gap-2 sm:flex-row"><div className="relative min-w-0 flex-1"><Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input className="pl-9" aria-label="Pesquisar desertas" placeholder="O que sua empresa vende? Ex.: papel A4; toner" value={f.busca} onChange={e=>setF(x=>({...x,busca:e.target.value}))} maxLength={300} /></div><Button type="submit" carregando={q.isFetching}>Buscar desertas</Button></div>
-        <div className="grid gap-2 sm:grid-cols-2">
+        <div className={`grid gap-2 ${porPortal?'sm:grid-cols-3':'sm:grid-cols-2'}`}>
           <Select aria-label="Situação dos itens" value={f.tipo} onChange={e=>aplicar({...f,tipo:e.target.value as FiltrosDesertas['tipo']})}><option value="">Desertos e fracassados</option><option value="4">Só desertos (ninguém propôs)</option><option value="5">Só fracassados (nenhuma proposta válida)</option></Select>
           <Select aria-label="UF" value={f.uf} onChange={e=>aplicar({...f,uf:e.target.value})}><option value="">Brasil inteiro</option>{UFS.map(u=><option key={u}>{u}</option>)}</Select>
+          <RecursoLiberado id="recurso-sem-vencedor-portal"><Select aria-label="Portal" value={f.portal} onChange={e=>aplicar({...f,portal:e.target.value})}><option value="">Todos os portais</option>{PORTAIS.map(p=><option key={p[0]} value={p[0]}>{p[1]}</option>)}</Select></RecursoLiberado>
         </div>
         <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Sessões realizadas nos últimos">
           <span className="text-sm text-muted-foreground">Sessões nos últimos</span>

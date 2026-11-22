@@ -4,6 +4,7 @@ import { useOrg } from '@/providers/OrgProvider'
 import { GRUPOS_NAV, IA, NAV_CONTA } from '@/lib/navegacao'
 import { estadoDe, filtrarGrupos, filtrarItens } from '@/lib/modulos'
 import { estadoFiltro } from '@/lib/filtrosLiberacao'
+import { estadoRecurso } from '@/lib/recursos'
 
 /** Estados de liberação dos módulos para a organização ativa (definidos pelo master). */
 export function useModulos() {
@@ -28,6 +29,12 @@ export function useModulos() {
 export function useFiltrosLiberados() {
   const { estados } = useModulos()
   return { estados, estado: (id: string) => estadoFiltro(estados, id) }
+}
+
+/** Estado de cada botão/ação (recurso) para a organização ativa, definido pelo master. */
+export function useRecursos() {
+  const { estados } = useModulos()
+  return { estados, estado: (id: string) => estadoRecurso(estados, id) }
 }
 
 /** Navegação do cliente já filtrada pelo que o master liberou. */

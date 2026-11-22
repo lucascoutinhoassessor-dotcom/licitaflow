@@ -14,11 +14,14 @@ import {pesquisarIndice,type ResultadoIndice} from '@/lib/buscaIndice'
 import CategoriasObjeto from '@/components/CategoriasObjeto'
 import FiltrosOportunidades from '@/components/FiltrosOportunidades'
 import OportunidadesDesertas from '@/components/OportunidadesDesertas'
+import LocalizarEdital from '@/components/LocalizarEdital'
+import AtalhosOportunidades, { type AcaoAtalho } from '@/components/AtalhosOportunidades'
+import { RecursoLiberado } from '@/components/RecursoLiberado'
 import { codigoComprasnet, portalCompra, PORTAIS } from '@/lib/portais'
 import IconePortal from '@/components/IconePortal'
 import CodigoComprasnet from '@/components/CodigoComprasnet'
 import { FiltroLiberado } from '@/components/FiltroLiberado'
-import { useFiltrosLiberados } from '@/hooks/useModulos'
+import { useFiltrosLiberados, useRecursos } from '@/hooks/useModulos'
 import { aplicarLiberacao, modalidadesLiberadas } from '@/lib/filtrosLiberacao'
 import { formatarData, formatarMoeda, prazoRelativo } from '@/lib/format'
 import type { Processo } from '@/types/db'
@@ -27,8 +30,10 @@ function dataLocal(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
 }
 const CHAVE_BUSCA='lf-oportunidades-busca',CHAVE_ABA='lf-oportunidades-aba'
-type Aba='abertas'|'desertas'
-function lerAba():Aba{try{return sessionStorage.getItem(CHAVE_ABA)==='desertas'?'desertas':'abertas'}catch{return 'abertas'}}
+type Aba='abertas'|'desertas'|'localizar'
+function lerAba():Aba{try{const a=sessionStorage.getItem(CHAVE_ABA);return a==='desertas'||a==='localizar'?a:'abertas'}catch{return 'abertas'}}
+/** Abas da tela e o recurso (liberado pelo master) que cada uma exige. */
+const ABAS:[Aba,string,`recurso-${string}`|null][]=[['abertas','Editais abertos',null],['desertas','Itens sem vencedor','recurso-sem-vencedor'],['localizar','Localizar edital','recurso-localizar-edital']]
 function lerBuscaSalva():{f:Partial<Filtros>;consulta:Partial<Filtros>|null;pagina:number}|null {
   try{
     const s=JSON.parse(sessionStorage.getItem(CHAVE_BUSCA)??'null')
@@ -60,7 +65,12 @@ export default function Oportunidades() {
   const [f,setF]=useState<Filtros>(inicial.f)
   const [consulta,setConsulta]=useState<Filtros|null>(inicial.consulta),[avancados,setAvancados]=useState(false)
   const [pagina,setPagina]=useState(inicial.pagina)
-  const [aba,setAba]=useState<Aba>(lerAba)
+  const [abaEscolhida,setAba]=useState<Aba>(lerAba),[atalho,setAtalho]=useState<{portal:string;vez:number}>()
+  const recursos=useRecursos()
+  const abas=ABAS.filter(([,,r])=>!r||recursos.estado(r)==='liberado')
+  // Aba que o master deixou de liberar volta para os editais abertos.
+  const aba:Aba=abas.some(([id])=>id===abaEscolhida)?abaEscolhida:'abertas'
+  function usarAtalho(a:AcaoAtalho){if(a.tipo==='localizar'){setAba('localizar');return}setAba('desertas');setAtalho(x=>({portal:a.portal,vez:(x?.vez??0)+1}))}
   useEffect(()=>{try{sessionStorage.setItem(CHAVE_ABA,aba)}catch{/* armazenamento indisponível */}},[aba])
   useEffect(()=>{try{sessionStorage.setItem(CHAVE_BUSCA,JSON.stringify({f,consulta,pagina}))}catch{/* armazenamento indisponível */}},[f,consulta,pagina])
   const navigate=useNavigate()
@@ -103,12 +113,12 @@ export default function Oportunidades() {
     try{const p=await salvar.mutateAsync({dados:dadosProcesso(c,empresaId)});toast.success('Oportunidade importada.');navigate(`/app/processos/${p.id}`)}catch{/* useSalvar apresenta o erro */}
   }
   return <>
-    <CabecalhoPagina titulo="Oportunidades" descricao="Encontre editais e consulte seus itens." />
-    <div role="tablist" aria-label="Tipo de oportunidade" className="mb-4 inline-flex rounded-full border bg-card p-1">
-      {([['abertas','Editais abertos'],['desertas','Desertas e fracassadas']] as const).map(([id,rotulo])=><button key={id} type="button" role="tab" aria-selected={aba===id} onClick={()=>setAba(id)}
+    <CabecalhoPagina titulo="Oportunidades" descricao="Encontre editais e consulte seus itens." acoes={<AtalhosOportunidades aoEscolher={usarAtalho} />} />
+    {abas.length>1&&<div role="tablist" aria-label="Tipo de oportunidade" className="mb-4 inline-flex max-w-full overflow-x-auto rounded-full border bg-card p-1">
+      {abas.map(([id,rotulo])=><button key={id} type="button" role="tab" aria-selected={aba===id} onClick={()=>{setAba(id);setAtalho(undefined)}}
         className={`h-9 rounded-full px-4 text-sm font-semibold transition-colors ${aba===id?'bg-primary text-primary-foreground':'text-muted-foreground hover:text-foreground'}`}>{rotulo}</button>)}
-    </div>
-    {aba==='desertas'?<OportunidadesDesertas />:<>
+    </div>}
+    {aba==='desertas'?<OportunidadesDesertas atalho={atalho} />:aba==='localizar'?<LocalizarEdital />:<>
     <Card className="mb-5 p-4">
       <form onSubmit={pesquisar} className="space-y-3">
         <div className="flex flex-col gap-2 sm:flex-row"><div className="relative min-w-0 flex-1"><Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input className="pl-9" aria-label="Pesquisar oportunidades" placeholder="O que sua empresa vende? Ex.: notebook; computador" value={f.busca} onChange={set('busca')} maxLength={300} /></div><Button type="submit" carregando={q.isFetching}>Buscar oportunidades</Button></div>
@@ -146,7 +156,7 @@ export default function Oportunidades() {
           <div className="mt-2.5 flex flex-wrap items-center gap-2"><Badge cor="verde">{c.modalidadeNome}</Badge>{c.srp===true&&<Badge cor="azul">Registro de preço</Badge>}{nomeModoDisputa(c.modoDisputaId)&&<Badge>{nomeModoDisputa(c.modoDisputaId)}</Badge>}{c.materialOuServico&&<Badge title={c.tipoEstimado?'Deduzido pelo objeto do edital; confirme nos itens.':undefined}>{c.materialOuServico==='M'?'Material':c.materialOuServico==='S'?'Serviço':'Material e serviço'}{c.tipoEstimado?' (estimado)':''}</Badge>}<Badge>{c.valorTotalEstimado?formatarMoeda(c.valorTotalEstimado):'Valor não divulgado'}</Badge></div>
           <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm"><span className="flex items-center gap-1.5 font-semibold"><CalendarClock className="h-4 w-4 text-muted-foreground" />Propostas até {formatarData(c.dataEncerramentoProposta)}</span>{prazoRelativo(c.dataEncerramentoProposta)&&<span className="text-xs text-muted-foreground">{prazoRelativo(c.dataEncerramentoProposta)}</span>}</div>
           <div className="mt-2 flex flex-wrap gap-2"><Badge className="gap-1.5"><IconePortal id={portalCompra(c)[0]} nome={portalCompra(c)[1]} />{portalCompra(c)[1]}</Badge><Badge>{c.unidadeOrgao.municipioNome}/{c.unidadeOrgao.ufSigla}</Badge><CodigoComprasnet compra={c} /></div>
-          <div className="mt-3 flex flex-wrap items-center gap-3"><Link to={`${rotaOportunidade(c)}#itens`} state={{compra:c}} className="inline-flex h-8 items-center gap-2 rounded-full border border-input bg-card px-3.5 text-sm font-semibold hover:bg-muted"><Package className="h-4 w-4" />Ver itens</Link>{existente?<Link className="text-sm text-primary hover:underline" to={`/app/processos/${existente.id}`}>Abrir processo</Link>:podeEditar&&<Button tamanho="sm" disabled={processos.isLoading||processos.isError||salvar.isPending} onClick={()=>importar(c)}>Adicionar aos processos</Button>}</div>
+          <div className="mt-3 flex flex-wrap items-center gap-3"><Link to={`${rotaOportunidade(c)}#itens`} state={{compra:c}} className="inline-flex h-8 items-center gap-2 rounded-full border border-input bg-card px-3.5 text-sm font-semibold hover:bg-muted"><Package className="h-4 w-4" />Ver itens</Link>{existente?<Link className="text-sm text-primary hover:underline" to={`/app/processos/${existente.id}`}>Abrir processo</Link>:podeEditar&&<RecursoLiberado id="recurso-importar-oportunidade"><Button tamanho="sm" disabled={processos.isLoading||processos.isError||salvar.isPending} onClick={()=>importar(c)}>Adicionar aos processos</Button></RecursoLiberado>}</div>
         </Card>
       })}</div>}
       {processos.isError&&<p role="alert" className="mt-3 text-sm text-destructive">Não foi possível verificar os processos já importados. <button className="underline" onClick={()=>processos.refetch()}>Tentar novamente</button></p>}

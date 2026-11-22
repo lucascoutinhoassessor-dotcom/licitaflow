@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Eye, EyeOff, FlaskConical, Gavel, Hourglass, SlidersHorizontal } from 'lucide-react'
+import { Eye, EyeOff, FlaskConical, Gavel, Hourglass, MousePointerClick, SlidersHorizontal } from 'lucide-react'
 import { supabase, mensagemErro } from '@/lib/supabase'
 import { CATALOGO_MODULOS, type EstadoModulo, type ModuloCatalogo } from '@/lib/modulos'
 import { CATALOGO_FILTROS, CATALOGO_MODALIDADES } from '@/lib/filtrosLiberacao'
+import { CATALOGO_RECURSOS } from '@/lib/recursos'
 import { cn } from '@/lib/utils'
 import { Aviso, Badge, Button, CabecalhoPagina, Card, Carregando, Input, Modal } from '@/components/ui'
 
@@ -16,9 +17,10 @@ const ESTADOS: { id: EstadoModulo; rotulo: string; ajuda: string; icone: typeof 
   { id: 'oculto', rotulo: 'Oculto', ajuda: 'Ninguém vê no menu', icone: EyeOff, cor: 'border-zinc-500/60 bg-zinc-500/10 text-zinc-600 dark:text-zinc-300' },
 ]
 
-/** Módulos do menu e, em seguida, cada filtro da tela Oportunidades. */
+/** Módulos do menu, botões de cada tela, filtros da tela Oportunidades e modalidades. */
 const ITENS: ModuloCatalogo[] = [
   ...CATALOGO_MODULOS,
+  ...CATALOGO_RECURSOS.map((r) => ({ id: r.id, rotulo: r.rotulo, descricao: r.descricao, grupo: `Botões · ${r.tela}`, icone: MousePointerClick })),
   ...CATALOGO_FILTROS.map((f) => ({ id: f.id, rotulo: f.rotulo, descricao: f.descricao, grupo: 'Filtros de Oportunidades', icone: SlidersHorizontal })),
   ...CATALOGO_MODALIDADES.map((m) => ({ id: m.id, rotulo: m.rotulo, descricao: 'Editais desta modalidade em Oportunidades. "Em teste" libera só para os clientes escolhidos (pacotes).', grupo: 'Modalidades de licitação', icone: Gavel })),
 ]
@@ -62,7 +64,7 @@ export default function Modulos() {
   const orgsFiltradas = (orgs.data ?? []).filter((o) => !busca.trim() || `${o.nome} ${o.dono_email ?? ''}`.toLowerCase().includes(busca.trim().toLowerCase()))
 
   return <>
-    <CabecalhoPagina titulo="Funcionalidades" descricao="Escolha o que cada cliente vê no LicitaFlow. Libere um módulo ou um filtro para todos quando estiver pronto, ou teste antes com organizações escolhidas (inclusive a sua)." />
+    <CabecalhoPagina titulo="Funcionalidades" descricao="Escolha o que cada cliente vê no LicitaFlow. Libere um módulo, um botão ou um filtro para todos quando estiver pronto, ou teste antes com organizações escolhidas (inclusive a sua)." />
     {q.isLoading && <Carregando />}
     {q.isError && <Aviso>{mensagemErro(q.error)} — aplique a migração de funcionalidades.</Aviso>}
     {q.data && <>
@@ -93,7 +95,7 @@ export default function Modulos() {
           </div>
         })}</Card>
       </section>)}</div>
-      <p className="mt-6 text-xs text-muted-foreground">Módulos novos chegam ocultos: só aparecem para os clientes quando você liberar aqui. Painel, empresas, equipe, plano, cobranças, avisos, suporte e configurações ficam sempre disponíveis. Ocultar um módulo esconde o menu e bloqueia a abertura pelo endereço; os dados do cliente não são apagados. Filtro oculto some da busca e não é aplicado; em breve aparece desativado. Modalidade oculta some da escolha e os editais dela não aparecem para o cliente.</p>
+      <p className="mt-6 text-xs text-muted-foreground">Módulos novos chegam ocultos: só aparecem para os clientes quando você liberar aqui. Painel, empresas, equipe, plano, cobranças, avisos, suporte e configurações ficam sempre disponíveis. Ocultar um módulo esconde o menu e bloqueia a abertura pelo endereço; os dados do cliente não são apagados. Botão oculto some da tela (em breve aparece desativado). Filtro oculto some da busca e não é aplicado; em breve aparece desativado. Modalidade oculta some da escolha e os editais dela não aparecem para o cliente.</p>
     </>}
 
     <Modal aberto={!!teste} aoFechar={() => { if (!ocupado) setTeste(null) }} titulo={`Testar "${teste?.modulo.rotulo ?? ''}" com quem?`}>
