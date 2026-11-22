@@ -80,7 +80,7 @@ describe('coleta e busca no Turso', () => {
       if (url.includes('/itens?')) return new Response('[]')
       return new Response(null, { status: 204 })
     })
-    const feitos = await coletarRodada(turso as never, { fetcher: fetcher as never, prazo: Date.now() + 40_000 })
+    const feitos = await coletarRodada(turso as never, { fetcher: fetcher as never, prazo: Date.now() + 40_000, maxConsultas: 60, intervaloMs: 0 })
     return { turso, feitos }
   }
 
@@ -121,6 +121,21 @@ describe('coleta e busca no Turso', () => {
     expect((await buscarTurso(turso as never, { portais: ['comprasnet'] })).totalRegistros).toBe(0)
     const pag = await buscarTurso(turso as never, {}, 2, 2)
     expect(pag.data).toHaveLength(1); expect(pag.totalPaginas).toBe(2)
+  })
+})
+
+describe('ritmo do PNCP', () => {
+  it('para no limite de consultas da rodada e pausa quando o PNCP responde 429', async () => {
+    const { pncpComLimite } = await import('./turso.js')
+    const f = pncpComLimite(vi.fn(async () => new Response('[]')) as never, 2, 0)
+    await f('a'); await f('b')
+    await expect(f('c')).rejects.toMatchObject({ fim: true })
+    const turso = tursoLocal()
+    const fetcher = vi.fn(async () => new Response(null, { status: 429 }))
+    const feitos = await coletarRodada(turso as never, { fetcher: fetcher as never, intervaloMs: 0 })
+    expect(feitos).toContainEqual({ etapa: 'carga', pausado: true })
+    expect((await turso.consultar("select valor from coleta_estado where chave = 'pausado_ate'"))[0].valor > new Date().toISOString()).toBe(true)
+    expect(await coletarRodada(turso as never, { fetcher: fetcher as never })).toEqual([expect.objectContaining({ pausado: expect.any(String) })])
   })
 })
 

@@ -164,39 +164,56 @@ async function coletarItens(turso, e, fetcher) {
 }
 
 /**
- * Uma rodada (até ~40 s, as funções da Vercel têm tempo curto):
- * 1. editais atualizados hoje no PNCP (a última página fica aberta para pegar o que entrou depois);
- * 2. carga completa dos editais com proposta aberta, uma vez por dia, continuando de onde parou;
- * 3. itens dos editais que abrem em até 30 dias;
- * 4. limpeza dos encerrados há mais de 2 dias.
+ * Limita e espaça as consultas ao PNCP numa rodada (o PNCP responde 429 quando recebe muitas seguidas).
+ * Passado o limite, a consulta falha com { fim: true } e a rodada encerra a etapa.
  */
-export async function coletarRodada(turso, { prazo = Date.now() + 40_000, fetcher = fetch, hoje = new Date() } = {}) {
+export function pncpComLimite(fetcher, maximo = 20, intervaloMs = 300) {
+  let feitas = 0, ultima = 0
+  const f = async (url, opcoes) => {
+    if (feitas >= maximo) throw Object.assign(new Error('Limite da rodada'), { fim: true })
+    feitas++
+    const espera = ultima + intervaloMs - Date.now()
+    if (espera > 0) await new Promise((r) => setTimeout(r, espera))
+    ultima = Date.now()
+    return fetcher(url, opcoes)
+  }
+  f.restantes = () => maximo - feitas
+  return f
+}
+
+/**
+ * Uma rodada (até ~40 s e no máximo 20 consultas ao PNCP):
+ * 1. carga completa dos editais com proposta aberta, uma vez por dia, continuando de onde parou (é ela que libera a busca);
+ * 2. editais atualizados hoje, 3 modalidades por rodada em rodízio (a última página fica aberta para pegar o que entrou depois);
+ * 3. itens dos editais que abrem em até 30 dias, os mais próximos primeiro;
+ * 4. limpeza dos encerrados há mais de 2 dias.
+ * Uma falha do PNCP numa etapa não derruba as outras; um 429 pausa a coleta por 3 minutos.
+ */
+export async function coletarRodada(turso, { prazo = Date.now() + 40_000, fetcher = fetch, hoje = new Date(), maxConsultas = 20, intervaloMs = 300 } = {}) {
   let estadoLinhas
   try { estadoLinhas = await turso.consultar('select chave, valor from coleta_estado') } catch { estadoLinhas = [] }
   let estado = Object.fromEntries(estadoLinhas.map((l) => [l.chave, l.valor]))
   if (estado.esquema !== VERSAO_ESQUEMA) { await turso.prepararEsquema(); estado = {} }
-  const data = dia(hoje), feitos = [], tempoAte = (fracao) => Date.now() < prazo - (1 - fracao) * 40_000
   if (estado.pausado_ate && estado.pausado_ate > agoraIso()) return [{ pausado: estado.pausado_ate }]
-  try {
-    // 1. Atualizações do dia (até 35% do tempo).
-    for (const m of MODALIDADES) {
-      if (!tempoAte(0.35)) break
-      const chave = `atualizacao-${m}`
-      let [diaVisto, pagina] = String(estado[chave] ?? '').split(':')
-      pagina = diaVisto === data ? Math.max(1, Number(pagina) || 1) : 1
-      const { lista, paginas } = await lerPagina(fetcher, `${PNCP}/contratacoes/atualizacao?dataInicial=${data}&dataFinal=${data}&codigoModalidadeContratacao=${m}&pagina=${pagina}&tamanhoPagina=50`)
-      const gravados = await gravarEditais(turso, lista)
-      const proxima = lista.length === 50 && pagina < paginas ? pagina + 1 : pagina
-      await turso.pipeline([guardar(chave, `${data}:${proxima}`)])
-      feitos.push({ etapa: 'atualizacao', modalidade: m, pagina, editais: lista.length, gravados })
+  const data = dia(hoje), feitos = [], tempoAte = (fracao) => Date.now() < prazo - (1 - fracao) * 40_000
+  const pncp = pncpComLimite(fetcher, maxConsultas, intervaloMs)
+  let pausar = false
+  async function etapa(nome, fn) {
+    if (pausar) return
+    try { await fn() } catch (e) {
+      if (e.pausa) { pausar = true; feitos.push({ etapa: nome, pausado: true }) }
+      else if (!e.fim) feitos.push({ etapa: nome, erro: String(e.message ?? e).slice(0, 120) })
     }
-    // 2. Carga completa diária (até 70% do tempo). Cursor "dia:índice da modalidade:página".
+  }
+
+  // 1. Carga completa diária (até 55% do tempo e metade das consultas). Cursor "dia:índice da modalidade:página".
+  await etapa('carga', async () => {
     let [diaCarga, im, pg] = String(estado.carga ?? '').split(':')
     if (diaCarga !== data && !(estado.carga_completa_em ?? '').startsWith(hoje.toISOString().slice(0, 10))) { diaCarga = data; im = 0; pg = 1 }
     im = Number(im) || 0; pg = Number(pg) || 1
     const limiteData = `${hoje.getUTCFullYear() + 1}1231`
-    while (diaCarga === data && im < MODALIDADES.length && tempoAte(0.7)) {
-      const { lista, paginas } = await lerPagina(fetcher, `${PNCP}/contratacoes/proposta?dataFinal=${limiteData}&codigoModalidadeContratacao=${MODALIDADES[im]}&pagina=${pg}&tamanhoPagina=50`)
+    while (diaCarga === data && im < MODALIDADES.length && tempoAte(0.55) && pncp.restantes() > Math.floor(maxConsultas / 2)) {
+      const { lista, paginas } = await lerPagina(pncp, `${PNCP}/contratacoes/proposta?dataFinal=${limiteData}&codigoModalidadeContratacao=${MODALIDADES[im]}&pagina=${pg}&tamanhoPagina=50`)
       const gravados = await gravarEditais(turso, lista)
       feitos.push({ etapa: 'carga', modalidade: MODALIDADES[im], pagina: pg, de: paginas, gravados })
       if (!lista.length || pg >= paginas) { im++; pg = 1 } else pg++
@@ -204,32 +221,50 @@ export async function coletarRodada(turso, { prazo = Date.now() + 40_000, fetche
       if (im >= MODALIDADES.length) comandos.push(guardar('carga_completa_em', agoraIso()))
       await turso.pipeline(comandos)
     }
-    // 3. Itens dos que abrem em até 30 dias (4 por vez), mais próximos primeiro.
+  })
+  // 2. Atualizações do dia: 3 modalidades por rodada, em rodízio.
+  await etapa('atualizacao', async () => {
+    const vez = Number(estado.atualizacao_vez) || 0
+    for (let k = 0; k < 3 && tempoAte(0.65); k++) {
+      const m = MODALIDADES[(vez + k) % MODALIDADES.length], chave = `atualizacao-${m}`
+      let [diaVisto, pagina] = String(estado[chave] ?? '').split(':')
+      pagina = diaVisto === data ? Math.max(1, Number(pagina) || 1) : 1
+      const { lista, paginas } = await lerPagina(pncp, `${PNCP}/contratacoes/atualizacao?dataInicial=${data}&dataFinal=${data}&codigoModalidadeContratacao=${m}&pagina=${pagina}&tamanhoPagina=50`)
+      const gravados = await gravarEditais(turso, lista)
+      const proxima = lista.length === 50 && pagina < paginas ? pagina + 1 : pagina
+      await turso.pipeline([guardar(chave, `${data}:${proxima}`), guardar('atualizacao_vez', (vez + k + 1) % MODALIDADES.length)])
+      feitos.push({ etapa: 'atualizacao', modalidade: m, pagina, editais: lista.length, gravados })
+    }
+  })
+  // 3. Itens dos que abrem em até 30 dias (2 por vez), com as consultas que sobraram.
+  await etapa('itens', async () => {
     const ate30 = new Date(Date.now() + 30 * 86400_000).toISOString()
-    while (tempoAte(0.92)) {
-      const fila = await turso.consultar('select controle, cnpj, ano, sequencial from editais where itens_completos = 0 and itens_tentativas < 5 and encerramento >= ? and encerramento <= ? order by encerramento limit 8', [agoraIso(), ate30])
+    let total = 0, falhas = 0
+    while (tempoAte(0.9) && pncp.restantes() > 0) {
+      const fila = await turso.consultar('select controle, cnpj, ano, sequencial from editais where itens_completos = 0 and itens_tentativas < 5 and encerramento >= ? and encerramento <= ? order by encerramento limit ?', [agoraIso(), ate30, Math.min(6, pncp.restantes())])
       if (!fila.length) break
-      const resultados = []
-      for (let k = 0; k < fila.length && tempoAte(0.92); k += 4) {
-        resultados.push(...await Promise.all(fila.slice(k, k + 4).map(async (e) => ({ e, ok: await coletarItens(turso, e, fetcher).catch((err) => { if (err.pausa) throw err; return false }) }))))
+      for (let k = 0; k < fila.length && tempoAte(0.9) && pncp.restantes() > 0; k += 2) {
+        const lote = fila.slice(k, k + 2)
+        const res = await Promise.all(lote.map(async (e) => ({ e, ok: await coletarItens(turso, e, pncp).catch((err) => { if (err.pausa || err.fim) throw err; return false }) })))
+        total += res.length
+        const ruins = res.filter((r) => !r.ok)
+        falhas += ruins.length
+        if (ruins.length) await turso.pipeline(ruins.map((r) => ['update editais set itens_tentativas = itens_tentativas + 1 where controle = ?', [r.e.controle]]))
       }
-      const falhas = resultados.filter((r) => !r.ok)
-      if (falhas.length) await turso.pipeline(falhas.map((r) => ['update editais set itens_tentativas = itens_tentativas + 1 where controle = ?', [r.e.controle]]))
-      feitos.push({ etapa: 'itens', editais: resultados.length, falhas: falhas.length })
     }
-    // 4. Limpeza (encerrados há mais de 2 dias), no máximo 300 por rodada.
+    if (total) feitos.push({ etapa: 'itens', editais: total, falhas })
+  })
+  // 4. Limpeza (encerrados há mais de 2 dias), no máximo 300 por rodada.
+  await etapa('limpeza', async () => {
     const velhos = (await turso.consultar('select controle from editais where encerramento < ? limit 300', [new Date(Date.now() - 2 * 86400_000).toISOString()])).map((l) => l.controle)
-    if (velhos.length) {
-      const marcas = velhos.map(() => '?').join(',')
-      await turso.pipeline([[`delete from itens where controle in (${marcas})`, velhos], [`delete from itens_fts where controle in (${marcas})`, velhos], [`delete from editais_fts where controle in (${marcas})`, velhos], [`delete from editais where controle in (${marcas})`, velhos]])
-      feitos.push({ etapa: 'limpeza', editais: velhos.length })
-    }
-  } catch (e) {
-    // PNCP pediu para esperar: pausa 5 minutos.
-    if (e.pausa) { await turso.pipeline([guardar('pausado_ate', new Date(Date.now() + 5 * 60_000).toISOString())]); feitos.push({ pausado: true }) }
-    else throw e
-  }
-  await turso.pipeline([guardar('ultima_coleta_em', agoraIso())])
+    if (!velhos.length) return
+    const marcas = velhos.map(() => '?').join(',')
+    await turso.pipeline([[`delete from itens where controle in (${marcas})`, velhos], [`delete from itens_fts where controle in (${marcas})`, velhos], [`delete from editais_fts where controle in (${marcas})`, velhos], [`delete from editais where controle in (${marcas})`, velhos]])
+    feitos.push({ etapa: 'limpeza', editais: velhos.length })
+  })
+  const fim = [guardar('ultima_coleta_em', agoraIso())]
+  if (pausar) fim.push(guardar('pausado_ate', new Date(Date.now() + 3 * 60_000).toISOString()))
+  await turso.pipeline(fim)
   return feitos
 }
 
