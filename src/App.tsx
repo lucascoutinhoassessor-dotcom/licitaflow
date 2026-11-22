@@ -17,6 +17,7 @@ const Entrar = lazy(() => import('@/pages/auth/Entrar'))
 const Cadastro = lazy(() => import('@/pages/auth/Cadastro'))
 const RecuperarSenha = lazy(() => import('@/pages/auth/RecuperarSenha'))
 const RedefinirSenha = lazy(() => import('@/pages/auth/RedefinirSenha'))
+const ConfirmarEmail = lazy(() => import('@/pages/auth/ConfirmarEmail'))
 const Convite = lazy(() => import('@/pages/Convite'))
 const Onboarding = lazy(() => import('@/pages/Onboarding'))
 const Painel = lazy(() => import('@/pages/app/Painel'))
@@ -134,6 +135,7 @@ export default function App() {
           <Route path="/cadastro" element={<SoVisitante><Cadastro /></SoVisitante>} />
           <Route path="/recuperar-senha" element={<SoVisitante><RecuperarSenha /></SoVisitante>} />
           <Route path="/redefinir-senha" element={<RedefinirSenha />} />
+          <Route path="/confirmar-email" element={<ConfirmarEmail />} />
           <Route path="/convite/:token" element={<Convite />} />
           <Route path="/cobrancas" element={<ExigeLogin><div className="painel-conteudo mx-auto max-w-5xl p-4 sm:p-8"><Cobrancas /></div></ExigeLogin>} />
           <Route path="/suporte" element={<ExigeLogin><div className="painel-conteudo mx-auto max-w-5xl p-4 sm:p-8"><Suporte /></div></ExigeLogin>} />

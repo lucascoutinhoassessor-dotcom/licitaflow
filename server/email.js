@@ -1,53 +1,89 @@
-// Somente servidor: envio de e-mail da plataforma por SMTP (configurado em Master → Integrações).
+// Somente servidor: e-mails da plataforma por SMTP (Gmail com senha de app ou outro provedor),
+// configurados em Master → Integrações. Mesmo padrão do CallBot AI: remetente "LicitaFlow", logo e botão.
 import nodemailer from 'nodemailer'
 import { decifrar } from './asaas.js'
+import { LOGO_PNG_BASE64 } from './logo-email.js'
 
 export const URL_SITE = 'https://licitaflow-prod.vercel.app'
+export const NOME_PADRAO = 'LicitaFlow'
+const COR = '#1d4ed8'
 
 /** Configuração de envio a partir da linha de plataforma_email (senha decifrada). null se incompleta. */
 export function montarSmtp(linha, env) {
-  if (!linha?.host || !linha.usuario || !linha.senha_cifrada || !linha.remetente_email) return null
+  if (!linha?.host || !linha.usuario || !linha.senha_cifrada) return null
   return {
     ativo: !!linha.ativo, boasVindas: !!linha.boas_vindas,
-    host: linha.host, porta: linha.porta, usuario: linha.usuario, senha: decifrar(linha.senha_cifrada, env),
-    de: `"${String(linha.remetente_nome || 'LicitaFlow').replace(/["\r\n]/g, '')}" <${linha.remetente_email}>`,
+    host: linha.host, porta: linha.porta || 465, usuario: linha.usuario, senha: decifrar(linha.senha_cifrada, env),
+    nome: String(linha.remetente_nome || NOME_PADRAO).replace(/["\r\n<>]/g, '').trim() || NOME_PADRAO,
+    endereco: linha.remetente_email || linha.usuario,
   }
 }
+
+export class ErroEmail extends Error {}
 
 export async function enviarEmail(cfg, { para, assunto, html, texto }, transporte = nodemailer.createTransport) {
   const t = transporte({
     host: cfg.host, port: cfg.porta, secure: cfg.porta === 465, auth: { user: cfg.usuario, pass: cfg.senha },
     connectionTimeout: 10000, greetingTimeout: 10000, socketTimeout: 15000,
   })
-  return t.sendMail({ from: cfg.de, to: para, subject: assunto, html, text: texto })
+  try {
+    return await t.sendMail({
+      from: { name: cfg.nome, address: cfg.endereco }, to: para, subject: assunto, html, text: texto,
+      attachments: html.includes('cid:licitaflow-logo')
+        ? [{ filename: 'licitaflow.png', content: Buffer.from(LOGO_PNG_BASE64, 'base64'), cid: 'licitaflow-logo', contentDisposition: 'inline' }]
+        : [],
+    })
+  } catch (e) {
+    if (e?.responseCode === 535 || e?.code === 'EAUTH') throw new ErroEmail('O Gmail recusou o login. Confira o e-mail e use uma “senha de app” (não a senha normal da conta).')
+    throw new ErroEmail('Não foi possível enviar o e-mail: ' + String(e?.message || 'falha de conexão').slice(0, 160))
+  }
 }
 
+// ---------------- modelos ----------------
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c])
 const data = (d) => (d ? new Date(`${d}T12:00:00`).toLocaleDateString('pt-BR') : '')
+const ola = (nome) => (nome ? `Olá, ${String(nome).trim().split(/\s+/)[0]}!` : 'Olá!')
 
-function moldura(titulo, corpo) {
-  return `<!doctype html><html><body style="margin:0;background:#f4f6f8;font-family:Arial,Helvetica,sans-serif;color:#1f2937">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:24px 12px">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:10px;overflow:hidden">
-<tr><td style="background:#0f3d5e;color:#ffffff;padding:18px 24px;font-size:20px;font-weight:bold">LicitaFlow</td></tr>
-<tr><td style="padding:24px"><h1 style="margin:0 0 16px;font-size:20px">${esc(titulo)}</h1>${corpo}</td></tr>
-<tr><td style="padding:16px 24px;font-size:12px;color:#6b7280;border-top:1px solid #e5e7eb">Você recebeu este e-mail porque tem uma conta no LicitaFlow.</td></tr>
-</table></td></tr></table></body></html>`
+function layout(titulo, corpo) {
+  return `<!doctype html><html><body style="margin:0;background:#f4f4f5;font-family:Arial,Helvetica,sans-serif;color:#18181b">
+<div style="max-width:520px;margin:24px auto;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e4e4e7">
+<div style="background:${COR};color:#ffffff;padding:18px 24px;font-size:18px;font-weight:bold"><img src="cid:licitaflow-logo" width="40" height="40" alt="LicitaFlow" style="vertical-align:middle;margin-right:12px;border-radius:8px">LicitaFlow</div>
+<div style="padding:24px"><h1 style="font-size:20px;margin:0 0 16px">${esc(titulo)}</h1>${corpo}</div>
+<div style="padding:16px 24px;font-size:12px;color:#71717a;border-top:1px solid #e4e4e7">Você recebeu este e-mail porque tem uma conta no LicitaFlow. <a href="${URL_SITE}" style="color:${COR}">${URL_SITE.replace(/^https?:\/\//, '')}</a></div>
+</div></body></html>`
+}
+const botao = (url, rotulo) =>
+  `<p style="margin:24px 0"><a href="${esc(url)}" style="background:${COR};color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:8px;font-weight:bold;display:inline-block">${esc(rotulo)}</a></p>`
+const nota = (t) => `<p style="font-size:13px;color:#52525b">${t}</p>`
+
+/** "Esqueci minha senha". */
+export function emailRedefinirSenha({ nome, url }) {
+  const html = layout('Redefinir sua senha', `<p>${esc(ola(nome))}</p><p>Recebemos um pedido para criar uma nova senha para sua conta. Clique no botão abaixo (o link vale por 1 hora e só pode ser usado uma vez):</p>${botao(url, 'Criar nova senha')}${nota('Se não foi você, ignore este e-mail: sua senha atual continua valendo.')}`)
+  const texto = `${ola(nome)}\n\nPara criar uma nova senha, abra (vale por 1 hora): ${url}\n\nSe não foi você, ignore este e-mail.`
+  return { assunto: 'Redefinir sua senha do LicitaFlow', html, texto }
 }
 
-/** E-mail "pagamento confirmado, acesso liberado" (dados vindos de reservar_boas_vindas). */
+/** Confirmação do cadastro. */
+export function emailConfirmarCadastro({ nome, url }) {
+  const html = layout('Confirme seu e-mail', `<p>${esc(ola(nome))}</p><p>Falta só um passo para ativar sua conta no LicitaFlow. Clique no botão abaixo para confirmar seu e-mail e continuar o cadastro:</p>${botao(url, 'Confirmar meu e-mail')}${nota('Se você não criou uma conta no LicitaFlow, ignore este e-mail.')}`)
+  const texto = `${ola(nome)}\n\nConfirme seu e-mail para ativar sua conta no LicitaFlow: ${url}\n\nSe você não criou uma conta, ignore este e-mail.`
+  return { assunto: 'Confirme seu e-mail no LicitaFlow', html, texto }
+}
+
+/** Primeiro pagamento confirmado (dados vindos de reservar_boas_vindas). */
 export function emailAcessoLiberado(d) {
-  const link = `${URL_SITE}/entrar`
+  const login = `${URL_SITE}/entrar`
   const ate = data(d.pago_ate)
-  const corpo = `<p>Olá, ${esc(d.nome)}!</p>
-<p>Recebemos o pagamento da assinatura de <strong>${esc(d.organizacao)}</strong>. O plano <strong>${esc(d.plano)}</strong> (${esc(d.ciclo)}) já está liberado${ate ? `, com acesso pago até <strong>${ate}</strong>` : ''}.</p>
-<p style="margin:24px 0"><a href="${link}" style="background:#0f3d5e;color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:6px;display:inline-block;font-weight:bold">Entrar no LicitaFlow</a></p>
-<p>Entre com o mesmo e-mail e senha do cadastro. Esqueceu a senha? Use "Esqueci minha senha" na tela de login.</p>
-<p>O recibo e as próximas faturas chegam por e-mail pelo Asaas, nosso parceiro de pagamentos.</p>`
-  const texto = `Olá, ${d.nome}!\n\nRecebemos o pagamento da assinatura de ${d.organizacao}. O plano ${d.plano} (${d.ciclo}) já está liberado${ate ? `, com acesso pago até ${ate}` : ''}.\n\nEntre em ${link} com o mesmo e-mail e senha do cadastro.\n\nLicitaFlow`
-  return { assunto: 'Pagamento confirmado: seu acesso ao LicitaFlow está liberado', html: moldura('Acesso liberado', corpo), texto }
+  const html = layout('Seu acesso ao LicitaFlow está liberado', `<p>${esc(ola(d.nome))}</p>
+<p>O pagamento da empresa <b>${esc(d.organizacao)}</b> foi confirmado e o plano <b>${esc(d.plano)}</b> (${esc(d.ciclo)}) já está liberado${ate ? `, com acesso pago até <b>${ate}</b>` : ''}.</p>
+<p><b>Seus dados de acesso:</b><br>Endereço: <a href="${login}" style="color:${COR}">${esc(login)}</a><br>E-mail: <b>${esc(d.email)}</b><br>Senha: a definida no cadastro.</p>
+${botao(login, 'Entrar no LicitaFlow')}
+${nota(`Esqueceu a senha? <a href="${URL_SITE}/recuperar-senha" style="color:${COR}">Crie uma nova aqui</a>. O recibo e as próximas faturas chegam pelo Asaas, nosso parceiro de pagamentos.`)}
+<p>Dica: no celular, abra o LicitaFlow e toque em “Instalar o app” para usar como aplicativo e receber avisos.</p>`)
+  const texto = `${ola(d.nome)}\n\nO pagamento da empresa ${d.organizacao} foi confirmado e o plano ${d.plano} já está liberado${ate ? ` (pago até ${ate})` : ''}.\n\nEndereço: ${login}\nE-mail: ${d.email}\nSenha: a definida no cadastro.\n\nEsqueceu a senha? ${URL_SITE}/recuperar-senha`
+  return { assunto: 'Seu acesso ao LicitaFlow está liberado', html, texto }
 }
 
 export function emailTeste() {
-  return { assunto: 'Teste de e-mail do LicitaFlow', html: moldura('Envio funcionando', '<p>Este é um e-mail de teste enviado pelo painel master. Se chegou, o SMTP está correto.</p>'), texto: 'Este é um e-mail de teste enviado pelo painel master. Se chegou, o SMTP está correto.' }
+  return { assunto: 'Teste de e-mail do LicitaFlow', html: layout('Envio funcionando', '<p>Este é um e-mail de teste enviado pelo Painel Master. Se chegou com o nome e o logo do LicitaFlow, está tudo certo.</p>'), texto: 'Este é um e-mail de teste enviado pelo Painel Master.' }
 }

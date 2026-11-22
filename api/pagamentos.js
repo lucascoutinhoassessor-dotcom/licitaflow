@@ -63,34 +63,33 @@ export default async function handler(req,res) {
     }
 
     // ------------------------------------------------------------------ E-mail da plataforma (SMTP)
+    // Padrão Gmail + senha de app. Com conta e senha salvas, o envio fica ativo (sem botão separado).
     if(body.acao==='email_salvar') {
-      const dados={updated_at:new Date().toISOString()}
-      const host=String(body.host ?? '').trim().toLowerCase(), usuario=String(body.usuario ?? '').trim(), senha=String(body.senha ?? '')
-      const remetente=String(body.remetente_email ?? '').trim().toLowerCase(), nome=String(body.remetente_nome ?? '').trim()
-      if(host) { if(!/^[a-z0-9.-]{3,253}$/.test(host)) return res.status(400).json({error:'Servidor SMTP inválido'}); dados.host=host }
-      if(body.porta!==undefined) { const p=Number(body.porta); if(![25,465,587,2525].includes(p)) return res.status(400).json({error:'Porta deve ser 465, 587, 2525 ou 25'}); dados.porta=p }
-      if(usuario) { if(usuario.length>254) return res.status(400).json({error:'Usuário inválido'}); dados.usuario=usuario }
-      if(senha) { if(senha.length>500) return res.status(400).json({error:'Senha inválida'}); dados.senha_cifrada=cifrar(senha,env); dados.testado_em=null }
-      if(remetente) { if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(remetente)) return res.status(400).json({error:'E-mail do remetente inválido'}); dados.remetente_email=remetente }
-      if(nome) dados.remetente_nome=nome.slice(0,80)
-      if(typeof body.boas_vindas==='boolean') dados.boas_vindas=body.boas_vindas
-      if(typeof body.ativo==='boolean') dados.ativo=body.ativo
-      if(dados.ativo) {
-        const [linha]=await sv('/rest/v1/plataforma_email?select=*&id=eq.smtp')
-        const f={...linha,...dados}
-        if(!f.host || !f.usuario || !f.senha_cifrada || !f.remetente_email) return res.status(400).json({error:'Preencha servidor, usuário, senha e remetente antes de ativar'})
-      }
+      const [linha]=await sv('/rest/v1/plataforma_email?select=*&id=eq.smtp')
+      const usuario=String(body.usuario ?? linha?.usuario ?? '').trim().toLowerCase()
+      const host=(String(body.host ?? '').trim().toLowerCase() || linha?.host || 'smtp.gmail.com')
+      const porta=Number(body.porta || linha?.porta || 465)
+      const senha=String(body.senha ?? '').replace(/\s+/g,'') // a senha de app do Google vem com espaços
+      const nome=String(body.remetente_nome ?? '').trim().slice(0,80) || linha?.remetente_nome || 'LicitaFlow'
+      if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(usuario) || usuario.length>254) return res.status(400).json({error:'Informe o e-mail que vai enviar (ex.: contato.licitaflow@gmail.com)'})
+      if(!/^[a-z0-9.-]{3,253}$/.test(host)) return res.status(400).json({error:'Servidor SMTP inválido'})
+      if(![25,465,587,2525].includes(porta)) return res.status(400).json({error:'Porta deve ser 465 ou 587'})
+      if(senha.length>500) return res.status(400).json({error:'Senha inválida'})
+      if(linha?.usuario && linha.usuario!==usuario && !senha) return res.status(400).json({error:'Informe a senha de app do novo e-mail'})
+      const dados={usuario,host,porta,remetente_nome:nome,remetente_email:usuario,boas_vindas:true,updated_at:new Date().toISOString()}
+      if(senha) { dados.senha_cifrada=cifrar(senha,env); dados.testado_em=null }
+      dados.ativo=!!(senha || linha?.senha_cifrada)
       await patchSv('/rest/v1/plataforma_email?id=eq.smtp',dados)
-      return res.json({ok:true})
+      return res.json({ok:true,configurado:dados.ativo})
     }
     if(body.acao==='email_testar') {
       const [[linha],eu]=await Promise.all([sv('/rest/v1/plataforma_email?select=*&id=eq.smtp'),banco('/auth/v1/user')])
       const cfg=montarSmtp(linha,env)
-      if(!cfg) return res.status(400).json({error:'Preencha servidor, usuário, senha e remetente e salve antes de testar'})
+      if(!cfg) return res.status(400).json({error:'Salve o e-mail e a senha de app antes de testar'})
       const para=String(body.para ?? '').trim() || eu?.email
       if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(para ?? '')) return res.status(400).json({error:'E-mail de destino inválido'})
       try { await enviarEmail(cfg,{para,...emailTeste()}) }
-      catch(e) { return res.status(400).json({error:'O servidor SMTP recusou: '+String(e.response || e.message || 'falha de conexão').slice(0,200)}) }
+      catch(e) { return res.status(400).json({error:e.message}) }
       await patchSv('/rest/v1/plataforma_email?id=eq.smtp',{testado_em:new Date().toISOString()})
       return res.json({ok:true,para})
     }

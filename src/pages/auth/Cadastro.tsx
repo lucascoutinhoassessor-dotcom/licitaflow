@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { MailCheck } from 'lucide-react'
 import { supabase, mensagemErro } from '@/lib/supabase'
+import { contaEmailAPI } from '@/lib/contaEmail'
 import { Aviso, Button, Campo, Input, InputSenha } from '@/components/ui'
 import { AuthShell } from './AuthShell'
 import { useDiasTeste } from '@/hooks/useDiasTeste'
@@ -24,6 +25,16 @@ export default function Cadastro() {
     setErro('')
     if (senha.length < 8) return setErro('A senha precisa ter pelo menos 8 caracteres.')
     setEnviando(true)
+    // E-mail de confirmação pela plataforma (nome e logo do LicitaFlow); sem ele configurado, segue o cadastro padrão do Supabase.
+    try {
+      if (await contaEmailAPI({ acao: 'cadastrar', nome: nome.trim(), email: email.trim(), senha, voltar: destino })) {
+        setEnviando(false)
+        return setConfirmar(true)
+      }
+    } catch (e) {
+      setEnviando(false)
+      return setErro(mensagemErro(e))
+    }
     const { data, error } = await supabase.auth.signUp({
       email: email.trim(),
       password: senha,

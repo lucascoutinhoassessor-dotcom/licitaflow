@@ -1,5 +1,5 @@
-import { useState, type FormEvent } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useEffect, useState, type FormEvent } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase, mensagemErro } from '@/lib/supabase'
 import { useAuth } from '@/providers/AuthProvider'
 import { Aviso, Button, Campo, Carregando, Input, InputSenha } from '@/components/ui'
@@ -12,6 +12,22 @@ export default function RedefinirSenha() {
   const [erro, setErro] = useState('')
   const [enviando, setEnviando] = useState(false)
   const navigate = useNavigate()
+  // Link do e-mail da plataforma: ?token_hash=...&type=recovery. Valida o link e abre a sessão de troca de senha.
+  const [params] = useSearchParams()
+  const tokenHash = params.get('token_hash')
+  const [validando, setValidando] = useState(!!tokenHash)
+  const [linkRuim, setLinkRuim] = useState(false)
+  useEffect(() => {
+    if (!tokenHash) return
+    let ativo = true
+    supabase.auth.verifyOtp({ token_hash: tokenHash, type: 'recovery' }).then(({ error }) => {
+      if (!ativo) return
+      if (error) setLinkRuim(true)
+      window.history.replaceState(null, '', '/redefinir-senha')
+      setValidando(false)
+    })
+    return () => { ativo = false }
+  }, [tokenHash])
 
   async function enviar(e: FormEvent) {
     e.preventDefault()
@@ -25,9 +41,9 @@ export default function RedefinirSenha() {
     navigate('/app', { replace: true })
   }
 
-  if (carregando) return <Carregando telaCheia />
+  if (carregando || validando) return <Carregando telaCheia />
 
-  if (!user) {
+  if (!user || linkRuim) {
     return (
       <AuthShell titulo="Link inválido ou expirado">
         <p className="text-sm text-muted-foreground">Peça um novo link de recuperação de senha.</p>

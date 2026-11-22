@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase, mensagemErro } from '@/lib/supabase'
+import { contaEmailAPI } from '@/lib/contaEmail'
 import { Aviso, Button, Campo, Input } from '@/components/ui'
 import { AuthShell } from './AuthShell'
 
@@ -14,12 +15,18 @@ export default function RecuperarSenha() {
     e.preventDefault()
     setErro('')
     setEnviando(true)
-    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-      redirectTo: `${window.location.origin}/redefinir-senha`,
-    })
-    setEnviando(false)
-    if (error) return setErro(mensagemErro(error))
-    setEnviado(true)
+    try {
+      // E-mail da plataforma (nome e logo do LicitaFlow); sem ele configurado, cai no envio padrão do Supabase.
+      if (!(await contaEmailAPI({ acao: 'recuperar_senha', email: email.trim() }))) {
+        const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: `${window.location.origin}/redefinir-senha` })
+        if (error) throw error
+      }
+      setEnviado(true)
+    } catch (e) {
+      setErro(mensagemErro(e))
+    } finally {
+      setEnviando(false)
+    }
   }
 
   return (

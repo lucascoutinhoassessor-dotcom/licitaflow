@@ -2,6 +2,9 @@
 // Cria o login (e-mail já confirmado), e opcionalmente a organização com o plano e o prazo de teste
 // escolhidos, com o novo usuário como dono. Tudo com a chave de serviço, depois de conferir que quem
 // pediu é master. Fica registrado em admin_audit.
+import {ACOES_PUBLICAS,contaPublica} from '../server/conta-emails.js'
+import {ErroEmail} from '../server/email.js'
+
 const EMAIL=/^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const DATA=/^\d{4}-\d{2}-\d{2}$/
 
@@ -13,6 +16,12 @@ export default async function handler(req,res) {
   const anon=env.SUPABASE_ANON_KEY || env.VITE_SUPABASE_ANON_KEY
   const servico=env.SUPABASE_SERVICE_ROLE_KEY
   const token=req.headers.authorization
+  // Cadastro e "esqueci minha senha" com e-mail da plataforma: públicos (sem login).
+  const pedido=typeof req.body==='string'?(()=>{try{return JSON.parse(req.body)}catch{return {}}})():req.body ?? {}
+  if(ACOES_PUBLICAS.includes(pedido.acao)) {
+    try { return await contaPublica(pedido,req,res,env) }
+    catch(e) { return res.status(502).json({error:e instanceof ErroEmail?e.message:'Não foi possível enviar o e-mail agora. Tente de novo em instantes.'}) }
+  }
   if(!base || !anon || !servico) return res.status(503).json({error:'Configuração Supabase ausente no servidor'})
   if(!/^Bearer \S+$/.test(token ?? '')) return res.status(401).json({error:'Entre na sua conta'})
 
