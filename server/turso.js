@@ -184,14 +184,14 @@ export function pncpComLimite(fetcher, maximo = 20, intervaloMs = 300) {
 }
 
 /**
- * Uma rodada (até ~40 s e no máximo 30 consultas ao PNCP, espaçadas):
+ * Uma rodada (até ~40 s e no máximo 45 consultas ao PNCP, espaçadas):
  * 1. carga completa dos editais com proposta aberta, uma vez por dia, continuando de onde parou (é ela que libera a busca);
  * 2. editais atualizados hoje, 3 modalidades por rodada em rodízio (a última página fica aberta para pegar o que entrou depois);
  * 3. itens dos editais que abrem em até 30 dias, os mais próximos primeiro;
  * 4. limpeza dos encerrados há mais de 2 dias.
  * Uma falha do PNCP numa etapa não derruba as outras; um 429 pausa a coleta por 3 minutos.
  */
-export async function coletarRodada(turso, { prazo = Date.now() + 40_000, fetcher = fetch, hoje = new Date(), maxConsultas = 30, intervaloMs = 300 } = {}) {
+export async function coletarRodada(turso, { prazo = Date.now() + 40_000, fetcher = fetch, hoje = new Date(), maxConsultas = 45, intervaloMs = 300 } = {}) {
   let estadoLinhas
   try { estadoLinhas = await turso.consultar('select chave, valor from coleta_estado') } catch { estadoLinhas = [] }
   let estado = Object.fromEntries(estadoLinhas.map((l) => [l.chave, l.valor]))
@@ -238,15 +238,15 @@ export async function coletarRodada(turso, { prazo = Date.now() + 40_000, fetche
       feitos.push({ etapa: 'atualizacao', modalidade: m, pagina, editais: lista.length, gravados })
     }
   })
-  // 3. Itens dos que abrem em até 30 dias (2 por vez), com as consultas que sobraram.
+  // 3. Itens dos que abrem em até 30 dias (3 por vez), com as consultas que sobraram.
   await etapa('itens', async () => {
     const ate30 = new Date(Date.now() + 30 * 86400_000).toISOString()
     let total = 0, falhas = 0
     while (tempoAte(0.9) && pncp.restantes() > 0) {
-      const fila = await turso.consultar('select controle, cnpj, ano, sequencial from editais where itens_completos = 0 and itens_tentativas < 5 and encerramento >= ? and encerramento <= ? order by encerramento limit ?', [agoraIso(), ate30, Math.min(6, pncp.restantes())])
+      const fila = await turso.consultar('select controle, cnpj, ano, sequencial from editais where itens_completos = 0 and itens_tentativas < 5 and encerramento >= ? and encerramento <= ? order by encerramento limit ?', [agoraIso(), ate30, Math.min(9, pncp.restantes())])
       if (!fila.length) break
-      for (let k = 0; k < fila.length && tempoAte(0.9) && pncp.restantes() > 0; k += 2) {
-        const lote = fila.slice(k, k + 2)
+      for (let k = 0; k < fila.length && tempoAte(0.9) && pncp.restantes() > 0; k += 3) {
+        const lote = fila.slice(k, k + 3)
         const res = await Promise.all(lote.map(async (e) => ({ e, ok: await coletarItens(turso, e, pncp).catch((err) => { if (err.pausa || err.fim) throw err; return false }) })))
         total += res.length
         const ruins = res.filter((r) => !r.ok)
