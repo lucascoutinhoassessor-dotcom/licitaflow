@@ -41,6 +41,10 @@ export const INDICES_EDITAIS = [
   // Os que têm itens guardados (só os abertos e recém-encerrados): a limpeza do histórico e a contagem leem só eles.
   'create index if not exists editais_com_itens on editais(encerramento) where itens_completos <> 0',
 ]
+// Busca por estado: o editais_abertos começa pelo encerramento, então filtrar um estado pequeno (ex.: AC) percorria
+// todos os ~36 mil abertos para achar uma centena. Este começa pela UF e cobre os mesmos filtros (sem abrir a tabela).
+// Criado uma vez (marca 'indice_uf' em coleta_estado).
+export const INDICE_UF = `create index if not exists editais_uf_abertos on editais(uf, encerramento, controle, ${COLUNAS_FILTRO}, orgao_nome)`
 // Contagens da busca guardadas no próprio Turso: valem para todas as instâncias da Vercel (a memória de cada uma some
 // a cada partida a frio) e evitam recontar dezenas de milhares de linhas a cada filtro repetido.
 export const CACHE_BUSCA = [
@@ -60,6 +64,7 @@ export const ESQUEMA = [
     atualizado_pncp text, coletado_em text not null, compra text not null, hash text, itens_hash text)`,
   ...INDICES_EDITAIS,
   ...INDICES_HISTORICO,
+  INDICE_UF,
   `create virtual table if not exists editais_fts using fts5(controle unindexed, texto, tokenize = 'unicode61 remove_diacritics 2')`,
   `create table if not exists itens (
     controle text not null, numero integer not null, descricao text, valor_unitario real, beneficio integer, sigiloso integer not null default 0,
@@ -378,6 +383,7 @@ export async function coletarRodada(turso, { prazo = Date.now() + 40_000, fetche
   if (estado.fts_rowid !== '1') await turso.transacao(MIGRAR_FTS_ROWID)
   if (estado.indices_historico !== '1') await turso.pipeline([...INDICES_HISTORICO.map((s) => [s]), guardar('indices_historico', '1')])
   if (estado.otimizacao !== '1') await migrarOtimizacao(turso)
+  if (estado.indice_uf !== '1') await turso.pipeline([[INDICE_UF], guardar('indice_uf', '1')])
   if (estado.pausado_ate && estado.pausado_ate > agoraIso()) return [{ pausado: estado.pausado_ate }]
   // Cota do mês (server/turso-cota.js): freia antes de o Turso bloquear o banco.
   const cota = nivelCota(estado, turso.cota ?? configCota(), { agora: hoje, pendente: turso.pendente?.() })
@@ -548,8 +554,12 @@ const inicioDiaSP = (d) => new Date(`${d}T00:00:00-03:00`).toISOString()
 const fimDiaSP = (d) => new Date(new Date(`${d}T00:00:00-03:00`).getTime() + 86400_000).toISOString()
 /** Data (AAAA-MM-DD) de um instante ISO no horário de Brasília. */
 const diaSP = (iso) => new Date(new Date(iso).getTime() - 3 * 3600_000).toISOString().slice(0, 10)
-/** No histórico a contagem para aqui: contar tudo leria o período inteiro (centenas de milhares de linhas). */
-export const LIMITE_CONTAGEM_HISTORICO = 1000
+/**
+ * A contagem para aqui, em toda busca: contar tudo leria todos os editais que passam no filtro (~36 mil abertos, ou
+ * centenas de milhares no histórico) a cada filtro novo. Eram ~80 mil linhas lidas por busca, quase toda a cota do Turso.
+ */
+export const LIMITE_CONTAGEM = 1000
+export const LIMITE_CONTAGEM_HISTORICO = LIMITE_CONTAGEM
 
 export class FiltroInvalido extends Error {}
 
@@ -693,11 +703,12 @@ export async function buscarTurso(turso, filtros, pagina = 1, tamanho = 20) {
   const { onde, args, base, porItem, comTermo, inverter, historico, porPublicacao, chave } = montarFiltros(filtros ?? {})
   const ordem = porPublicacao ? (inverter ? 'e.publicacao asc, e.controle asc' : 'e.publicacao desc, e.controle desc')
     : inverter ? 'e.encerramento desc, e.controle desc' : 'e.encerramento asc, e.controle asc'
-  // No histórico, contagens param no limite (senão leriam o período inteiro a cada busca e estourariam a cota).
-  const L = LIMITE_CONTAGEM_HISTORICO
-  const contar = (w, a) => historico ? [`select count(*) as n from (select 1 from editais e where ${w} limit ${L + 1})`, a] : [`select count(*) as n from editais e where ${w}`, a]
-  // Total, órgãos e pendentes dependem só dos filtros (não da página) e varrem todos os editais que passam no filtro:
-  // ficam em memória e também no Turso (cache_busca), compartilhados entre as instâncias.
+  // Contagens param no limite (L + 1 linhas). Os pendentes (sem itens coletados) são contados na mesma janela dos
+  // primeiros L + 1 editais do filtro base: servem para comparar com o total, que também para no limite.
+  const L = LIMITE_CONTAGEM
+  const contar = (w, a) => [`select count(*) as n from (select 1 from editais e where ${w} limit ${L + 1})`, a]
+  // Total e pendentes dependem só dos filtros (não da página): ficam em memória e também no Turso (cache_busca),
+  // compartilhados entre as instâncias. A lista de órgãos saiu daqui: só é lida quando alguém abre o filtro (orgaosTurso).
   const porFiltro = POR_FILTRO.get(turso) ?? new Map(), chaveFiltro = resumo(chave)
   POR_FILTRO.set(turso, porFiltro)
   let contagem = porFiltro.get(chaveFiltro)
@@ -719,13 +730,9 @@ export async function buscarTurso(turso, filtros, pagina = 1, tamanho = 20) {
     if (v) contagem = { ...v, expira: Date.parse(guardada[0].expira) }
   }
   if (!contagem) {
-    // Contagem e órgãos leem só o índice que cobre os filtros (editais_abertos).
-    const r = await turso.lote([contar(onde.join(' and '), args), historico
-      ? [`select cnpj, min(nome) as razaoSocial from (select e.orgao_cnpj as cnpj, e.orgao_nome as nome from editais e where ${base.onde.join(' and ')} limit ${2 * L}) group by cnpj order by 2 limit 200`, base.args]
-      // "+" no agrupamento: sem ele o SQLite prefere o índice de órgão (já agrupado) e abre a tabela a cada edital.
-      : [`select e.orgao_cnpj as cnpj, min(e.orgao_nome) as razaoSocial from editais e where ${base.onde.join(' and ')} group by +e.orgao_cnpj order by 2 limit 200`, base.args],
-      ...(porItem ? [contar(`${base.onde.join(' and ')} and e.itens_completos = 0`, base.args)] : [])])
-    contagem = { total: r[0][0]?.n ?? 0, orgaos: r[1], pendentes: porItem ? r[2][0]?.n ?? 0 : 0, expira: Date.now() + validade }
+    const r = await turso.lote([contar(onde.join(' and '), args),
+      ...(porItem ? [[`select count(*) as n from (select e.itens_completos from editais e where ${base.onde.join(' and ')} limit ${L + 1}) where itens_completos = 0`, base.args]] : [])])
+    contagem = { total: r[0][0]?.n ?? 0, pendentes: porItem ? r[1][0]?.n ?? 0 : 0, expira: Date.now() + validade }
     // Guarda para as outras instâncias (uma escrita), a não ser que a cota de escrita já esteja no fim.
     if (!peloMenos(cota.escritasNivel, 'critico')) {
       const { expira, ...valor } = contagem
@@ -734,8 +741,8 @@ export async function buscarTurso(turso, filtros, pagina = 1, tamanho = 20) {
   }
   if (porFiltro.size >= 300) porFiltro.delete(porFiltro.keys().next().value)
   porFiltro.set(chaveFiltro, contagem)
-  const { total, orgaos, pendentes } = contagem
-  const n = Math.min(total ?? 0, historico ? L : Infinity)
+  const { total, pendentes } = contagem
+  const n = Math.min(total ?? 0, L)
   const [diaHist] = String(e.historico ?? '').split(':')
   // Tamanho da base e cobertura dos itens vêm prontos da coleta (coleta_estado).
   const cobertura = lerJson(e.cobertura), base0 = lerJson(e.contagem)
@@ -744,7 +751,8 @@ export async function buscarTurso(turso, filtros, pagina = 1, tamanho = 20) {
       const c = JSON.parse(l.compra), tipo = l.tipo_itens ?? l.tipo_objeto
       return { ...c, ...(l.modo_disputa != null ? { modoDisputaId: l.modo_disputa } : {}), ...(tipo ? { materialOuServico: tipo } : {}), ...(!l.tipo_itens && l.tipo_objeto ? { tipoEstimado: true } : {}) }
     }),
-    totalRegistros: n, totalPaginas: Math.ceil(n / tamanho), orgaos, historico, totalLimitado: historico && (total ?? 0) > L,
+    // Órgãos vazios: o app pede a lista (acao=turso-orgaos) quando o usuário abre o seletor.
+    totalRegistros: n, totalPaginas: Math.ceil(n / tamanho), orgaos: [], orgaosSobDemanda: true, historico, totalLimitado: (total ?? 0) > L,
     catalogo: {
       iniciado_em: null, ultima_coleta_em: e.ultima_coleta_em ?? null, ultima_carga_completa_em: e.carga_completa_em ?? null,
       carga_inicial_concluida: !!e.carga_completa_em, editais_indexados: base0?.editais ?? 0, editais_com_itens: 0, paginas_coletadas: 0, paginas_planejadas: 0,
@@ -755,4 +763,36 @@ export async function buscarTurso(turso, filtros, pagina = 1, tamanho = 20) {
     detalhesPendentes: porItem ? pendentes : 0,
     coberturaItens: cobertura?.total ? (cobertura.com ?? 0) / cobertura.total : 0, comTermo,
   }
+}
+
+
+/**
+ * Órgãos dos editais que passam no filtro (seletor "Órgão encontrado na consulta"). Só é lida quando alguém abre o
+ * seletor: agrupar todos os abertos lê ~36 mil linhas. Fica 30 min em cache (memória e cache_busca).
+ * No histórico, olha só os primeiros 2.000 editais do filtro (o período inteiro leria centenas de milhares).
+ */
+export async function orgaosTurso(turso, filtros) {
+  const conhecido = nivelConhecido(turso)
+  if (conhecido && peloMenos(conhecido.leituras, 'critico')) throw new CotaTurso('Cota do Turso no fim do mês')
+  const agora = agoraIso()
+  const { base, historico } = montarFiltros(filtros ?? {}, agora)
+  // A chave não leva o "agora" (senão mudaria a cada chamada e o cache nunca acertaria).
+  const chaveOrgaos = `orgaos:${resumo(JSON.stringify([base.onde, base.args.map((a) => (a === agora ? 'agora' : a))]))}`
+  const porFiltro = POR_FILTRO.get(turso) ?? new Map()
+  POR_FILTRO.set(turso, porFiltro)
+  const memoria = porFiltro.get(chaveOrgaos)
+  if (memoria && Date.now() < memoria.expira) return memoria.orgaos
+  const [guardada] = await turso.consultar('select valor from cache_busca where chave = ? and expira > ?', [chaveOrgaos, agora])
+  let orgaos = guardada ? lerJson(guardada.valor) : null
+  if (!Array.isArray(orgaos)) {
+    orgaos = await turso.consultar(historico
+      ? `select cnpj, min(nome) as razaoSocial from (select e.orgao_cnpj as cnpj, e.orgao_nome as nome from editais e where ${base.onde.join(' and ')} limit ${2 * LIMITE_CONTAGEM}) group by cnpj order by 2 limit 200`
+      // "+" no agrupamento: sem ele o SQLite prefere o índice de órgão (já agrupado) e abre a tabela a cada edital.
+      : `select e.orgao_cnpj as cnpj, min(e.orgao_nome) as razaoSocial from editais e where ${base.onde.join(' and ')} group by +e.orgao_cnpj order by 2 limit 200`, base.args)
+    const expira = new Date(Date.now() + 30 * 60_000).toISOString()
+    await turso.pipeline([['insert into cache_busca(chave, valor, expira) values(?,?,?) on conflict(chave) do update set valor = excluded.valor, expira = excluded.expira', [chaveOrgaos, JSON.stringify(orgaos), expira]]]).catch(() => undefined)
+  }
+  if (porFiltro.size >= 300) porFiltro.delete(porFiltro.keys().next().value)
+  porFiltro.set(chaveOrgaos, { orgaos, expira: Date.now() + 30 * 60_000 })
+  return orgaos
 }

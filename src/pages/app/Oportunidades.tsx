@@ -10,7 +10,7 @@ import { useOrg } from '@/providers/OrgProvider'
 import { useLista, useSalvar } from '@/hooks/useDados'
 import { dadosProcesso, rotaOportunidade, type CompraPNCP } from '@/lib/pncp'
 import { comUfs, filtrosExtras, MODALIDADES, nomeModoDisputa, PERIODOS_ABERTURA, periodoAbertura, periodoEntre, resumoFiltros, ufsDe, validarFiltros, type FiltrosOportunidades as Filtros } from '@/lib/filtrosOportunidades'
-import {buscaHistorica,pesquisarIndice,type ResultadoIndice} from '@/lib/buscaIndice'
+import {buscaHistorica,pesquisarIndice,pesquisarOrgaos,type ResultadoIndice} from '@/lib/buscaIndice'
 import CategoriasObjeto from '@/components/CategoriasObjeto'
 import FiltrosOportunidades from '@/components/FiltrosOportunidades'
 import MenuFiltros from '@/components/MenuFiltros'
@@ -100,6 +100,12 @@ export default function Oportunidades() {
       return r
     },
   })
+  // Órgãos da base rápida: só quando o usuário abre o seletor, e para a busca que está na tela (cada lista lê ~36 mil linhas do Turso).
+  const [orgaosDe,setOrgaosDe]=useState<Filtros|null>(null)
+  const orgaosQ=useQuery({
+    queryKey:['oportunidades-orgaos',efetiva],enabled:!!efetiva&&orgaosDe===efetiva&&!!q.data?.orgaosSobDemanda,staleTime:30*60_000,gcTime:30*60_000,retry:0,
+    queryFn:({signal})=>pesquisarOrgaos(efetiva!,signal),
+  })
   const lista=q.data?.data??[],visiveis=lista
   const totalPaginas=Math.max(1,q.data?.totalPaginas??1)
   const catalogo=q.data?.catalogo
@@ -147,7 +153,7 @@ export default function Oportunidades() {
         <div className="flex flex-col gap-2 sm:flex-row"><div className="relative min-w-0 flex-1"><Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input className="pl-9" aria-label="Pesquisar oportunidades" placeholder="O que sua empresa vende? Ex.: notebook; computador" value={f.busca} onChange={set('busca')} maxLength={300} /></div><Button type="submit" carregando={q.isFetching}>Buscar oportunidades</Button></div>
         <div className="flex flex-col gap-2 sm:flex-row"><FiltroLiberado id="filtro-publicacao" className="min-w-0 flex-1"><Select aria-label="Situação dos editais" value={fv.situacao} onChange={set('situacao')}><option value="abertas">Por data de abertura</option><option value="publicacoes">Por data de publicação</option></Select></FiltroLiberado><FiltroLiberado id="filtro-uf" className="min-w-0 flex-1"><SeletorEstados className="min-w-0" valor={ufsDe(fv)} aoMudar={ufs=>setF(x=>({...x,...comUfs(ufs)}))} aoAplicar={()=>pesquisar()} carregando={q.isFetching} /></FiltroLiberado><MenuFiltros ativos={extras} colunas={2} aoLimpar={()=>setF(x=>({...x,...filtrosExtras,busca:x.busca,aberturaDe:x.aberturaDe,aberturaAte:x.aberturaAte,diasUteis:x.diasUteis,inverter:x.inverter}))}
           rodape={fechar=><Button type="button" carregando={q.isFetching} onClick={()=>{fechar();pesquisar()}}>Aplicar e buscar</Button>}>
-          <FiltrosOportunidades f={f} mudar={setF} compras={[]} orgaos={q.data?.orgaos??[]} />
+          <FiltrosOportunidades f={f} mudar={setF} compras={[]} orgaos={q.data?.orgaosSobDemanda?orgaosQ.data??[]:q.data?.orgaos??[]} aoAbrirOrgaos={()=>setOrgaosDe(efetiva)} carregandoOrgaos={orgaosQ.isFetching} />
         </MenuFiltros></div>
         {fv.situacao==='abertas'&&<>
           <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Período de abertura">

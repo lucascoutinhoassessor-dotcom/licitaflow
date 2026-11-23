@@ -3,12 +3,13 @@
 //   POST ?acao=turso-coletar   (pg_cron, cabeçalho x-coleta conferido no banco) → grava no Turso o que mudou no PNCP
 //   GET  ?acao=turso-situacao  (master)                                          → conectado? quantos editais? última coleta
 //   POST ?acao=turso-buscar    (usuário logado) {filtros, pagina}                → busca no mesmo formato do buscar_oportunidades
+//   POST ?acao=turso-orgaos    (usuário logado) {filtros}                        → órgãos do filtro (só quando o seletor abre)
 //   GET  ?acao=turso-itens&controle= (usuário logado)                            → itens guardados de um edital (reserva da página)
 //   POST ?acao=turso-logs-registrar (usuário logado) {org, eventos}              → registro de uso, erros e lentidão (server/logs-uso.js)
 //   GET  ?acao=turso-logs&tipo=&horas=&usuario=&busca=&antes= (master)         → logs de uso dos clientes
 import { emCache, usuarioLogado, excedeuLimite } from './protecao.js'
 import { consultarLogs, registrarLogs } from './logs-uso.js'
-import { BloqueioTurso, buscarTurso, clienteTurso, coletarRodada, CotaTurso, FiltroInvalido, itensTurso, nivelConhecido, situacaoTurso } from './turso.js'
+import { BloqueioTurso, buscarTurso, clienteTurso, coletarRodada, CotaTurso, FiltroInvalido, itensTurso, nivelConhecido, orgaosTurso, situacaoTurso } from './turso.js'
 import { peloMenos } from './turso-cota.js'
 
 async function rpcServico(fetcher, base, chave, nome, corpo) {
@@ -110,6 +111,18 @@ export function criarHandler({ fetcher = fetch, env = process.env, validarSessao
         if (r.comTermo && r.coberturaItens < 0.9) return res.status(409).json({ error: 'Itens ainda em coleta na base rápida.', codigo: 'turso_itens' })
         const { coberturaItens, comTermo, ...resposta } = r
         return res.status(200).json({ ...resposta, catalogo: { ...resposta.catalogo, cobertura_itens: Math.round(coberturaItens * 100) } })
+      }
+      if (acao === 'turso-orgaos') {
+        if (req.method !== 'POST') return res.status(405).json({ error: 'Método não permitido' })
+        if (!turso) return res.status(409).json({ error: 'A base rápida ainda não foi conectada.', codigo: 'turso_indisponivel' })
+        const corpo = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : req.body ?? {}
+        const filtros = corpo.filtros && typeof corpo.filtros === 'object' ? corpo.filtros : {}
+        const consulta = emCache('turso-orgaos', JSON.stringify(filtros), 5 * 60_000, () => orgaosTurso(turso, filtros), 300)
+        consulta.catch(() => undefined)
+        const usuario = await sessao
+        if (!usuario) return res.status(401).json({ error: 'Entre na sua conta' })
+        if (excedeuLimite('turso-orgaos', usuario, 20)) return res.status(429).json({ error: 'Muitas consultas em pouco tempo. Aguarde um minuto.' })
+        return res.status(200).json({ orgaos: await consulta })
       }
       if (acao === 'turso-itens') {
         const controle = String(req.query?.controle ?? '')

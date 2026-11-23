@@ -96,6 +96,25 @@ painel do Turso (**Usage**) continua sendo a referência oficial.
 O cartão **Integrações → Base rápida de dados brutos** mostra o plano, as duas barras de consumo, a projeção do
 ciclo e o nível atual.
 
+### Quanto custa uma busca
+
+Medido em 23/11/2026 (painel do Turso → **Top Queries**, e num SQLite local com 36 mil abertos e 100 mil encerrados):
+
+| Busca | Antes | Agora |
+|---|---|---|
+| Todo o Brasil, sem palavra-chave | ~72 mil linhas | ~1 mil |
+| Um estado grande (SP) | ~72 mil | ~1 mil |
+| Um estado pequeno (AC) | ~78 mil | ~130 |
+| Abrir o seletor de órgão | (vinha em toda busca) | ~36 mil, só quando abre, 30 min em cache |
+| Palavra-chave | ~75 mil | uma linha por edital que tem a palavra (inclui o histórico) |
+
+O que mudou: a contagem para em 1.000 ("Mais de 1.000 oportunidades"), a lista de órgãos só é lida quando o
+usuário abre o seletor (`?acao=turso-orgaos`), e o índice `editais_uf_abertos` começa pela UF.
+
+Em 22/11/2026, 98% das 892 milhões de linhas lidas do mês vieram de um único comando da coleta
+(`delete from editais_fts where controle = ?`), já corrigido. Confira o painel **Top Queries** ("This month")
+antes de culpar a busca.
+
 ### O que foi feito para gastar menos
 
 - **Leituras da busca:**

@@ -10,7 +10,8 @@ import { useFiltrosLiberados } from '@/hooks/useModulos'
 import { estadoModalidade } from '@/lib/filtrosLiberacao'
 
 /** Filtros adicionais de Oportunidades, em seções do menu Filtros. Cada um aparece conforme o master liberou em Funcionalidades. */
-export default function FiltrosOportunidades({ f, mudar, compras, orgaos: opcoes }: { f: Filtros; mudar: (f: Filtros) => void; compras: CompraPNCP[]; orgaos?: {cnpj:string;razaoSocial:string}[] }) {
+/** aoAbrirOrgaos: a lista de órgãos da base rápida só é pedida quando o seletor abre (economiza a cota do Turso). */
+export default function FiltrosOportunidades({ f, mudar, compras, orgaos: opcoes, aoAbrirOrgaos, carregandoOrgaos }: { f: Filtros; mudar: (f: Filtros) => void; compras: CompraPNCP[]; orgaos?: {cnpj:string;razaoSocial:string}[]; aoAbrirOrgaos?: () => void; carregandoOrgaos?: boolean }) {
   const set = (k: keyof Filtros, value: string | boolean | string[]) => mudar({...f,[k]:value})
   const marcar = (k: 'portais' | 'modalidades' | 'modosDisputa', id: string) => set(k,f[k].includes(id)?f[k].filter(x=>x!==id):[...f[k],id])
   const orgaos=opcoes??[...new Map(compras.map(c=>[c.orgaoEntidade.cnpj,c.orgaoEntidade])).values()].sort((a,b)=>a.razaoSocial.localeCompare(b.razaoSocial))
@@ -41,7 +42,7 @@ export default function FiltrosOportunidades({ f, mudar, compras, orgaos: opcoes
     </SecaoFiltro></F>
     {visivel('filtro-orgao','filtro-max-itens','filtro-valor-total','filtro-valor-item','filtro-nao-divulgado')&&<SecaoFiltro icone={Banknote} cor="neutro" titulo="Órgãos e valores" descricao="Só valores positivos divulgados; filtros de item podem demorar mais">
       <div className="grid gap-2 px-1 sm:grid-cols-2">
-        <F id="filtro-orgao" className="sm:col-span-2"><Campo rotulo="Órgão encontrado na consulta" htmlFor="oportunidade-orgao"><Select id="oportunidade-orgao" value={f.orgao} onChange={e=>set('orgao',e.target.value)}><option value="">Todos os órgãos</option>{f.orgao && !orgaos.some(o=>o.cnpj===f.orgao) && <option value={f.orgao}>{f.orgao}</option>}{orgaos.map(o=><option key={o.cnpj} value={o.cnpj}>{o.razaoSocial} · {o.cnpj}</option>)}</Select></Campo></F>
+        <F id="filtro-orgao" className="sm:col-span-2"><Campo rotulo="Órgão encontrado na consulta" htmlFor="oportunidade-orgao"><Select id="oportunidade-orgao" value={f.orgao} onChange={e=>set('orgao',e.target.value)} onFocus={aoAbrirOrgaos} onPointerDown={aoAbrirOrgaos}><option value="">{carregandoOrgaos?'Carregando órgãos...':'Todos os órgãos'}</option>{f.orgao && !orgaos.some(o=>o.cnpj===f.orgao) && <option value={f.orgao}>{f.orgao}</option>}{orgaos.map(o=><option key={o.cnpj} value={o.cnpj}>{o.razaoSocial} · {o.cnpj}</option>)}</Select></Campo></F>
         <F id="filtro-max-itens" className="sm:col-span-2"><Campo rotulo="Quantidade máxima de itens do edital" htmlFor="oportunidade-maxItens"><Input id="oportunidade-maxItens" type="number" min="1" step="1" value={f.maxItens} onChange={e=>set('maxItens',e.target.value)} /></Campo></F>
         {([['minimo','Valor total mínimo (R$)'],['maximo','Valor total máximo (R$)'],['itemMinimo','Valor unitário mín. do item (R$)'],['itemMaximo','Valor unitário máx. do item (R$)']] as const).map(([k,t])=><F key={k} id={k==='minimo'||k==='maximo'?'filtro-valor-total':'filtro-valor-item'}><Campo rotulo={t} htmlFor={`oportunidade-${k}`}><Input id={`oportunidade-${k}`} type="number" min="0" step="0.01" disabled={f.naoDivulgado && (k==='minimo'||k==='maximo')} value={f[k]} onChange={e=>set(k,e.target.value)} /></Campo></F>)}
       </div>

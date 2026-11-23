@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createRequire } from 'node:module'
-import { buscarTurso, clienteTurso, coletarRodada, itensTurso, linhas, montarFiltros, urlHttp } from './turso.js'
+import { buscarTurso, clienteTurso, coletarRodada, itensTurso, LIMITE_CONTAGEM, linhas, montarFiltros, orgaosTurso, urlHttp } from './turso.js'
 import { consultaFts, diaUtil, portalDe, raiz, tempo, tipoPeloObjeto } from './turso-regras.js'
 import { criarHandler } from './oportunidades.js'
 
@@ -137,7 +137,10 @@ describe('coleta e busca no Turso', () => {
     const todos = await buscarTurso(turso as never, {})
     expect(todos.totalRegistros).toBe(3) // o encerrado fica de fora
     expect(todos.catalogo.carga_inicial_concluida).toBe(true)
-    expect(todos.orgaos).toEqual([{ cnpj: '12345678000199', razaoSocial: 'PREFEITURA DE VARGINHA' }])
+    // Órgãos só sob demanda (o seletor pede quando abre): a busca não agrupa os abertos.
+    expect(todos.orgaos).toEqual([]); expect(todos.orgaosSobDemanda).toBe(true); expect(todos.totalLimitado).toBe(false)
+    expect(await orgaosTurso(turso as never, {})).toEqual([{ cnpj: '12345678000199', razaoSocial: 'PREFEITURA DE VARGINHA' }])
+    expect(await orgaosTurso(turso as never, { ufs: ['RJ'] })).toEqual([])
     expect((await buscarTurso(turso as never, { busca: 'computador' })).data.map((c) => c.sequencialCompra)).toEqual([1])
     // Palavra só nos itens (notebook está no item do edital 3 e no objeto do 1).
     expect((await buscarTurso(turso as never, { busca: 'notebooks' })).totalRegistros).toBe(2)
@@ -156,6 +159,19 @@ describe('coleta e busca no Turso', () => {
     const pag = await buscarTurso(turso as never, {}, 2, 2)
     expect(pag.data).toHaveLength(1); expect(pag.totalPaginas).toBe(2)
     expect(todos.historico).toBe(false)
+  })
+
+  it('contagem para no limite e a busca por UF segue o índice que começa pela UF', async () => {
+    const { turso } = await preparar()
+    const enc = dias(3).toISOString()
+    turso.db.exec(`with recursive n(i) as (select 100 union all select i + 1 from n where i < ${100 + LIMITE_CONTAGEM + 50})
+      insert into editais(controle,cnpj,ano,sequencial,modalidade,portal,uf,situacao,orgao_cnpj,orgao_nome,encerramento,coletado_em,compra)
+      select '12345678000199-1-' || i || '/2026','12345678000199',2026,i,6,'pcp','PR',1,'12345678000199','X','${enc}','x','{"sequencialCompra":' || i || '}' from n`)
+    const r = await buscarTurso(turso as never, {})
+    expect(r.totalLimitado).toBe(true); expect(r.totalRegistros).toBe(LIMITE_CONTAGEM); expect(r.totalPaginas).toBe(LIMITE_CONTAGEM / 20)
+    expect((await buscarTurso(turso as never, { ufs: ['SP'] })).totalRegistros).toBe(1)
+    const plano = turso.db.prepare("explain query plan select count(*) from editais e where e.uf = 'AC' and e.encerramento >= '2026'").all() as { detail: string }[]
+    expect(plano.map((p) => p.detail).join(' ')).toContain('editais_uf_abertos')
   })
 
   it('histórico: data passada traz os encerrados, sem limitar a contagem dos abertos', async () => {

@@ -13,8 +13,19 @@ export interface ResultadoIndice {
  orgaos:{cnpj:string;razaoSocial:string}[];catalogo:StatusCatalogo;detalhesPendentes:number
  /** Inclui editais encerrados (histórico de 12 meses no Turso). */
  historico?:boolean
- /** O total passou do limite de contagem do histórico (mostra "mais de"). */
+ /** O total passou do limite de contagem (mostra "mais de"). */
  totalLimitado?:boolean
+ /** Base rápida: os órgãos não vêm na busca; o app pede com pesquisarOrgaos quando o seletor abre. */
+ orgaosSobDemanda?:boolean
+}
+/** Órgãos dos editais do filtro, na base rápida (só quando o usuário abre o seletor de órgão). */
+export async function pesquisarOrgaos(f:FiltrosOportunidades,signal?:AbortSignal):Promise<{cnpj:string;razaoSocial:string}[]>{
+ const {data:s}=await supabase.auth.getSession()
+ if(!s.session)return []
+ const r=await fetch('/api/oportunidades?acao=turso-orgaos',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${s.session.access_token}`},body:JSON.stringify({filtros:f}),signal})
+ const corpo=await r.json().catch(()=>null)
+ if(!r.ok||!Array.isArray(corpo?.orgaos))throw new Error(corpo?.error??'Não foi possível carregar os órgãos.')
+ return corpo.orgaos
 }
 /** Data de hoje (AAAA-MM-DD) em Brasília. */
 const hojeSP=()=>new Date().toLocaleDateString('en-CA',{timeZone:'America/Sao_Paulo'})
