@@ -13,6 +13,17 @@ export const MODALIDADES = [6, 8, 4, 12, 5, 7, 9, 1, 2, 3, 10, 11, 13]
 const VERSAO_ESQUEMA = '2'
 const LIMITE_CARGA = '20991231'
 const UA = { Accept: 'application/json', 'User-Agent': 'licitaforce-turso' }
+// Histórico de encerrados: 12 meses, sem dispensa (8) e inexigibilidade (9), que são ~65% do volume e não caberiam
+// nos 5 GB do plano grátis. Os itens dos encerrados não ficam (só os dos abertos).
+export const HISTORICO_DIAS = 365
+export const SEM_HISTORICO = [8, 9]
+export const MODALIDADES_HISTORICO = MODALIDADES.filter((m) => !SEM_HISTORICO.includes(m))
+// Índices da busca no histórico (a base passa de ~36 mil para ~600 mil editais). Criados uma vez (marca em coleta_estado).
+export const INDICES_HISTORICO = [
+  'create index if not exists editais_modalidade_encerramento on editais(modalidade, encerramento)',
+  'create index if not exists editais_orgao_encerramento on editais(orgao_cnpj, encerramento)',
+  'create index if not exists editais_publicacao on editais(publicacao)',
+]
 
 export const ESQUEMA = [
   'drop table if exists editais_brutos',
@@ -27,6 +38,7 @@ export const ESQUEMA = [
   'create index if not exists editais_encerramento on editais(encerramento)',
   'create index if not exists editais_uf_encerramento on editais(uf, encerramento)',
   'create index if not exists editais_itens_pendentes on editais(itens_completos, encerramento)',
+  ...INDICES_HISTORICO,
   `create virtual table if not exists editais_fts using fts5(controle unindexed, texto, tokenize = 'unicode61 remove_diacritics 2')`,
   `create table if not exists itens (
     controle text not null, numero integer not null, descricao text, valor_unitario real, beneficio integer, sigiloso integer not null default 0,
@@ -139,9 +151,10 @@ export function linhaEdital(c) {
  * Edital que mudou perde os itens (são coletados de novo).
  */
 export async function gravarEditais(turso, lista, agora = agoraIso()) {
-  // Encerrados há mais de 2 dias não entram (a limpeza apagaria logo depois).
-  const corte = new Date(Date.now() - 2 * 86400_000).toISOString()
-  const novos = lista.map(linhaEdital).filter((n) => n && (!n.encerramento || n.encerramento >= corte))
+  // Encerrados há mais de 2 dias só entram no histórico (12 meses, sem dispensa/inexigibilidade); os demais a limpeza
+  // apagaria logo depois.
+  const corte = new Date(Date.now() - 2 * 86400_000).toISOString(), corteHistorico = new Date(Date.now() - HISTORICO_DIAS * 86400_000).toISOString()
+  const novos = lista.map(linhaEdital).filter((n) => n && (!n.encerramento || n.encerramento >= corte || (!SEM_HISTORICO.includes(n.modalidade) && n.encerramento >= corteHistorico)))
   if (!novos.length) return 0
   const existentes = new Map((await turso.consultar(`select controle, atualizado_pncp from editais where controle in (${novos.map(() => '?').join(',')})`, novos.map((n) => n.controle))).map((l) => [l.controle, l.atualizado_pncp]))
   const mudaram = novos.filter((n) => !existentes.has(n.controle) || (n.atualizado_pncp ?? '') > (existentes.get(n.controle) ?? ''))
@@ -234,6 +247,7 @@ export async function coletarRodada(turso, { prazo = Date.now() + 40_000, fetche
   let estado = Object.fromEntries(estadoLinhas.map((l) => [l.chave, l.valor]))
   if (estado.esquema !== VERSAO_ESQUEMA) { await turso.prepararEsquema(); estado = {} }
   if (estado.fts_rowid !== '1') await turso.transacao(MIGRAR_FTS_ROWID)
+  if (estado.indices_historico !== '1') await turso.pipeline([...INDICES_HISTORICO.map((s) => [s]), guardar('indices_historico', '1')])
   if (estado.pausado_ate && estado.pausado_ate > agoraIso()) return [{ pausado: estado.pausado_ate }]
   const data = dia(hoje), feitos = [], tempoAte = (fracao) => Date.now() < prazo - (1 - fracao) * 40_000
   const pncp = pncpComLimite(fetcher, maxConsultas, intervaloMs)
@@ -284,7 +298,27 @@ export async function coletarRodada(turso, { prazo = Date.now() + 40_000, fetche
       feitos.push({ etapa: 'atualizacao', modalidade: m, pagina, editais: lista.length, gravados })
     }
   })
-  // 3. Itens dos que abrem em até 30 dias (3 por vez), com as consultas que sobraram.
+  // 3. Histórico: editais publicados nos últimos 12 meses, do dia mais recente para o mais antigo (o que mais se
+  // procura fica pronto primeiro). Só depois da carga do dia e com no máximo 3 páginas por rodada (cada página do
+  // PNCP leva de 7 a 15 s). Cursor "dia de publicação:índice da modalidade:página".
+  if ((estado.carga_completa_em ?? '').startsWith(hoje.toISOString().slice(0, 10))) await etapa('historico', async () => {
+    const limite = dia(new Date(hoje.getTime() - HISTORICO_DIAS * 86400_000))
+    let [diaHist, im, pg] = String(estado.historico ?? '').split(':')
+    if (!/^\d{8}$/.test(diaHist ?? '')) { diaHist = dia(new Date(hoje.getTime() - 86400_000)); im = 0; pg = 1 }
+    im = Number(im) || 0; pg = Number(pg) || 1
+    for (let k = 0; k < 3 && diaHist >= limite && tempoAte(0.7) && pncp.restantes() > 3; k++) {
+      const m = MODALIDADES_HISTORICO[im]
+      const { lista, paginas } = await lerPagina(pncp, `${PNCP}/contratacoes/publicacao?dataInicial=${diaHist}&dataFinal=${diaHist}&codigoModalidadeContratacao=${m}&pagina=${pg}&tamanhoPagina=50`)
+      const gravados = await gravarEditais(turso, lista)
+      feitos.push({ etapa: 'historico', dia: diaHist, modalidade: m, pagina: pg, de: paginas, gravados })
+      if (!lista.length || pg >= paginas) { im++; pg = 1 } else pg++
+      if (im >= MODALIDADES_HISTORICO.length) { im = 0; diaHist = dia(new Date(Date.UTC(+diaHist.slice(0, 4), +diaHist.slice(4, 6) - 1, +diaHist.slice(6, 8)) - 86400_000)) }
+      const comandos = [guardar('historico', `${diaHist}:${im}:${pg}`)]
+      if (diaHist < limite) comandos.push(guardar('historico_completo_em', agoraIso()))
+      await turso.pipeline(comandos)
+    }
+  })
+  // 4. Itens dos que abrem em até 30 dias (3 por vez), com as consultas que sobraram.
   await etapa('itens', async () => {
     const ate30 = new Date(Date.now() + 30 * 86400_000).toISOString()
     let total = 0, falhas = 0
@@ -302,13 +336,30 @@ export async function coletarRodada(turso, { prazo = Date.now() + 40_000, fetche
     }
     if (total) feitos.push({ etapa: 'itens', editais: total, falhas })
   })
-  // 4. Limpeza (encerrados há mais de 2 dias), no máximo 300 por rodada.
+  // 5. Limpeza, no máximo 300 por rodada (cada consulta usa um índice e lê só o que vai apagar):
+  //    apaga os encerrados há mais de 2 dias que não entram no histórico (dispensa/inexigibilidade) e os que saíram
+  //    dos 12 meses; dos que ficam no histórico, apaga só os itens.
   await etapa('limpeza', async () => {
-    const velhos = (await turso.consultar('select controle from editais where encerramento < ? limit 300', [new Date(Date.now() - 2 * 86400_000).toISOString()])).map((l) => l.controle)
-    if (!velhos.length) return
-    const marcas = velhos.map(() => '?').join(',')
-    await turso.pipeline([[`delete from itens where controle in (${marcas})`, velhos], [`delete from itens_fts where rowid in (select rowid from editais where controle in (${marcas}))`, velhos], [`delete from editais_fts where rowid in (select rowid from editais where controle in (${marcas}))`, velhos], [`delete from editais where controle in (${marcas})`, velhos]])
-    feitos.push({ etapa: 'limpeza', editais: velhos.length })
+    const corte = new Date(Date.now() - 2 * 86400_000).toISOString(), corteHistorico = new Date(Date.now() - HISTORICO_DIAS * 86400_000).toISOString()
+    const [foraHistorico, antigos, comItens] = await turso.lote([
+      [`select controle from editais where modalidade in (${SEM_HISTORICO.join(',')}) and encerramento < ? limit 300`, [corte]],
+      ['select controle from editais where encerramento < ? limit 300', [corteHistorico]],
+      ['select controle from editais where itens_completos = 1 and encerramento < ? limit 300', [corte]],
+    ])
+    const velhos = [...new Set([...foraHistorico, ...antigos].map((l) => l.controle))].slice(0, 300)
+    const semItens = comItens.map((l) => l.controle).filter((c) => !velhos.includes(c))
+    const comandos = []
+    if (velhos.length) {
+      const marcas = velhos.map(() => '?').join(',')
+      comandos.push([`delete from itens where controle in (${marcas})`, velhos], [`delete from itens_fts where rowid in (select rowid from editais where controle in (${marcas}))`, velhos], [`delete from editais_fts where rowid in (select rowid from editais where controle in (${marcas}))`, velhos], [`delete from editais where controle in (${marcas})`, velhos])
+    }
+    if (semItens.length) {
+      const marcas = semItens.map(() => '?').join(',')
+      comandos.push([`delete from itens where controle in (${marcas})`, semItens], [`delete from itens_fts where rowid in (select rowid from editais where controle in (${marcas}))`, semItens], [`update editais set itens_completos = 0, quantidade_itens = null where controle in (${marcas})`, semItens])
+    }
+    if (!comandos.length) return
+    await turso.pipeline(comandos)
+    feitos.push({ etapa: 'limpeza', editais: velhos.length, itensDe: semItens.length })
   })
   // Uma vez por hora a resposta traz o tamanho da base (aparece em net._http_response no Supabase).
   // Eram 10 min, mas cada vez conta a base inteira (~75 mil linhas lidas).
@@ -341,6 +392,10 @@ const DATA = /^\d{4}-\d{2}-\d{2}$/
 const numero = (v) => (v === '' || v === null || v === undefined ? null : Number(v))
 const inicioDiaSP = (d) => new Date(`${d}T00:00:00-03:00`).toISOString()
 const fimDiaSP = (d) => new Date(new Date(`${d}T00:00:00-03:00`).getTime() + 86400_000).toISOString()
+/** Data (AAAA-MM-DD) de um instante ISO no horário de Brasília. */
+const diaSP = (iso) => new Date(new Date(iso).getTime() - 3 * 3600_000).toISOString().slice(0, 10)
+/** No histórico a contagem para aqui: contar tudo leria o período inteiro (centenas de milhares de linhas). */
+export const LIMITE_CONTAGEM_HISTORICO = 1000
 
 export class FiltroInvalido extends Error {}
 
@@ -364,14 +419,28 @@ export function montarFiltros(f, agora = agoraIso()) {
   // Pelo rowid (o mesmo do edital): ler "controle" faria o FTS abrir a tabela de conteúdo, mais uma linha lida por resultado.
   if (q) { onde.push('e.rowid in (select rowid from editais_fts where editais_fts match ? union select rowid from itens_fts where itens_fts match ?)'); args.push(q, q) }
   if (qEx) { onde.push('e.rowid not in (select rowid from editais_fts where editais_fts match ?)'); args.push(qEx) }
-  onde.push(`e.modalidade in (${mods.map(() => '?').join(',')})`, `e.portal in (${portais.map(() => '?').join(',')})`); args.push(...mods, ...portais)
+  // "+" tira a modalidade da escolha de índice: o índice (modalidade, encerramento) é da limpeza; na busca ele faria o
+  // SQLite ler o período inteiro e ordenar em memória, em vez de seguir o índice de encerramento e parar na página.
+  onde.push(`+e.modalidade in (${mods.map(() => '?').join(',')})`, `e.portal in (${portais.map(() => '?').join(',')})`); args.push(...mods, ...portais)
   if (/^[A-Z]{2}$/.test(f.uf ?? '')) { onde.push('e.uf = ?'); args.push(f.uf) }
   if (/^\d{14}$/.test(f.orgao ?? '')) { onde.push('e.orgao_cnpj = ?'); args.push(f.orgao) }
-  const desde = abDe && inicioDiaSP(abDe) > agora ? inicioDiaSP(abDe) : agora
-  onde.push('e.encerramento >= ?'); args.push(desde)
-  if (abAte) { onde.push('e.encerramento < ?'); args.push(fimDiaSP(abAte)) }
-  onde.push('coalesce(e.situacao, 1) = 1')
-  if (f.diasUteis === true) onde.push('e.dia_util = 1')
+  // Período: "por data de publicação" (qualquer situação) ou "por data de abertura". Na abertura, um início antes de
+  // hoje (Brasília) traz também os encerrados guardados no histórico; sem início, ou a partir de hoje, só os abertos.
+  const porPublicacao = f.situacao === 'publicacoes'
+  let historico = porPublicacao
+  if (porPublicacao) {
+    const de = DATA.test(f.inicio ?? '') ? f.inicio : null, ate = DATA.test(f.fim ?? '') ? f.fim : null
+    if (!de || !ate || de > ate) throw new FiltroInvalido('Período de publicação inválido')
+    onde.push('e.publicacao >= ?', 'e.publicacao < ?'); args.push(inicioDiaSP(de), fimDiaSP(ate))
+  } else {
+    historico = !!abDe && abDe < diaSP(agora)
+    const desde = historico ? inicioDiaSP(abDe) : abDe && inicioDiaSP(abDe) > agora ? inicioDiaSP(abDe) : agora
+    onde.push('e.encerramento >= ?'); args.push(desde)
+    if (abAte) { onde.push('e.encerramento < ?'); args.push(fimDiaSP(abAte)) }
+    if (historico) { onde.push('(e.encerramento < ? or coalesce(e.situacao, 1) = 1)'); args.push(agora) }
+    else onde.push('coalesce(e.situacao, 1) = 1')
+  }
+  if (f.diasUteis === true && !porPublicacao) onde.push('e.dia_util = 1')
   if (f.excluirSrp === true) onde.push('e.srp = 0')
   if (modos.length) { onde.push(`e.modo_disputa in (${modos.map(() => '?').join(',')})`); args.push(...modos) }
   if (f.naoDivulgado === true) onde.push('coalesce(e.valor, 0) = 0')
@@ -394,19 +463,25 @@ export function montarFiltros(f, agora = agoraIso()) {
       onde.push(`exists (select 1 from itens i where ${cond.join(' and ')})`)
     }
   }
-  return { onde, args, base, porItem, comTermo: !!q, inverter: f.inverter === true }
+  return { onde, args, base, porItem, comTermo: !!q, inverter: f.inverter === true, historico, porPublicacao }
 }
 
 /** Situação da base para a tela (mesmo formato do status do catálogo do Postgres). */
 export async function situacaoTurso(turso) {
+  // Com o histórico, contar a base inteira leria ~600 mil linhas a cada vez: o total sai do maior rowid (aproximado,
+  // um lookup só), e só os abertos são contados.
   const [[n], [abertos], [itens], estado] = await turso.lote([
-    ['select count(*) as n from editais'],
+    ['select max(rowid) as n from editais'],
     ['select count(*) as n from editais where encerramento >= ?', [agoraIso()]],
     ['select count(*) as n from editais where itens_completos = 1'],
     ['select chave, valor from coleta_estado'],
   ])
   const e = Object.fromEntries(estado.map((l) => [l.chave, l.valor]))
-  return { editais: n?.n ?? 0, abertos: abertos?.n ?? 0, comItens: itens?.n ?? 0, ultimaColeta: e.ultima_coleta_em ?? null, cargaCompletaEm: e.carga_completa_em ?? null, pausadoAte: e.pausado_ate ?? null, carga: e.carga ?? null }
+  const [diaHist] = String(e.historico ?? '').split(':')
+  return {
+    editais: n?.n ?? 0, abertos: abertos?.n ?? 0, comItens: itens?.n ?? 0, ultimaColeta: e.ultima_coleta_em ?? null, cargaCompletaEm: e.carga_completa_em ?? null, pausadoAte: e.pausado_ate ?? null, carga: e.carga ?? null,
+    historicoAte: /^\d{8}$/.test(diaHist ?? '') ? `${diaHist.slice(0, 4)}-${diaHist.slice(4, 6)}-${diaHist.slice(6, 8)}` : null, historicoCompletoEm: e.historico_completo_em ?? null,
+  }
 }
 
 const GLOBAIS = new WeakMap(), POR_FILTRO = new WeakMap()
@@ -414,8 +489,12 @@ const GLOBAIS = new WeakMap(), POR_FILTRO = new WeakMap()
 /** Busca no Turso no formato de resposta do buscar_oportunidades (ResultadoIndice). */
 export async function buscarTurso(turso, filtros, pagina = 1, tamanho = 20) {
   if (!Number.isInteger(pagina) || pagina < 1 || pagina > 100000) throw new FiltroInvalido('Filtros inválidos')
-  const { onde, args, base, porItem, comTermo, inverter } = montarFiltros(filtros ?? {})
-  const ordem = inverter ? 'e.encerramento desc, e.controle' : 'e.encerramento asc, e.controle'
+  const { onde, args, base, porItem, comTermo, inverter, historico, porPublicacao } = montarFiltros(filtros ?? {})
+  const ordem = porPublicacao ? (inverter ? 'e.publicacao asc, e.controle' : 'e.publicacao desc, e.controle')
+    : inverter ? 'e.encerramento desc, e.controle' : 'e.encerramento asc, e.controle'
+  // No histórico, contagens param no limite (senão leriam o período inteiro a cada busca e estourariam a cota).
+  const L = LIMITE_CONTAGEM_HISTORICO
+  const contar = (w, a) => historico ? [`select count(*) as n from (select 1 from editais e where ${w} limit ${L + 1})`, a] : [`select count(*) as n from editais e where ${w}`, a]
   const comandos = [
     [`select e.compra, e.modo_disputa, e.tipo_itens, e.tipo_objeto from editais e where ${onde.join(' and ')} order by ${ordem} limit ? offset ?`, [...args, tamanho, (pagina - 1) * tamanho]],
     ['select chave, valor from coleta_estado'],
@@ -428,9 +507,10 @@ export async function buscarTurso(turso, filtros, pagina = 1, tamanho = 20) {
   if (contagem && Date.now() - contagem.em > 10 * 60_000) { porFiltro.delete(chaveFiltro); contagem = undefined }
   const inicioContagem = comandos.length
   if (!contagem) {
-    comandos.push([`select count(*) as n from editais e where ${onde.join(' and ')}`, args],
-      [`select e.orgao_cnpj as cnpj, min(e.orgao_nome) as razaoSocial from editais e where ${base.onde.join(' and ')} group by e.orgao_cnpj order by 2 limit 200`, base.args])
-    if (porItem) comandos.push([`select count(*) as n from editais e where ${base.onde.join(' and ')} and e.itens_completos = 0`, base.args])
+    comandos.push(contar(onde.join(' and '), args), historico
+      ? [`select cnpj, min(nome) as razaoSocial from (select e.orgao_cnpj as cnpj, e.orgao_nome as nome from editais e where ${base.onde.join(' and ')} limit ${2 * L}) group by cnpj order by 2 limit 200`, base.args]
+      : [`select e.orgao_cnpj as cnpj, min(e.orgao_nome) as razaoSocial from editais e where ${base.onde.join(' and ')} group by e.orgao_cnpj order by 2 limit 200`, base.args])
+    if (porItem) comandos.push(contar(`${base.onde.join(' and ')} and e.itens_completos = 0`, base.args))
   }
   // Tamanho da base e cobertura dos itens (até 30 dias) são iguais para todas as buscas e cada um lê dezenas de
   // milhares de linhas no Turso: ficam 10 min em memória.
@@ -438,7 +518,8 @@ export async function buscarTurso(turso, filtros, pagina = 1, tamanho = 20) {
   const buscarGlobais = !globais || Date.now() - globais.em > 10 * 60_000
   if (buscarGlobais) {
     const agora = agoraIso(), ate30 = new Date(Date.now() + 30 * 86400_000).toISOString()
-    comandos.push(['select count(*) as n from editais'], ['select count(*) as total, sum(itens_completos) as com from editais where encerramento >= ? and encerramento <= ?', [agora, ate30]])
+    // Só os abertos: com o histórico, a base inteira passa de 600 mil linhas.
+    comandos.push(['select count(*) as n from editais where encerramento >= ?', [agora]], ['select count(*) as total, sum(itens_completos) as com from editais where encerramento >= ? and encerramento <= ?', [agora, ate30]])
   }
   const res = await turso.lote(comandos)
   const [paginaLinhas, estado] = res
@@ -451,17 +532,20 @@ export async function buscarTurso(turso, filtros, pagina = 1, tamanho = 20) {
   if (buscarGlobais) { globais = { em: Date.now(), indexados: res.at(-2)[0], cobertura: res.at(-1)[0] }; GLOBAIS.set(turso, globais) }
   const { indexados, cobertura } = globais
   const e = Object.fromEntries(estado.map((l) => [l.chave, l.valor]))
-  const n = total?.n ?? 0
+  const n = Math.min(total?.n ?? 0, historico ? L : Infinity)
+  const [diaHist] = String(e.historico ?? '').split(':')
   return {
     data: paginaLinhas.map((l) => {
       const c = JSON.parse(l.compra), tipo = l.tipo_itens ?? l.tipo_objeto
       return { ...c, ...(l.modo_disputa != null ? { modoDisputaId: l.modo_disputa } : {}), ...(tipo ? { materialOuServico: tipo } : {}), ...(!l.tipo_itens && l.tipo_objeto ? { tipoEstimado: true } : {}) }
     }),
-    totalRegistros: n, totalPaginas: Math.ceil(n / tamanho), orgaos,
+    totalRegistros: n, totalPaginas: Math.ceil(n / tamanho), orgaos, historico, totalLimitado: historico && (total?.n ?? 0) > L,
     catalogo: {
       iniciado_em: null, ultima_coleta_em: e.ultima_coleta_em ?? null, ultima_carga_completa_em: e.carga_completa_em ?? null,
       carga_inicial_concluida: !!e.carga_completa_em, editais_indexados: indexados?.n ?? 0, editais_com_itens: 0, paginas_coletadas: 0, paginas_planejadas: 0,
       pausado_ate: e.pausado_ate ?? null, aviso: null, fonte: 'turso',
+      // Dia de publicação até onde o histórico já foi carregado (a carga anda do mais recente para o mais antigo).
+      historico_ate: e.historico_completo_em ? null : /^\d{8}$/.test(diaHist ?? '') ? `${diaHist.slice(0, 4)}-${diaHist.slice(4, 6)}-${diaHist.slice(6, 8)}` : 'pendente',
     },
     detalhesPendentes: porItem ? (pendentes?.[0]?.n ?? 0) : 0,
     coberturaItens: cobertura?.total ? (cobertura.com ?? 0) / cobertura.total : 0, comTermo,

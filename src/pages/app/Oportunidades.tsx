@@ -10,7 +10,7 @@ import { useOrg } from '@/providers/OrgProvider'
 import { useLista, useSalvar } from '@/hooks/useDados'
 import { dadosProcesso, rotaOportunidade, type CompraPNCP } from '@/lib/pncp'
 import { filtrosExtras, MODALIDADES, nomeModoDisputa, PERIODOS_ABERTURA, periodoAbertura, periodoEntre, resumoFiltros, validarFiltros, type FiltrosOportunidades as Filtros } from '@/lib/filtrosOportunidades'
-import {pesquisarIndice,type ResultadoIndice} from '@/lib/buscaIndice'
+import {buscaHistorica,pesquisarIndice,type ResultadoIndice} from '@/lib/buscaIndice'
 import CategoriasObjeto from '@/components/CategoriasObjeto'
 import FiltrosOportunidades from '@/components/FiltrosOportunidades'
 import MenuFiltros from '@/components/MenuFiltros'
@@ -35,7 +35,7 @@ const CHAVE_BUSCA='lf-oportunidades-busca',CHAVE_ABA='lf-oportunidades-aba'
 type Aba='abertas'|'desertas'|'localizar'
 function lerAba():Aba{try{const a=sessionStorage.getItem(CHAVE_ABA);return a==='desertas'||a==='localizar'?a:'abertas'}catch{return 'abertas'}}
 /** Abas da tela e o recurso (liberado pelo master) que cada uma exige. */
-const ABAS:[Aba,string,`recurso-${string}`|null][]=[['abertas','Editais abertos',null],['desertas','Itens sem vencedor','recurso-sem-vencedor'],['localizar','Localizar edital','recurso-localizar-edital']]
+const ABAS:[Aba,string,`recurso-${string}`|null][]=[['abertas','Editais',null],['desertas','Itens sem vencedor','recurso-sem-vencedor'],['localizar','Localizar edital','recurso-localizar-edital']]
 function lerBuscaSalva():{f:Partial<Filtros>;consulta:Partial<Filtros>|null;pagina:number}|null {
   try{
     const s=JSON.parse(sessionStorage.getItem(CHAVE_BUSCA)??'null')
@@ -123,6 +123,12 @@ export default function Oportunidades() {
     const novo={...consulta,...remover}
     setF(x=>({...x,...remover}));setPagina(1);setConsulta(novo)
   }
+  /** Encerrados nos últimos 30 dias (até ontem), os mais recentes primeiro. */
+  function escolherEncerrados() {
+    const novo={...f,situacao:'abertas' as const,...periodoEntre(-30,-1),inverter:true}
+    setF(novo);setPagina(1);setConsulta(novo)
+  }
+  const encerradosAtual=(()=>{const p=periodoEntre(-30,-1);return p.aberturaDe===f.aberturaDe&&p.aberturaAte===f.aberturaAte})()
   const periodoAtual=PERIODOS_ABERTURA.find(([d])=>{const p=periodoAbertura(d);return p.aberturaDe===f.aberturaDe&&p.aberturaAte===f.aberturaAte})?.[0]
   async function importar(c:CompraPNCP) {
     if(!empresaId){toast.error('Selecione a empresa para importar.');return}
@@ -146,10 +152,13 @@ export default function Oportunidades() {
           <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Período de abertura">
             {PERIODOS_ABERTURA.map(([d,rotulo])=><button key={rotulo} type="button" onClick={()=>escolherPeriodo(d)} aria-pressed={periodoAtual===d}
               className={`h-9 rounded-full border px-4 text-sm font-semibold transition-colors ${periodoAtual===d?'border-primary bg-primary text-primary-foreground':'bg-card text-muted-foreground hover:text-foreground'}`}>{rotulo}</button>)}
+            <button type="button" onClick={escolherEncerrados} aria-pressed={encerradosAtual} title="Editais com abertura nos últimos 30 dias"
+              className={`h-9 rounded-full border px-4 text-sm font-semibold transition-colors ${encerradosAtual?'border-primary bg-primary text-primary-foreground':'bg-card text-muted-foreground hover:text-foreground'}`}>Já encerrados</button>
             <FiltroLiberado id="filtro-dias-uteis"><button type="button" onClick={()=>{const novo={...f,diasUteis:!f.diasUteis};setF(novo);setPagina(1);setConsulta(novo)}} aria-pressed={f.diasUteis}
               className={`h-9 rounded-full border px-4 text-sm font-semibold transition-colors ${f.diasUteis?'border-emerald-500/60 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300':'bg-card text-muted-foreground hover:text-foreground'}`}>Só dias úteis</button></FiltroLiberado>
           </div>
           <div className="grid gap-3 sm:grid-cols-2"><Campo rotulo="Abertura a partir de" htmlFor="busca-abertura-de"><Input id="busca-abertura-de" type="date" value={f.aberturaDe} max={f.aberturaAte||undefined} onChange={set('aberturaDe')} /></Campo><Campo rotulo="Abertura até" htmlFor="busca-abertura-ate"><Input id="busca-abertura-ate" type="date" min={f.aberturaDe||undefined} value={f.aberturaAte} onChange={set('aberturaAte')} /></Campo></div>
+          <p className="text-xs text-muted-foreground">Para ver editais já encerrados, escolha uma data passada. O histórico cobre os últimos 12 meses, sem dispensa e inexigibilidade.</p>
         </>}
         {fv.situacao==='publicacoes'&&<div className="grid gap-3 sm:grid-cols-2"><Campo rotulo="Publicado desde" htmlFor="busca-inicio"><Input id="busca-inicio" type="date" required value={f.inicio} max={f.fim} onChange={set('inicio')} /></Campo><Campo rotulo="Publicado até" htmlFor="busca-fim"><Input id="busca-fim" type="date" required min={f.inicio} value={f.fim} onChange={set('fim')} /></Campo></div>}
       </form>
@@ -160,11 +169,13 @@ export default function Oportunidades() {
         {remover&&<button type="button" onClick={()=>removerFiltro(remover)} disabled={q.isFetching} aria-label={`Tirar o filtro ${rotulo}`} title="Tirar este filtro" className="grid h-5 w-5 shrink-0 place-items-center rounded-full transition-colors hover:bg-emerald-500/30 disabled:opacity-50"><X className="h-3.5 w-3.5" /></button>}
       </span>)}</div>}
       <div role="status" aria-live="polite" className="mb-4 space-y-2">
-        {q.isFetching?<p className="text-sm text-muted-foreground">Pesquisando...</p>:q.isError?<div role="alert" className="flex flex-wrap items-center gap-3 text-sm text-destructive"><p>{q.error.message}</p><Button tamanho="sm" variante="contorno" onClick={()=>q.refetch()}>Tentar novamente</Button></div>:<div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm font-medium">{q.data?.totalRegistros??0} {(q.data?.totalRegistros??0)===1?'oportunidade encontrada':'oportunidades encontradas'}</p>
+        {q.isFetching?<p className="text-sm text-muted-foreground">Pesquisando...</p>:q.isError?<div role="alert" className="flex flex-wrap items-center gap-3 text-sm text-destructive"><p>{q.error.message}</p><Button tamanho="sm" variante="contorno" onClick={()=>q.refetch()}>Tentar novamente</Button></div>:<div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm font-medium">{q.data?.totalLimitado?`Mais de ${(q.data.totalRegistros).toLocaleString('pt-BR')} oportunidades encontradas`:<>{(q.data?.totalRegistros??0).toLocaleString('pt-BR')} {(q.data?.totalRegistros??0)===1?'oportunidade encontrada':'oportunidades encontradas'}</>}</p>
           <BotaoInverterOrdem invertido={!!consulta.inverter} aoMudar={inverter=>{const novo={...consulta,inverter};setF(v=>({...v,inverter}));setPagina(1);setConsulta(novo)}}
             normal={consulta.situacao==='abertas'?'Mais próximas primeiro':'Mais recentes primeiro'} inverso={consulta.situacao==='abertas'?'Mais distantes primeiro':'Mais antigas primeiro'} /></div>}
         {catalogo?.ultima_coleta_em&&<p className="text-xs text-muted-foreground">Base atualizada em {new Date(catalogo.ultima_coleta_em).toLocaleString('pt-BR')}.</p>}
         {catalogo&&!catalogo.carga_inicial_concluida&&<p className="text-sm text-muted-foreground">A base está recebendo a carga inicial. {catalogo.editais_indexados.toLocaleString('pt-BR')} editais já estão disponíveis; a cobertura ainda é parcial.</p>}
+        {q.data?.totalLimitado&&<p className="text-xs text-muted-foreground">Para ver todas, reduza o período ou use palavra-chave, UF ou órgão.</p>}
+        {(q.data?.historico||(consulta&&buscaHistorica(consulta)))&&catalogo?.fonte==='turso'&&<p className="text-xs text-muted-foreground">Inclui editais encerrados (últimos 12 meses, sem dispensa e inexigibilidade; os itens só aparecem na página do edital).{catalogo.historico_ate==='pendente'?' O histórico começa a ser carregado hoje; por enquanto há só os encerrados dos últimos dias.':catalogo.historico_ate?` O histórico ainda está sendo carregado e vai, por enquanto, até editais publicados em ${new Date(`${catalogo.historico_ate}T12:00:00`).toLocaleDateString('pt-BR')}.`:''}</p>}
         {catalogo?.aviso&&<p className="text-xs text-muted-foreground">{catalogo.aviso}</p>}
         {(q.data?.detalhesPendentes??0)>0&&<p className="text-sm text-muted-foreground">Os filtros por item consideram os detalhes já coletados. Há {q.data?.detalhesPendentes} editais com detalhes em atualização.</p>}
       </div>
@@ -176,7 +187,7 @@ export default function Oportunidades() {
           <p className="mt-1 line-clamp-2 break-words text-sm text-muted-foreground">{c.objetoCompra}</p>
           <CategoriasObjeto objeto={c.objetoCompra} className="mt-2" />
           <div className="mt-2.5 flex flex-wrap items-center gap-2"><Badge cor="verde">{c.modalidadeNome}</Badge>{c.srp===true&&<Badge cor="azul">Registro de preço</Badge>}{nomeModoDisputa(c.modoDisputaId)&&<Badge>{nomeModoDisputa(c.modoDisputaId)}</Badge>}{c.materialOuServico&&<Badge title={c.tipoEstimado?'Deduzido pelo objeto do edital; confirme nos itens.':undefined}>{c.materialOuServico==='M'?'Material':c.materialOuServico==='S'?'Serviço':'Material e serviço'}{c.tipoEstimado?' (estimado)':''}</Badge>}<Badge>{c.valorTotalEstimado?formatarMoeda(c.valorTotalEstimado):'Valor não divulgado'}</Badge></div>
-          <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm"><ContagemDisputa data={c.dataEncerramentoProposta} /></div>
+          <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">{c.dataEncerramentoProposta&&new Date(c.dataEncerramentoProposta).getTime()<Date.now()?<><span className="font-semibold">Disputa em {new Date(c.dataEncerramentoProposta).toLocaleDateString('pt-BR')}</span><Badge>Encerrado</Badge></>:<ContagemDisputa data={c.dataEncerramentoProposta} />}</div>
           <div className="mt-2 flex flex-wrap gap-2"><Badge className="gap-1.5"><IconePortal id={portalCompra(c)[0]} nome={portalCompra(c)[1]} />{portalCompra(c)[1]}</Badge><Badge>{c.unidadeOrgao.municipioNome}/{c.unidadeOrgao.ufSigla}</Badge><CodigoComprasnet compra={c} /></div>
           <div className="mt-3 flex flex-wrap items-center gap-3"><Link to={`${rotaOportunidade(c)}#itens`} state={{compra:c}} className="inline-flex h-8 items-center gap-2 rounded-full border border-input bg-card px-3.5 text-sm font-semibold hover:bg-muted"><Package className="h-4 w-4" />Ver itens</Link>{existente?<Link className="text-sm text-primary hover:underline" to={`/app/processos/${existente.id}`}>Abrir processo</Link>:podeEditar&&<RecursoLiberado id="recurso-importar-oportunidade"><Button tamanho="sm" disabled={processos.isLoading||processos.isError||salvar.isPending} onClick={()=>importar(c)}>Adicionar aos processos</Button></RecursoLiberado>}</div>
         </Card>

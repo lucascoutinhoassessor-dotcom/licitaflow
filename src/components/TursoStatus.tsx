@@ -4,7 +4,7 @@ import { Badge, Button, Card } from '@/components/ui'
 import { supabase } from '@/lib/supabase'
 import { formatarDataHora } from '@/lib/format'
 
-interface Situacao { configurado: boolean; coletaAgendada: boolean; editais?: number; abertos?: number; comItens?: number; ultimaColeta?: string | null; cargaCompletaEm?: string | null; pausadoAte?: string | null }
+interface Situacao { configurado: boolean; coletaAgendada: boolean; editais?: number; abertos?: number; comItens?: number; ultimaColeta?: string | null; cargaCompletaEm?: string | null; pausadoAte?: string | null; historicoAte?: string | null; historicoCompletoEm?: string | null }
 
 async function situacao(): Promise<Situacao> {
   const { data } = await supabase.auth.getSession()
@@ -27,9 +27,10 @@ export default function TursoStatus() {
       <p className="text-sm text-muted-foreground">O coletor grava aqui o edital bruto assim que ele muda no PNCP, sem pesar no banco do Supabase. O Supabase cuida do login e dispara a coleta a cada minuto; os painéis leem o Turso.</p>
       {q.isError && <p className="text-sm text-destructive">{(q.error as Error).message}</p>}
       {s?.configurado && <ul className="grid gap-1 text-sm sm:grid-cols-2">
-        <li><span className="text-muted-foreground">Editais guardados:</span> <b>{(s.editais ?? 0).toLocaleString('pt-BR')}</b></li>
+        <li><span className="text-muted-foreground">Editais guardados (aprox.):</span> <b>{(s.editais ?? 0).toLocaleString('pt-BR')}</b></li>
         <li><span className="text-muted-foreground">Com proposta aberta:</span> <b>{(s.abertos ?? 0).toLocaleString('pt-BR')}</b></li>
         <li><span className="text-muted-foreground">Com itens coletados:</span> <b>{(s.comItens ?? 0).toLocaleString('pt-BR')}</b></li>
+        <li><span className="text-muted-foreground">Histórico de encerrados (12 meses):</span> <b>{s.historicoCompletoEm ? `completo em ${formatarDataHora(s.historicoCompletoEm)}` : s.historicoAte ? `carregado até ${new Date(`${s.historicoAte}T12:00:00`).toLocaleDateString('pt-BR')}` : 'aguardando a carga do dia'}</b></li>
         <li><span className="text-muted-foreground">Última coleta:</span> <b>{s.ultimaColeta ? formatarDataHora(s.ultimaColeta) : '—'}</b></li>
         <li className="sm:col-span-2"><span className="text-muted-foreground">Busca do app:</span> <b>{s.cargaCompletaEm ? `lendo daqui (carga completa em ${formatarDataHora(s.cargaCompletaEm)})` : 'ainda no Supabase, até terminar a primeira carga completa'}</b>{s.pausadoAte && new Date(s.pausadoAte) > new Date() ? ' · coleta pausada pelo PNCP por alguns minutos' : ''}</li>
       </ul>}
