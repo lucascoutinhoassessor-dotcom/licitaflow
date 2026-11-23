@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { ChevronDown, Search } from 'lucide-react'
 import { Input } from '@/components/ui'
 import { agruparItens, identificacaoGrupo, tituloItem, valorItem } from '@/lib/itensEdital'
@@ -12,7 +12,7 @@ function quantidade(i: ItemCompra) {
   return typeof i.quantidade === 'number' ? i.quantidade.toLocaleString('pt-BR') : '—'
 }
 
-function Item({ item, tipoPadrao }: { item: ItemCompra; tipoPadrao?: string }) {
+function Item({ item, tipoPadrao, extra }: { item: ItemCompra; tipoPadrao?: string; extra?: (item: ItemCompra) => ReactNode }) {
   const [aberto, setAberto] = useState(false)
   const [completo, setCompleto] = useState(false)
   const descricao = (item.descricao ?? '').trim()
@@ -54,6 +54,7 @@ function Item({ item, tipoPadrao }: { item: ItemCompra; tipoPadrao?: string }) {
             {identificacaoGrupo(item, 'lote') && <span className="rounded-full border px-2.5 py-1 font-semibold">Lote {identificacaoGrupo(item, 'lote')}</span>}
             {identificacaoGrupo(item, 'grupo') && <span className="rounded-full border px-2.5 py-1 font-semibold">Grupo {identificacaoGrupo(item, 'grupo')}</span>}
           </div>
+          {extra?.(item)}
         </div>
       )}
     </article>
@@ -62,7 +63,8 @@ function Item({ item, tipoPadrao }: { item: ItemCompra; tipoPadrao?: string }) {
 
 /** Itens do edital em lista que abre e fecha, com busca e agrupamento por lote ou grupo. */
 /** tipoEdital: M ou S quando todos os itens do edital são do mesmo tipo. */
-export default function ItensAcordeao({ itens, tipoEdital }: { itens: ItemCompra[]; tipoEdital?: string }) {
+/** extra: conteúdo a mais dentro do item aberto (ex.: concorrentes do item). */
+export default function ItensAcordeao({ itens, tipoEdital, extra }: { itens: ItemCompra[]; tipoEdital?: string; extra?: (item: ItemCompra) => ReactNode }) {
   const tipoPadrao = tipoEdital === 'M' ? 'Material' : tipoEdital === 'S' ? 'Serviço' : undefined
   const [busca, setBusca] = useState('')
   const temLote = itens.some((i) => identificacaoGrupo(i, 'lote'))
@@ -98,7 +100,7 @@ export default function ItensAcordeao({ itens, tipoEdital }: { itens: ItemCompra
                 <span className="text-muted-foreground">{lista.length} {lista.length === 1 ? 'item' : 'itens'}</span>
               </h3>
             )}
-            <div className="space-y-2">{lista.map((i) => <Item key={i.numeroItem} item={i} tipoPadrao={tipoPadrao} />)}</div>
+            <div className="space-y-2">{lista.map((i) => <Item key={i.numeroItem} item={i} tipoPadrao={tipoPadrao} extra={extra} />)}</div>
           </section>
         ))}
       </div>

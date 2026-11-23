@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { abrirPdf, conferirTrechos, criarHandler, prepararDocumentos, prioridadeEdital, reduzir } from './agentes.js'
+import { abrirPdf, conferirTrechos, criarHandler, ESQUEMA, fichaDaCompra, prepararDocumentos, prioridadeEdital, reduzir } from './agentes.js'
 import { limparProtecoes } from './protecao.js'
 
 const CONTROLE = '11222333000144-1-000045/2026'
@@ -43,6 +43,21 @@ function pncp(arquivos: unknown[], bytes: Record<string, Uint8Array>) {
     return new Response('nada', { status: 404 })
   }
 }
+
+describe('relatório do Leitor', () => {
+  it('pede avaliação, características, tipo das datas e orientação nos riscos', () => {
+    expect(ESQUEMA.required).toEqual(expect.arrayContaining(['avaliacao', 'caracteristicas', 'datas', 'riscos']))
+    const risco = (ESQUEMA.properties.riscos as { items: { required: string[] } }).items
+    expect(risco.required).toEqual(expect.arrayContaining(['orientacao', 'fundamento', 'trecho']))
+    const data = (ESQUEMA.properties.datas as { items: { required: string[] } }).items
+    expect(data.required).toContain('tipo')
+  })
+  it('monta a ficha da compra com os dados oficiais do PNCP', () => {
+    expect(fichaDaCompra(null)).toBeNull()
+    expect(fichaDaCompra({ modalidadeNome: 'Pregão - Eletrônico', numeroCompra: '45', anoCompra: 2026, valorTotalEstimado: 1000, srp: true, linkSistemaOrigem: 'javascript:alert(1)' }))
+      .toMatchObject({ numero: '45/2026', valor_estimado: 1000, srp: true, link_origem: null })
+  })
+})
 
 describe('escolha dos arquivos do edital', () => {
   it('lê primeiro o edital e o termo de referência e ignora atas e resultados', () => {
@@ -167,6 +182,7 @@ describe('rota do Leitor de editais', () => {
     expect(corpo.leitura.resultado.datas[0].trecho.conferido).toBe(true)
     expect(corpo.leitura.resultado.habilitacao[0].trecho.conferido).toBe(true)
     expect(corpo.leitura.documentos[0].texto).toBeUndefined()
+    expect(corpo.leitura.resultado.ficha).toMatchObject({ modalidade: 'Pregão - Eletrônico', orgao: 'Prefeitura', uf: 'MG', objeto: 'Aquisição de material de limpeza' })
     expect(corpo.uso).toEqual({ usadas: 1, limite: 2, origem: 'plano' })
     const chamada = c.beta.messages.parse.mock.calls[0] as unknown as [Record<string, unknown>]
     expect(chamada[0]).toMatchObject({ model: 'claude-opus-5-5', fallbacks: 'default', betas: ['server-side-fallback-2026-07-01'] })

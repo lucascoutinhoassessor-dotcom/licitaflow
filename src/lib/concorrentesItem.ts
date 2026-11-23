@@ -6,6 +6,7 @@ import type { ItemCompraFederal } from './compraFederal'
 // - resultados cancelados (com o motivo publicado);
 // - desclassificadas, inabilitadas, recusadas e sem proposta lidas nas atas do PNCP, quando a ata cita o item ou o grupo;
 // - empresas por item lidas no termo de julgamento enviado pelo usuário (valor, situação e motivo de cada uma);
+// - todas as propostas de cada item capturadas no Compras.gov.br pelo botão favorito (fonte 'portal', a mais completa);
 // - demais empresas citadas na ata, que só se ligam ao item quando a compra tem um item (ou um grupo) só.
 
 export type SituacaoConcorrente = 'vencedora' | 'classificada' | 'cancelado' | TipoOcorrencia | 'participou'
@@ -13,7 +14,8 @@ export type SituacaoConcorrente = 'vencedora' | 'classificada' | 'cancelado' | T
 export interface Concorrente {
   chave: string; cnpj: string | null; nome: string | null; porte: string | null; meEpp: boolean
   colocacao: number | null; valorUnitario: number | null; valorTotal: number | null
-  situacao: SituacaoConcorrente; motivo: string | null; fonte: 'oficial' | 'ata'
+  situacao: SituacaoConcorrente; motivo: string | null; fonte: 'oficial' | 'ata' | 'portal'
+  marca?: string | null; valorInicial?: number | null; quantidade?: number | null
 }
 
 /** "Itens 1, 3 a 5" → { tipo: 'item', numeros: {1,3,4,5} }. Lote e grupo viram 'grupo'. */
@@ -78,7 +80,7 @@ export function concorrentesDoItem(item: ItemCompraFederal, todos: ItemCompraFed
     const atual = achar(cnpj, nome)
     if (atual) {
       // O resultado oficial vale mais que a leitura da ata (a empresa pode ter caído em outra fase e voltado no recurso).
-      if (atual.fonte === 'oficial') return
+      if (atual.fonte === 'oficial' || atual.fonte === 'portal') return
       if (PRIORIDADE[tipo] < PRIORIDADE[atual.situacao]) atual.situacao = tipo
       atual.motivo ??= motivo
       return
@@ -87,19 +89,22 @@ export function concorrentesDoItem(item: ItemCompraFederal, todos: ItemCompraFed
   }
 
   // Termo de julgamento enviado: seção do próprio item (ou do grupo dele) traz todas as propostas com valor.
-  for (const sec of atas?.itens ?? []) {
+  // Propostas do portal primeiro: são o registro oficial da disputa, e a leitura de PDF só completa o que faltar.
+  const secoes = [...(atas?.itens ?? [])].sort((a, b) => Number(b.fonte === 'portal') - Number(a.fonte === 'portal'))
+  for (const sec of secoes) {
+    const portal = sec.fonte === 'portal'
     const doItem = sec.tipo === 'item' ? sec.numero === item.numero : item.grupo != null && item.grupo > 0 ? sec.numero === item.grupo : unico
     for (const e of sec.empresas) {
       if (!doItem) { deOutroItem.add(e.cnpj); continue }
       const atual = achar(e.cnpj, e.nome)
       if (atual) {
-        if (atual.fonte === 'oficial') continue
+        if (atual.fonte === 'oficial' || atual.fonte === 'portal') { atual.marca ??= e.marca ?? null; atual.valorInicial ??= e.valorInicial ?? null; continue }
         if (e.situacao !== 'participou' && e.situacao !== 'classificada' && PRIORIDADE[e.situacao] > PRIORIDADE[atual.situacao]) atual.situacao = e.situacao
         atual.valorUnitario ??= e.valor
         atual.motivo ??= e.motivo
         continue
       }
-      lista.push({ chave: `t${lista.length}`, cnpj: e.cnpj, nome: e.nome, porte: null, meEpp: false, colocacao: null, valorUnitario: e.valor, valorTotal: null, situacao: e.situacao, motivo: e.motivo, fonte: 'ata' })
+      lista.push({ chave: `t${lista.length}`, cnpj: e.cnpj, nome: e.nome, porte: portal && e.meEpp ? 'ME/EPP' : null, meEpp: false, colocacao: e.colocacao ?? null, valorUnitario: e.valor, valorTotal: e.valorTotal ?? null, situacao: portal && e.adjudicada ? 'vencedora' : e.situacao, motivo: e.motivo, fonte: portal ? 'portal' : 'ata', marca: e.marca ?? null, valorInicial: e.valorInicial ?? null, quantidade: e.quantidade ?? null })
     }
   }
   for (const c of lista) if (c.cnpj) deOutroItem.delete(c.cnpj)

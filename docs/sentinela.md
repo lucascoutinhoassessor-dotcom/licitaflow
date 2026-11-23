@@ -19,6 +19,31 @@ A primeira leitura de cada edital só guarda como ele está, sem gerar aviso.
 
 Os níveis alto e médio vão por push para os membros da organização: um push por processo, que abre o processo ao ser tocado. Os três níveis entram no histórico do processo e na tela **Agentes de IA → Sentinela**.
 
+## Como os avisos são escritos
+
+- **Identificação da compra:** cada aviso traz modalidade, número e órgão (ex.: "Pregão Eletrônico nº 45/2026 · Prefeitura de X (MG)"). O push usa isso no título.
+- **Documentos classificados:** o tipo vem do nome e do tipo informado ao PNCP, com o nome do arquivo limpo (sem extensão, sublinhados e códigos internos). Tipos:
+  - errata / retificação;
+  - resposta a esclarecimento;
+  - impugnação;
+  - aviso de suspensão ou nova data;
+  - revogação ou anulação;
+  - recurso / contrarrazões;
+  - ata / julgamento;
+  - resultado / homologação;
+  - contrato / ARP;
+  - nova versão do edital;
+  - anexo;
+  - aviso do órgão.
+- **Antes e depois:** datas aparecem como "adiado" ou "antecipado", com a diferença em dias. O valor estimado mostra os valores em reais e a variação em %.
+- **O que fazer:** cada aviso traz uma orientação curta ao licitante, citando a Lei 14.133 quando há prazo legal:
+  - art. 55, § 1º: reabertura do prazo quando a mudança afeta as propostas;
+  - art. 164: esclarecimento e impugnação até 3 dias úteis antes da abertura;
+  - art. 165: recursos.
+
+  A orientação também vai para a descrição do histórico do processo.
+- **Push:** junta as mudanças por processo, com as de atenção primeiro, por exemplo "Errata / retificação do edital: Errata 01 (+1 outra mudança)".
+
 ## Como funciona
 
 - O pg_cron roda `licitaflow_sentinela.disparar()` a cada 10 minutos. A função só chama a Vercel quando há edital com verificação vencida, em `GET /api/agentes?agente=sentinela&acao=verificar` com o header `x-coleta`. O token fica em `licitaflow_sentinela.config` e é conferido pelo banco.

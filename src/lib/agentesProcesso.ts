@@ -11,6 +11,7 @@ export type EstadosAgentes = Record<string, Record<string, StatusAgente>>
 export const ROTULOS: Record<string, Partial<Record<EstadoAgente, string>>> = {
   sentinela: { ativo: 'Monitorando com IA', na_fila: 'Monitoramento ligado', falha: 'Monitoramento com falha', parado: 'Monitoramento parado' },
   'leitor-editais': { ativo: 'Edital lido pela IA' },
+  radar: { ativo: 'Encontrado pelo Radar' },
 }
 
 /** Estados que aparecem no cartão. Desligado e indisponível ficam só no menu, para não poluir o Kanban. */

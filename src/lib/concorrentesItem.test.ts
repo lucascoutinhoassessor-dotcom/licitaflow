@@ -73,3 +73,27 @@ describe('concorrentes do item', () => {
     expect(concorrentesDoItem(i, [i], atas).lista).toMatchObject([{ situacao: 'vencedora', motivo: null }])
   })
 })
+
+describe('propostas do Compras.gov.br no item', () => {
+  it('traz todas as colocações com marca, mesmo quem não foi homologado', () => {
+    const i1 = item(1, null, [res('LIBRASIL', '48943133000128', 1, 148)])
+    const atas = ata({
+      itens: [
+        { tipo: 'item', numero: 1, empresas: [{ cnpj: '27176482000191', nome: 'X (ata)', valor: null, situacao: 'participou', motivo: null }] },
+        { tipo: 'item', numero: 1, fonte: 'portal', empresas: [
+          { cnpj: '48943133000128', nome: 'LIBRASIL', valor: 148, situacao: 'classificada', motivo: null, colocacao: 1, marca: 'Teca', adjudicada: true },
+          { cnpj: '27176482000191', nome: 'DOUGLAS', valor: 149, situacao: 'classificada', motivo: null, colocacao: 2, marca: 'SL' },
+          { cnpj: '64655198000124', nome: 'GARDA', valor: 179.82, situacao: 'classificada', motivo: null, colocacao: 4, marca: 'SL Metalumi' },
+          { cnpj: '61720863000128', nome: 'APEX', valor: 261, situacao: 'desclassificacao', motivo: 'acima do valor estimado.', colocacao: 8, marca: 'APEX' },
+        ] },
+      ],
+    })
+    const { lista } = concorrentesDoItem(i1, [i1], atas)
+    expect(lista.map((c) => [c.nome, c.situacao, c.colocacao, c.marca, c.fonte])).toEqual([
+      ['LIBRASIL', 'vencedora', 1, 'Teca', 'oficial'],
+      ['DOUGLAS', 'classificada', 2, 'SL', 'portal'],
+      ['GARDA', 'classificada', 4, 'SL Metalumi', 'portal'],
+      ['APEX', 'desclassificacao', 8, 'APEX', 'portal'],
+    ])
+  })
+})

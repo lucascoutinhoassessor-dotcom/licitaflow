@@ -57,13 +57,15 @@ ok(l2.length === 7 && l2.some((x) => x.controle === C(1)), 'liberado para todos 
 
 const futuro = new Date(Date.now() + 3600e3).toISOString()
 const avisos = (await como('servico', 'select public.sentinela_gravar($1, $2) r', [token, JSON.stringify([
-  { controle: C(1), estado: { situacao: 'Suspensa' }, proxima_em: futuro, eventos: [{ tipo: 'situacao', nivel: 'alto', titulo: 'Compra suspensa pelo órgão', detalhe: { de: 'Divulgada', para: 'Suspensa' } }] },
+  { controle: C(1), estado: { situacao: 'Suspensa' }, proxima_em: futuro, eventos: [{ tipo: 'situacao', nivel: 'alto', titulo: 'Compra suspensa pelo órgão', orientacao: 'A sessão não acontece na data prevista.', detalhe: { antes: 'Divulgada', depois: 'Suspensa', contexto: 'Pregão Eletrônico nº 1/2026' } }] },
   { controle: C(3), estado: { situacao: 'Divulgada' }, proxima_em: futuro, eventos: [] },
   { controle: C(4), erro: 'PNCP fora do ar', proxima_em: futuro },
 ])]))[0].r
 ok(avisos.length === 2 && avisos.every((a) => a.titulo === 'Compra suspensa pelo órgão'), 'evento vira aviso para cada processo que acompanha o edital (duas orgs)')
 const linhas = (await db.query(`select org_id, tipo, origem, titulo from public.processo_eventos where tipo = 'sentinela'`)).rows
 ok(linhas.length === 2 && linhas.every((l) => l.origem === 'agente' && l.titulo.startsWith('Sentinela:')), 'evento entra na linha do tempo dos dois processos')
+ok(avisos.every((a) => a.controle === C(1)), 'aviso traz o número de controle do edital (para o push identificar a compra)')
+ok((await db.query(`select descricao from public.processo_eventos where tipo = 'sentinela' limit 1`)).rows[0].descricao === 'A sessão não acontece na data prevista.', 'orientação vai para a descrição do histórico do processo')
 ok((await db.query(`select falhas from licitaflow_sentinela.editais where controle = $1`, [C(4)])).rows[0].falhas === 1, 'falha conta e reagenda')
 
 ok((await como(U1, 'select * from public.sentinela_eventos')).length === 1, 'cliente vê o evento do edital que acompanha')

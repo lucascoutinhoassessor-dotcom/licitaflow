@@ -10,33 +10,9 @@ import type { ColocacaoItem } from '@/lib/resultadosEdital'
 import { linkPesquisaMarca } from '@/lib/precos'
 import { formatarCnpj, formatarData, formatarMoeda } from '@/lib/format'
 import { atasDaCompra, atasEnviadas, enviarAta, juntarAtas, type AtaEnviada, type AtasCompra } from '@/lib/atas'
-import { concorrentesDoItem, type Concorrente, type SituacaoConcorrente } from '@/lib/concorrentesItem'
+import { concorrentesDoItem } from '@/lib/concorrentesItem'
+import { FavoritoPropostas, LinhaConcorrente } from '@/components/ConcorrentesItem'
 import { cn } from '@/lib/utils'
-
-const SELO: Record<SituacaoConcorrente, { texto: string; cor: 'verde' | 'azul' | 'vermelho' | 'amarelo' | 'neutro' }> = {
-  vencedora: { texto: 'Vencedora', cor: 'verde' }, classificada: { texto: 'Classificada', cor: 'azul' },
-  desclassificacao: { texto: 'Desclassificada', cor: 'vermelho' }, inabilitacao: { texto: 'Inabilitada', cor: 'amarelo' },
-  recusa: { texto: 'Proposta recusada', cor: 'vermelho' }, cancelado: { texto: 'Resultado cancelado', cor: 'neutro' },
-  sem_proposta: { texto: 'Não enviou proposta', cor: 'neutro' }, participou: { texto: 'Participou', cor: 'neutro' },
-}
-
-function LinhaConcorrente({ c }: { c: Concorrente }) {
-  const selo = SELO[c.situacao]
-  return (
-    <li className={cn('flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl border p-3', ['desclassificacao', 'inabilitacao', 'recusa', 'cancelado', 'sem_proposta'].includes(c.situacao) && 'border-dashed')}>
-      <span className={cn('flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold', c.situacao === 'vencedora' ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300' : 'bg-muted text-muted-foreground')} title={c.colocacao ? `${c.colocacao}º colocado` : 'Colocação não publicada'}>{c.colocacao ? `${c.colocacao}º` : '–'}</span>
-      <span className="min-w-0 flex-1">
-        <span className="flex flex-wrap items-center gap-2">
-          {c.cnpj && /^\d{14}$/.test(c.cnpj) ? <Link className="font-semibold text-sky-700 hover:underline dark:text-sky-300" to={`/app/analise-empresas/${c.cnpj}`}>{c.nome ?? `CNPJ ${formatarCnpj(c.cnpj)}`}</Link> : <span className="font-semibold">{c.nome}</span>}
-          <Badge cor={selo.cor}>{selo.texto}</Badge>
-        </span>
-        <span className="block text-xs text-muted-foreground">{c.cnpj ? `CNPJ ${formatarCnpj(c.cnpj)}` : 'CNPJ não informado na ata'}{c.porte ? ` · ${c.porte}` : ''}{c.meEpp ? ' · benefício ME/EPP' : ''}{c.fonte === 'ata' ? ' · lido na ata' : ''}</span>
-        {c.motivo && <span className="mt-1 block text-xs text-muted-foreground">{c.situacao === 'cancelado' ? 'Motivo do cancelamento: ' : 'Motivo: '}{c.motivo.length > 220 ? `${c.motivo.slice(0, 217)}…` : c.motivo}</span>}
-      </span>
-      {(c.valorUnitario || c.valorTotal) && <span className="text-right"><span className="block font-bold tabular-nums">{c.valorUnitario ? formatarMoeda(c.valorUnitario) : '—'}</span><span className="text-xs text-muted-foreground">total {c.valorTotal ? formatarMoeda(c.valorTotal) : '—'}</span></span>}
-    </li>
-  )
-}
 
 function Item({ item, todos, atas, atasCarregando }: { item: ItemCompraFederal; todos: ItemCompraFederal[]; atas?: AtasCompra; atasCarregando: boolean }) {
   const [aberto, setAberto] = useState(false)
@@ -77,8 +53,8 @@ function Item({ item, todos, atas, atasCarregando }: { item: ItemCompraFederal; 
           )}
           <p className="mt-3 text-xs text-muted-foreground">
             {atasCarregando ? 'Procurando desclassificadas e inabilitadas nas atas da compra…'
-              : lidas ? 'Vencedora, colocações e cancelamentos são os dados oficiais; as demais propostas, desclassificadas e inabilitadas foram lidas na ata (confira no arquivo original).'
-              : 'Os dados abertos publicam só as empresas homologadas (vencedora e cadastro de reserva) e os resultados cancelados. Para ver todas as propostas, desclassificadas e inabilitadas, envie o termo de julgamento ou a ata da sessão no quadro acima dos itens.'}
+              : lista.some((c) => c.fonte === 'portal') ? 'Todas as propostas vieram da página da compra no Compras.gov.br, capturadas pelo botão favorito.' : lidas ? 'Vencedora, colocações e cancelamentos são os dados oficiais; as demais propostas, desclassificadas e inabilitadas foram lidas na ata (confira no arquivo original).'
+              : 'Os dados abertos publicam só as empresas homologadas (vencedora e cadastro de reserva) e os resultados cancelados. Para ver todas as propostas, use o botão favorito do Compras.gov.br ou envie o termo de julgamento no quadro acima dos itens.'}
           </p>
         </div>
       )}
@@ -161,6 +137,7 @@ export default function CompraDetalhe() {
         </Card>
         <EmpresasDisputa controle={c.controle} colocacoes={colocacoesDa(c)} />
         <h2 className="mb-3 flex items-center gap-2 text-lg font-semibold"><Tag className="h-5 w-5 text-sky-400" />Itens, vencedores e marcas</h2>
+        <FavoritoPropostas idCompra={idCompra} className="mb-4" />
         <EnviarAta idCompra={idCompra} controle={c.controle} enviadas={enviadas.data ?? []} />
         <div className="space-y-2">{c.itens.map((i) => <Item key={i.numero} item={i} todos={c.itens} atas={atasJuntas} atasCarregando={(atas.isLoading && atas.fetchStatus !== 'idle') || enviadas.isLoading} />)}</div>
       </>}

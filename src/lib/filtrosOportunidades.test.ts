@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { consultarItens, filtrosExtras, MODALIDADES, periodoAbertura, periodoEntre, validarFiltros, type FiltrosOportunidades } from './filtrosOportunidades'
+import { consultarItens, filtrosExtras, MODALIDADES, periodoAbertura, periodoEntre, resumoFiltros, validarFiltros, type FiltrosOportunidades } from './filtrosOportunidades'
 import { portalCompra, urlOrigem, PORTAIS } from './portais'
 import type { CompraPNCP } from './pncp'
 const f: FiltrosOportunidades={...filtrosExtras,modalidades:['6','8'],busca:'computadores',inicio:'2026-11-09',fim:'2026-11-16',uf:'',modalidade:'6'}
@@ -53,4 +53,19 @@ describe('filtros de oportunidades',()=>{
 
 
 
+})
+
+describe('resumoFiltros', () => {
+  const base: FiltrosOportunidades = { ...filtrosExtras, inicio: '', fim: '', situacao: 'abertas', modalidade: '6', uf: '', aberturaDe: '2026-11-22', aberturaAte: '2026-12-07', portais: ['pncp'], tipoItem: 'M' }
+  const r = resumoFiltros(base, MODALIDADES.length, PORTAIS.length)
+  const achar = (rotulo: string) => r.find((x) => x.rotulo === rotulo)
+  it('padrões não têm X; os demais voltam ao padrão ao serem tirados', () => {
+    expect(r.map((x) => x.rotulo)).toEqual(['Brasil inteiro', 'Abertura: 22/11/2026 a 07/12/2026', 'Só dias úteis', '1 portal', 'Somente materiais'])
+    expect(achar('Brasil inteiro')?.remover).toBeUndefined()
+    expect(achar('Só dias úteis')?.remover).toEqual({ diasUteis: false })
+    expect(achar('1 portal')?.remover).toEqual({ portais: filtrosExtras.portais })
+    expect(achar('Somente materiais')?.remover).toEqual({ tipoItem: '' })
+    const semPeriodo = { ...base, ...achar('Abertura: 22/11/2026 a 07/12/2026')!.remover }
+    expect(resumoFiltros(semPeriodo, MODALIDADES.length, PORTAIS.length).find((x) => x.rotulo === 'Abertura: todo o período')?.remover).toBeUndefined()
+  })
 })

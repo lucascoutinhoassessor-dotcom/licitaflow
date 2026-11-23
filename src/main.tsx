@@ -9,6 +9,13 @@ import './index.css'
 import { tocarPing } from './lib/ping'
 import { iniciarRegistroUso } from './lib/registroUso'
 
+// Propostas do botão favorito do Compras.gov.br chegam depois do # do endereço. Guarda antes do login,
+// que pode trocar de página e perder o #; a página /app/importar-propostas lê daqui.
+if (window.location.hash.startsWith('#lf-propostas=')) {
+  try { sessionStorage.setItem('lf-propostas', window.location.hash.slice(14)) } catch { /* sem armazenamento */ }
+  history.replaceState(null, '', window.location.pathname + window.location.search)
+}
+
 // Registro de uso, erros e lentidão por usuário (master → Logs → Uso dos clientes).
 iniciarRegistroUso()
 
