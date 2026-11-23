@@ -9,7 +9,7 @@
 import webpushPadrao from 'web-push'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-const CONTATO = 'https://licitaflow-prod.vercel.app'
+const CONTATO = 'https://licitaforce-app.vercel.app'
 
 /** Texto curto para caber na notificação do celular. */
 export function resumo(texto, max = 180) {

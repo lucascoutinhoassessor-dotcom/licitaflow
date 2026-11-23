@@ -4,7 +4,7 @@ import nodemailer from 'nodemailer'
 import { decifrar } from './asaas.js'
 import { LOGO_PNG_BASE64 } from './logo-email.js'
 
-export const URL_SITE = 'https://licitaflow-prod.vercel.app'
+export const URL_SITE = 'https://licitaforce-app.vercel.app'
 export const NOME_PADRAO = 'LicitaForce'
 const COR = '#1d4ed8'
 

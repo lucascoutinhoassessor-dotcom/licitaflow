@@ -24,7 +24,7 @@ describe('e-mail da plataforma', () => {
     expect(e.html).toContain('&lt;b&gt;Ana')
     expect(e.html).toContain('X &amp; Y')
     expect(e.html).toContain('21/12/2026')
-    expect(e.html).toContain('https://licitaflow-prod.vercel.app/entrar')
+    expect(e.html).toContain('https://licitaforce-app.vercel.app/entrar')
   })
 })
 

@@ -7,7 +7,7 @@ const CONSULTA = 'https://pncp.gov.br/api/consulta/v1/orgaos'
 const PNCP = 'https://pncp.gov.br/api/pncp/v1/orgaos'
 const CONTROLE = /^(\d{14})-1-0*(\d{1,9})\/(\d{4})$/
 const COMPLETO_A_CADA_MS = 6 * 3600e3 // relê a lista de arquivos ao menos a cada 6 h, mesmo sem mudança na compra
-const CONTATO = 'https://licitaflow-prod.vercel.app'
+const CONTATO = 'https://licitaforce-app.vercel.app'
 // Situações da compra no PNCP: 1 Divulgada, 2 Revogada, 3 Anulada, 4 Suspensa.
 const SITUACAO_GRAVE = new Set([2, 3, 4])
 const DOC_IMPORTANTE = /retifica|errata|aditamento|impugna|esclarec|suspens|revoga|anula|adiamento|prorroga|nova data|reabertura|aviso/i

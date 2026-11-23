@@ -32,4 +32,4 @@
 - Migração `20261121000042_email_plataforma.sql`. Configuração em **Master → Integrações → E-mail da plataforma (SMTP)** (Gmail com senha de app, Resend, Brevo ou outro). A senha é cifrada como a chave do Asaas.
 - No primeiro pagamento confirmado de cada assinatura, o webhook envia "Pagamento confirmado: seu acesso está liberado" para quem contratou (ou o criador da organização). Uma vez por assinatura; se o SMTP falhar, o próximo aviso do Asaas tenta de novo. O resultado aparece nos últimos avisos do Asaas ("e-mail enviado" / "e-mail falhou").
 - Assinaturas já pagas antes da migração não recebem e-mail retroativo.
-- Cadastro e "Esqueci minha senha" saem pelo **Supabase**: configure o mesmo SMTP em Authentication → Emails → SMTP Settings, a Site URL/Redirect URLs `https://licitaflow-prod.vercel.app/**` e o limite de e-mails por hora.
+- Cadastro e "Esqueci minha senha" saem pelo **Supabase**: configure o mesmo SMTP em Authentication → Emails → SMTP Settings, a Site URL/Redirect URLs `https://licitaforce-app.vercel.app/**` e o limite de e-mails por hora.

@@ -1,15 +1,22 @@
-// Roda antes do React. O painel master mora em licitaflow-master.vercel.app: é um app instalável
+// Roda antes do React. O painel master mora em endereço próprio (MASTER): é um app instalável
 // separado (ícone e nome próprios, abre em /master) e guarda um login independente do app do usuário.
 // Mesma regra de src/lib/pwa.ts (que cobre as navegações internas). Arquivo próprio por causa da CSP.
 (function () {
+  var HOST_SITE = 'licitaforce-app.vercel.app';
   var MASTER = 'licitaflow-master.vercel.app';
-  var SITE = 'https://licitaflow-prod.vercel.app';
-  var HOSTS_SITE = ['licitaflow-prod.vercel.app', 'licitaflow.com.br', 'www.licitaflow.com.br'];
+  var SITE = 'https://' + HOST_SITE;
+  // Endereços antigos (marca LicitaFlow) continuam no ar, mas as páginas levam aos novos.
+  var HOSTS_SITE = [HOST_SITE, 'licitaflow-prod.vercel.app'];
+  var HOSTS_MASTER = [MASTER, 'licitaforce-master.vercel.app', 'licitaflow-master.vercel.app'];
   var host = location.hostname, path = location.pathname, resto = location.search + location.hash;
   var rotaMaster = /^\/master(\/|$)/.test(path);
-  if (host === MASTER && path === '/') return location.replace('/master' + resto);
-  if (host === MASTER && !rotaMaster) return location.replace(SITE + path + resto);
+  if (HOSTS_MASTER.indexOf(host) >= 0) {
+    if (path === '/') return location.replace((host === MASTER ? '' : 'https://' + MASTER) + '/master' + resto);
+    if (!rotaMaster) return location.replace(SITE + path + resto);
+    if (host !== MASTER) return location.replace('https://' + MASTER + path + resto);
+  }
   if (HOSTS_SITE.indexOf(host) >= 0 && rotaMaster) return location.replace('https://' + MASTER + path + resto);
+  if (HOSTS_SITE.indexOf(host) >= 0 && host !== HOST_SITE) return location.replace(SITE + path + resto);
 
   var master = rotaMaster;
   // A abertura animada de index.html usa as cores do master.

@@ -35,7 +35,7 @@ describe('cadastro e senha pelo e-mail da plataforma', () => {
     expect(msg.para).toBe('ana@x.com')
     expect(msg.assunto).toBe('Redefinir sua senha do LicitaForce')
     expect(msg.html).toContain('Olá, Ana!')
-    expect(msg.html).toContain('https://licitaflow-prod.vercel.app/redefinir-senha?token_hash=abc123&amp;type=recovery')
+    expect(msg.html).toContain('https://licitaforce-app.vercel.app/redefinir-senha?token_hash=abc123&amp;type=recovery')
     expect(msg.html).toContain('cid:licitaflow-logo')
   })
   it('esqueci a senha com e-mail sem conta: responde ok e não envia', async () => {
