@@ -9,6 +9,7 @@ import { buscarCatalogo, historicoPrecos, type ItemCatalogo } from '@/lib/precos
 import { formatarData, formatarMoeda } from '@/lib/format'
 import { normalizar } from '@/lib/portais'
 import CartaoCompraPreco from '@/components/CartaoCompraPreco'
+import Paginacao, { POR_PAGINA } from '@/components/Paginacao'
 import { cn } from '@/lib/utils'
 
 const UFS = 'AC AL AP AM BA CE DF ES GO MA MT MS MG PA PB PR PE PI RJ RN RS RO RR SC SP SE TO'.split(' ')
@@ -45,10 +46,10 @@ export default function HistoricoPrecos() {
     for (const [k, v] of Object.entries(novos)) { if (v) p.set(k, v); else p.delete(k) }
     return p
   }, { replace: true })
-  const setFiltros = (f: (atual: typeof filtros) => typeof filtros) => { const n = f(filtros); mudar({ uf: n.uf || null, de: n.de, ate: n.ate }) }
-  const setItem = (c: ItemCatalogo | null) => mudar(c ? { item: `${c.tipo}${c.codigo}`, nome: c.nome, classe: c.classe || null } : { item: null, nome: null, classe: null, r: null })
-  const setRefino = (v: string) => mudar({ r: v || null })
-  const setAntigasPrimeiro = (v: boolean) => mudar({ ordem: v ? 'antigas' : null })
+  const setFiltros = (f: (atual: typeof filtros) => typeof filtros) => { const n = f(filtros); mudar({ uf: n.uf || null, de: n.de, ate: n.ate, pg: null }) }
+  const setItem = (c: ItemCatalogo | null) => mudar(c ? { item: `${c.tipo}${c.codigo}`, nome: c.nome, classe: c.classe || null, pg: null } : { item: null, nome: null, classe: null, r: null, pg: null })
+  const setRefino = (v: string) => mudar({ r: v || null, pg: null })
+  const setAntigasPrimeiro = (v: boolean) => mudar({ ordem: v ? 'antigas' : null, pg: null })
 
   const catalogo = useQuery({ queryKey: ['catalogo', pesquisa], enabled: !!pesquisa, ...GUARDA, retry: 1, queryFn: ({ signal }) => buscarCatalogo(pesquisa!.termo, pesquisa!.tipo, signal) })
   const precos = useQuery({ queryKey: ['precos', item?.tipo, item?.codigo, filtros], enabled: !!item, ...GUARDA, retry: 1, queryFn: ({ signal }) => historicoPrecos(item!, filtros, signal) })
@@ -79,6 +80,12 @@ export default function HistoricoPrecos() {
   const filtradas = (precos.data?.compras ?? []).filter((c) => !refino.trim() || normalizar(`${c.descricao} ${c.marca ?? ''} ${c.fornecedor ?? ''}`).includes(normalizar(refino.trim())))
   // A fonte entrega das mais recentes para as mais antigas; o botão inverte.
   const compras = antigasPrimeiro ? [...filtradas].reverse() : filtradas
+  // A mediana e as marcas usam todas as compras; a lista mostra 20 por página (até 300 cartões de uma vez pesavam a tela).
+  // A página fica no endereço (pg), como os filtros: ao voltar de uma compra, a lista e a rolagem continuam onde estavam.
+  const totalPaginas = Math.max(1, Math.ceil(compras.length / POR_PAGINA))
+  const pagina = Math.min(totalPaginas, Math.max(1, Number(sp.get('pg')) || 1))
+  const setPagina = (p: number) => mudar({ pg: p > 1 ? String(p) : null })
+  const visiveis = compras.slice((pagina - 1) * POR_PAGINA, pagina * POR_PAGINA)
 
   return <>
     <CabecalhoPagina titulo="Histórico de preços" descricao="Quanto o governo pagou por um produto ou serviço: preços homologados, marcas, fornecedores e órgãos." />
@@ -158,7 +165,8 @@ export default function HistoricoPrecos() {
                     <Input className="sm:w-72" placeholder="Filtrar por descrição, marca ou fornecedor" value={refino} onChange={(e) => setRefino(e.target.value)} />
                   </div>
                 </div>
-                <div className="space-y-3">{compras.map((c, i) => <CartaoCompraPreco key={`${c.idCompra}-${c.numeroItem}-${i}`} compra={c} />)}</div>
+                <div className="space-y-3">{visiveis.map((c, i) => <CartaoCompraPreco key={`${c.idCompra}-${c.numeroItem}-${(pagina - 1) * POR_PAGINA + i}`} compra={c} />)}</div>
+                <Paginacao pagina={pagina} totalPaginas={totalPaginas} aoMudar={setPagina} />
                 <p className="mt-3 text-xs text-muted-foreground">Dados oficiais de compras públicas, consultados na hora.{precos.data.incompleto ? ' Muitas compras no período: a análise considera as 2.000 mais recentes.' : ''}</p>
               </Card>
             </>}

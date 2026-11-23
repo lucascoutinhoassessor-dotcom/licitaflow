@@ -9,11 +9,12 @@ import { SeletorEmpresa, useEmpresaPadrao } from '@/components/Situacoes'
 import { useOrg } from '@/providers/OrgProvider'
 import { useLista, useSalvar } from '@/hooks/useDados'
 import { dadosProcesso, rotaOportunidade, type CompraPNCP } from '@/lib/pncp'
-import { filtrosExtras, MODALIDADES, nomeModoDisputa, PERIODOS_ABERTURA, periodoAbertura, periodoEntre, resumoFiltros, validarFiltros, type FiltrosOportunidades as Filtros } from '@/lib/filtrosOportunidades'
+import { comUfs, filtrosExtras, MODALIDADES, nomeModoDisputa, PERIODOS_ABERTURA, periodoAbertura, periodoEntre, resumoFiltros, ufsDe, validarFiltros, type FiltrosOportunidades as Filtros } from '@/lib/filtrosOportunidades'
 import {buscaHistorica,pesquisarIndice,type ResultadoIndice} from '@/lib/buscaIndice'
 import CategoriasObjeto from '@/components/CategoriasObjeto'
 import FiltrosOportunidades from '@/components/FiltrosOportunidades'
 import MenuFiltros from '@/components/MenuFiltros'
+import SeletorEstados from '@/components/SeletorEstados'
 import OportunidadesDesertas from '@/components/OportunidadesDesertas'
 import LocalizarEdital from '@/components/LocalizarEdital'
 import AtalhosOportunidades, { type AcaoAtalho } from '@/components/AtalhosOportunidades'
@@ -144,7 +145,7 @@ export default function Oportunidades() {
     <Card className="mb-5 p-4">
       <form onSubmit={pesquisar} className="space-y-3">
         <div className="flex flex-col gap-2 sm:flex-row"><div className="relative min-w-0 flex-1"><Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input className="pl-9" aria-label="Pesquisar oportunidades" placeholder="O que sua empresa vende? Ex.: notebook; computador" value={f.busca} onChange={set('busca')} maxLength={300} /></div><Button type="submit" carregando={q.isFetching}>Buscar oportunidades</Button></div>
-        <div className="flex flex-col gap-2 sm:flex-row"><FiltroLiberado id="filtro-publicacao" className="min-w-0 flex-1"><Select aria-label="Situação dos editais" value={fv.situacao} onChange={set('situacao')}><option value="abertas">Por data de abertura</option><option value="publicacoes">Por data de publicação</option></Select></FiltroLiberado><FiltroLiberado id="filtro-uf" className="min-w-0 flex-1"><Select aria-label="UF" value={fv.uf} onChange={set('uf')}><option value="">Brasil inteiro</option>{'AC AL AP AM BA CE DF ES GO MA MT MS MG PA PB PR PE PI RJ RN RS RO RR SC SP SE TO'.split(' ').map(u=><option key={u}>{u}</option>)}</Select></FiltroLiberado><MenuFiltros ativos={extras} colunas={2} aoLimpar={()=>setF(x=>({...x,...filtrosExtras,busca:x.busca,aberturaDe:x.aberturaDe,aberturaAte:x.aberturaAte,diasUteis:x.diasUteis,inverter:x.inverter}))}
+        <div className="flex flex-col gap-2 sm:flex-row"><FiltroLiberado id="filtro-publicacao" className="min-w-0 flex-1"><Select aria-label="Situação dos editais" value={fv.situacao} onChange={set('situacao')}><option value="abertas">Por data de abertura</option><option value="publicacoes">Por data de publicação</option></Select></FiltroLiberado><FiltroLiberado id="filtro-uf" className="min-w-0 flex-1"><SeletorEstados className="min-w-0" valor={ufsDe(fv)} aoMudar={ufs=>setF(x=>({...x,...comUfs(ufs)}))} aoAplicar={()=>pesquisar()} carregando={q.isFetching} /></FiltroLiberado><MenuFiltros ativos={extras} colunas={2} aoLimpar={()=>setF(x=>({...x,...filtrosExtras,busca:x.busca,aberturaDe:x.aberturaDe,aberturaAte:x.aberturaAte,diasUteis:x.diasUteis,inverter:x.inverter}))}
           rodape={fechar=><Button type="button" carregando={q.isFetching} onClick={()=>{fechar();pesquisar()}}>Aplicar e buscar</Button>}>
           <FiltrosOportunidades f={f} mudar={setF} compras={[]} orgaos={q.data?.orgaos??[]} />
         </MenuFiltros></div>

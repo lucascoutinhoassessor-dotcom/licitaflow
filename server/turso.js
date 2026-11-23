@@ -576,7 +576,11 @@ export function montarFiltros(f, agora = agoraIso()) {
   // "+" tira a modalidade da escolha de índice: o índice (modalidade, encerramento) é da limpeza; na busca ele faria o
   // SQLite ler o período inteiro e ordenar em memória, em vez de seguir o índice de encerramento e parar na página.
   onde.push(`+e.modalidade in (${mods.map(() => '?').join(',')})`, `e.portal in (${portais.map(() => '?').join(',')})`); args.push(...mods, ...portais)
-  if (/^[A-Z]{2}$/.test(f.uf ?? '')) { onde.push('e.uf = ?'); args.push(f.uf) }
+  // Vários estados de uma vez (ufs); buscas antigas mandam só "uf".
+  const ufs = [...new Set((Array.isArray(f.ufs) && f.ufs.length ? f.ufs : [f.uf]).map(String).filter((u) => /^[A-Z]{2}$/.test(u)))]
+  if (ufs.length > 27) throw new FiltroInvalido('Filtros inválidos')
+  if (ufs.length === 1) { onde.push('e.uf = ?'); args.push(ufs[0]) }
+  else if (ufs.length > 1) { onde.push(`e.uf in (${ufs.map(() => '?').join(',')})`); args.push(...ufs) }
   if (/^\d{14}$/.test(f.orgao ?? '')) { onde.push('e.orgao_cnpj = ?'); args.push(f.orgao) }
   // Período: "por data de publicação" (qualquer situação) ou "por data de abertura". Na abertura, um início antes de
   // hoje (Brasília) traz também os encerrados guardados no histórico; sem início, ou a partir de hoje, só os abertos.

@@ -195,5 +195,12 @@ latencias.sort((a,b)=>a-b)
 console.log(JSON.stringify({registros:50001,mediana_ms:Math.round(latencias[15]*100)/100,p95_ms:Math.round(latencias[29]*100)/100,teste:'Postgres local em WebAssembly; não mede rede de produção'}))
 const plano=await db.query("explain (format json) select controle from public.oportunidades_indice where busca @@ public.oportunidades_termos('microcomputador')")
 ok(JSON.stringify(plano.rows).includes('oportunidades_busca_gin'),'plano usa índice GIN')
+// Vários estados de uma vez (migração 090, sobre a tabela enxuta da 045).
+for(const m of ['20261121000024_busca_mais_leve','20261121000045_tabela_busca_enxuta','20261123000090_varios_estados'])await db.exec(readFileSync(`supabase/migrations/${m}.sql`,'utf8'))
+const nUf=async f=>(await buscar({busca:'microcomputador',...f})).totalRegistros
+const [sp,rj,todos]=[await nUf({ufs:['SP']}),await nUf({ufs:['RJ']}),await nUf({})]
+ok(sp>0&&rj>0&&await nUf({ufs:['SP','RJ']})===sp+rj&&todos>=sp+rj,'vários estados somam os resultados de cada um')
+ok(await nUf({uf:'SP'})===sp&&await nUf({ufs:[],uf:'RJ'})===rj,'busca antiga com uma UF continua valendo')
+let ufRuim=false;try{await nUf({ufs:['XX1']})}catch{ufRuim=true}ok(ufRuim,'UF inválida é recusada')
 console.log('Verificações do índice aprovadas:',asserts)
 await db.close()

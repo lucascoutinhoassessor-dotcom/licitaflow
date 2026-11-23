@@ -12,7 +12,7 @@ export interface FiltroCatalogo {
 
 /** Filtros da tela Oportunidades, na ordem em que aparecem para o cliente. Filtro novo entra aqui e nasce oculto. */
 export const CATALOGO_FILTROS: FiltroCatalogo[] = [
-  { id: 'filtro-uf', rotulo: 'UF', descricao: 'Escolher um estado em vez do Brasil inteiro.', campos: ['uf'] },
+  { id: 'filtro-uf', rotulo: 'UF', descricao: 'Escolher estados em vez do Brasil inteiro.', campos: ['uf', 'ufs'] },
   { id: 'filtro-publicacao', rotulo: 'Busca por data de publicação', descricao: 'Alternar de "por data de abertura" para "por data de publicação".', campos: ['situacao'] },
   { id: 'filtro-dias-uteis', rotulo: 'Só dias úteis', descricao: 'Limitar às sessões de segunda a sexta, fora de feriados.', campos: ['diasUteis'] },
   { id: 'filtro-excluir-palavras', rotulo: 'Excluir palavras', descricao: 'Tirar editais que tenham certas palavras no objeto.', campos: ['excluir'] },

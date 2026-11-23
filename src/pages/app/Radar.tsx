@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -15,6 +15,7 @@ import { UFS } from '@/lib/pecasJuridicas'
 import { aderencia, faltam, lerPalavras, lerValor, type EmpresaRadar, type PerfilRadar, type ResumoRadar, type SugestaoRadar } from '@/lib/radar'
 import { cn } from '@/lib/utils'
 import { Abas, Aviso, Badge, Button, Campo, Card, Carregando, Input, Modal, Textarea, Vazio } from '@/components/ui'
+import Paginacao, { POR_PAGINA } from '@/components/Paginacao'
 
 const nomeModalidade = (id: number | null) => MODALIDADES.find(([m]) => Number(m) === id)?.[1] ?? 'Outra modalidade'
 
@@ -111,15 +112,23 @@ export default function Radar() {
   const perfis = useQuery({ queryKey: ['radar-perfis', org?.id], enabled: !!org, queryFn: async () => {
     const { data, error } = await supabase.from('radar_perfis').select('*').eq('org_id', org!.id); if (error) throw error; return data as PerfilRadar[]
   } })
-  const sugestoes = useQuery({ queryKey: ['radar-sugestoes', org?.id, aba], enabled: !!org, queryFn: async () => {
-    const q = supabase.from('radar_sugestoes').select('*').eq('org_id', org!.id).eq('status', aba)
-    const { data, error } = await (aba === 'nova' ? q.order('pontuacao', { ascending: false }).order('encerramento') : q.order('decidido_em', { ascending: false })).limit(100)
+  const [pagina, setPagina] = useState(1)
+  useEffect(() => { setPagina(1) }, [aba, filtroEmpresa])
+  // Só a página da tela vem do banco (20 por vez). Empresa e prazo filtram no banco, para a contagem bater.
+  const sugestoes = useQuery({ queryKey: ['radar-sugestoes', org?.id, aba, filtroEmpresa, pagina], enabled: !!org, placeholderData: (anterior) => anterior, queryFn: async () => {
+    let q = supabase.from('radar_sugestoes').select('*', { count: 'exact' }).eq('org_id', org!.id).eq('status', aba)
+    if (filtroEmpresa) q = q.eq('empresa_id', filtroEmpresa)
+    if (aba === 'nova') q = q.or(`encerramento.is.null,encerramento.gt.${new Date().toISOString()}`)
+    const { data, error, count } = await (aba === 'nova' ? q.order('pontuacao', { ascending: false }).order('encerramento') : q.order('decidido_em', { ascending: false }))
+      .range((pagina - 1) * POR_PAGINA, pagina * POR_PAGINA - 1)
     if (error) throw error
-    return data as SugestaoRadar[]
+    return { lista: data as SugestaoRadar[], total: count ?? 0 }
   } })
   useEffect(() => { if (filtroEmpresa && !resumo.data?.empresas.some((e) => e.empresa_id === filtroEmpresa)) setFiltroEmpresa('') }, [resumo.data, filtroEmpresa])
-  const lista = useMemo(() => (sugestoes.data ?? []).filter((s) => !filtroEmpresa || s.empresa_id === filtroEmpresa)
-    .filter((s) => aba !== 'nova' || !s.encerramento || Date.parse(s.encerramento) > Date.now()), [sugestoes.data, filtroEmpresa, aba])
+  const lista = sugestoes.data?.lista ?? []
+  const totalPaginas = Math.max(1, Math.ceil((sugestoes.data?.total ?? 0) / POR_PAGINA))
+  // Decidir a última sugestão de uma página leva para a anterior.
+  useEffect(() => { if (pagina > totalPaginas) setPagina(totalPaginas) }, [pagina, totalPaginas])
   const nomeEmpresa = (id: string) => { const e = resumo.data?.empresas.find((x) => x.empresa_id === id); return e ? (e.nome_fantasia || e.razao_social) : '' }
   const atualizar = () => Promise.all([qc.invalidateQueries({ queryKey: ['radar-sugestoes'] }), qc.invalidateQueries({ queryKey: ['radar-resumo'] })])
 
@@ -275,6 +284,7 @@ export default function Radar() {
               </Card>
             )
           })}
+          <Paginacao pagina={pagina} totalPaginas={totalPaginas} aoMudar={setPagina} carregando={sugestoes.isFetching} />
         </div>
       )}
 
