@@ -81,4 +81,27 @@ ok(planos.trial.sentinela === 5 && planos.essencial.sentinela === 20 && planos.p
   'Sentinela definida em todos os planos (5, 20, 100, sem limite, 0)')
 ok(planos.essencial['leitor-editais'] === 10, 'limites do Leitor continuam')
 
+// Estado real dos agentes em cada processo (cartão do Kanban).
+const idDe = async (i) => (await db.query('select id from public.processos where org_id = $1 and pncp_controle = $2', [o1, C(i)])).rows[0].id
+const estados = async (uid = U1, org = o1) => (await como(uid, 'select public.agentes_estado_processos($1) r', [org]))[0].r
+let est = await estados()
+ok(est[p1].sentinela.estado === 'ativo' && est[p1].sentinela.verificado_em, 'edital já verificado: Sentinela ativa, com a hora da verificação')
+ok(est[await idDe(4)].sentinela.estado === 'na_fila', 'ligado mas ainda sem verificação: na fila')
+ok(est[await idDe(2)].sentinela.estado === 'indisponivel' && est[await idDe(2)].sentinela.motivo === 'Processo encerrado', 'processo perdido: indisponível (encerrado)')
+ok(!est[p1]['leitor-editais'], 'sem leitura guardada, o Leitor não aparece no processo')
+await db.exec(`insert into public.ia_leituras_edital (controle, resultado, modelo) values ('${C(1)}', '{}', 'claude-opus-5-5')`)
+await db.exec(`update public.processos set monitorar = false where id = '${await idDe(3)}'`)
+est = await estados()
+ok(est[p1]['leitor-editais'].estado === 'ativo', 'edital lido pela IA aparece no processo')
+ok(est[await idDe(3)].sentinela.estado === 'desligado', 'desligado pelo cliente no processo')
+await db.exec(`update public.organizations set plano = 'trial' where id = '${o1}'`)
+est = await estados()
+const parados = Object.values(est).filter((x) => x.sentinela?.estado === 'parado')
+ok(parados.length === 1 && parados[0].sentinela.motivo.includes('Fora do limite do plano (5'), 'acima do limite do plano: parado, com o motivo e o limite')
+await db.exec(`update public.plataforma_modulos set estado = 'oculto' where id = 'agentes'`)
+est = await estados()
+ok(est[p1].sentinela.estado === 'parado' && est[p1].sentinela.motivo.includes('não liberados'), 'módulo agentes não liberado: parado, mesmo com o cartão ligado')
+ok(est[pB] === undefined, 'só devolve processos da própria organização')
+ok(await falha(U2, 'select public.agentes_estado_processos($1)', [o1]), 'outra organização não consulta os estados')
+
 console.log(`\n${n} verificações da Sentinela ok`)

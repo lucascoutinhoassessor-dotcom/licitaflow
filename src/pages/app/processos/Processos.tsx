@@ -12,7 +12,11 @@ import { ETAPAS, ETAPAS_ATIVAS, ETAPAS_FINAIS, MODALIDADES, type Etapa } from '@
 import { formatarDataHora, formatarMoeda } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useLista, useNomeEmpresa, useSalvar } from '@/hooks/useDados'
-import { useRecursos } from '@/hooks/useModulos'
+import { useModulos, useRecursos } from '@/hooks/useModulos'
+import { useQueryClient } from '@tanstack/react-query'
+import { StatusAgentes } from '@/components/StatusAgentes'
+import { useEstadosAgentes } from '@/hooks/useEstadosAgentes'
+import { detalheDoEstado, type StatusAgente } from '@/lib/agentesProcesso'
 import { useOrg } from '@/providers/OrgProvider'
 import type { Processo, ProcessoColuna } from '@/types/db'
 import { ProcessoForm } from './ProcessoForm'
@@ -57,10 +61,7 @@ const CORES_COLUNA = ['#64748b', '#0ea5e9', '#6366f1', '#8b5cf6', '#ec4899', '#e
 
 const finalizada = (e: Etapa) => (ETAPAS_FINAIS as readonly Etapa[]).includes(e)
 
-/** A Sentinela vigia este processo agora (edital do PNCP vinculado, não encerrado, não arquivado, ligado). */
-const vigiado = (p: Processo) => !!p.pncp_controle && p.monitorar !== false && !p.arquivado_em && !finalizada(p.etapa)
-
-function ConteudoCartao({ p, nomeEmpresa, monitorVisivel }: { p: Processo; nomeEmpresa?: string; monitorVisivel?: boolean }) {
+function ConteudoCartao({ p, nomeEmpresa, agentes }: { p: Processo; nomeEmpresa?: string; agentes?: Record<string, StatusAgente> }) {
   return (
     <>
       <div className="flex items-start justify-between gap-2 pr-7">
@@ -85,16 +86,8 @@ function ConteudoCartao({ p, nomeEmpresa, monitorVisivel }: { p: Processo; nomeE
         )}
         {p.valor_estimado != null && <span className="tabular-nums">{formatarMoeda(p.valor_estimado)}</span>}
       </div>
-      {/* Só aparece quando a Sentinela está vigiando; sem monitoramento, o cartão não mostra nada aqui. */}
-      {monitorVisivel && vigiado(p) && (
-        <div className="mt-2 flex items-center gap-1.5 text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
-          <span className="relative flex h-2 w-2">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500/60" />
-            <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
-          </span>
-          Monitorando com IA
-        </div>
-      )}
+      {/* Estado real de cada agente (calculado no banco): trabalhando, na fila ou parado com o motivo. */}
+      <StatusAgentes estados={agentes} />
       {nomeEmpresa && <div className="mt-2 truncate border-t pt-2 text-[11px] text-muted-foreground">{nomeEmpresa}</div>}
     </>
   )
@@ -106,12 +99,15 @@ const itemMenu =
 function MenuCartao({
   p,
   estadoMonitor,
+  sentinela,
   aoMonitorar,
   aoArquivar,
   aoExcluir,
 }: {
   p: Processo
   estadoMonitor: string
+  /** Estado real da Sentinela neste processo (do banco); mostra se está mesmo ativa e, se não, por quê. */
+  sentinela?: StatusAgente
   aoMonitorar: (ligar: boolean) => void
   aoArquivar: (arquivar: boolean) => void
   aoExcluir: () => void
@@ -144,6 +140,10 @@ function MenuCartao({
                   <span className="block text-[11px] text-muted-foreground">Em breve</span>
                 ) : motivo ? (
                   <span className="block text-[11px] text-muted-foreground">{motivo}</span>
+                ) : sentinela ? (
+                  <span className={cn('block text-[11px]', sentinela.estado === 'ativo' ? 'text-emerald-600 dark:text-emerald-400' : sentinela.estado === 'parado' || sentinela.estado === 'falha' ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground')}>
+                    {sentinela.estado === 'ativo' ? 'Ativo · ' : sentinela.estado === 'parado' ? 'Parado · ' : ''}{detalheDoEstado(sentinela)}
+                  </span>
                 ) : null}
               </span>
               <Menu.ItemIndicator>
@@ -249,7 +249,7 @@ function CartaoProcesso({
   cor,
   arrastavel,
   nomeEmpresa,
-  monitorVisivel,
+  agentes,
   fantasma,
   menu,
   aoSegurar,
@@ -259,7 +259,7 @@ function CartaoProcesso({
   cor: string
   arrastavel?: boolean
   nomeEmpresa?: string
-  monitorVisivel?: boolean
+  agentes?: Record<string, StatusAgente>
   fantasma?: boolean
   menu?: React.ReactNode
   aoSegurar?: (s: Segurado) => void
@@ -324,7 +324,7 @@ function CartaoProcesso({
           p.arquivado_em && !fantasma && 'opacity-70',
         )}
       >
-        <ConteudoCartao p={p} nomeEmpresa={nomeEmpresa} monitorVisivel={monitorVisivel} />
+        <ConteudoCartao p={p} nomeEmpresa={nomeEmpresa} agentes={agentes} />
       </Link>
       {menu}
     </div>
@@ -337,6 +337,12 @@ export default function Processos() {
   const nomeEmpresa = useNomeEmpresa()
   const { estado: estadoRecurso } = useRecursos()
   const estadoMonitor = estadoRecurso('recurso-monitorar-processo')
+  // Selos dos agentes só com o módulo "agentes" liberado para a organização (senão o Kanban não fala de IA).
+  const { estado: estadoModulo } = useModulos()
+  const agentesLiberados = estadoModulo('/app/agentes') === 'liberado'
+  const estadosAgentes = useEstadosAgentes(agentesLiberados || estadoMonitor === 'liberado')
+  const agentesDe = (p: Processo) => (agentesLiberados ? estadosAgentes.data?.[p.id] : undefined)
+  const qc = useQueryClient()
   const [visao, setVisao] = useState(lerVisao)
   const [novo, setNovo] = useState(false)
   const [busca, setBusca] = useState('')
@@ -525,7 +531,8 @@ export default function Processos() {
   async function monitorar(p: Processo, ligar: boolean) {
     try {
       await salvar.mutateAsync({ id: p.id, dados: { monitorar: ligar } })
-      toast.success(ligar ? 'A Sentinela vai monitorar este processo.' : 'Monitoramento desligado neste processo.')
+      await qc.invalidateQueries({ queryKey: ['agentes-estado-processos'] })
+      toast.success(ligar ? 'Monitoramento ligado. O estado real aparece no cartão.' : 'Monitoramento desligado neste processo.')
     } catch {
       /* useSalvar mostra o erro */
     }
@@ -557,6 +564,7 @@ export default function Processos() {
       <MenuCartao
         p={p}
         estadoMonitor={estadoMonitor}
+        sentinela={estadosAgentes.data?.[p.id]?.sentinela}
         aoMonitorar={(v) => monitorar(p, v)}
         aoArquivar={(v) => arquivar(p, v)}
         aoExcluir={() => apagar(p)}
@@ -706,7 +714,7 @@ export default function Processos() {
                                   cor={cor}
                                   arrastavel={podeEditar}
                                   nomeEmpresa={mostrarEmpresa ? nomeEmpresa(p.empresa_id) : undefined}
-                                  monitorVisivel={estadoMonitor === 'liberado'}
+                                  agentes={agentesDe(p)}
                                   fantasma={idSegurado === p.id}
                                   menu={menuDe(p)}
                                   aoSegurar={setSegurado}
@@ -751,7 +759,7 @@ export default function Processos() {
                       style={{ borderLeftColor: segurado.cor }}
                       className="rounded-lg border border-l-4 bg-card p-3 shadow-2xl ring-2 ring-primary/30"
                     >
-                      <ConteudoCartao p={segurado.p} monitorVisivel={estadoMonitor === 'liberado'} />
+                      <ConteudoCartao p={segurado.p} agentes={agentesDe(segurado.p)} />
                     </motion.div>
                   </div>,
                   document.body,
@@ -774,7 +782,12 @@ export default function Processos() {
                     <div className="flex items-center gap-3 text-xs text-muted-foreground">
                       {p.data_abertura && <span>{formatarDataHora(p.data_abertura)}</span>}
                       {p.valor_estimado != null && <span className="tabular-nums">{formatarMoeda(p.valor_estimado)}</span>}
-                      {estadoMonitor === 'liberado' && vigiado(p) && <Radar className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" aria-label="Monitorado pela Sentinela" />}
+                      {(() => {
+                        const s = agentesDe(p)?.sentinela
+                        if (!s || !['ativo', 'na_fila', 'falha', 'parado'].includes(s.estado)) return null
+                        const cor = s.estado === 'ativo' ? 'text-emerald-600 dark:text-emerald-400' : s.estado === 'na_fila' ? 'text-sky-600 dark:text-sky-400' : 'text-amber-600 dark:text-amber-400'
+                        return <span title={detalheDoEstado(s)}><Radar className={cn('h-3.5 w-3.5', cor)} aria-label={detalheDoEstado(s)} /></span>
+                      })()}
                       {p.arquivado_em && <Badge>Arquivado</Badge>}
                       <BadgeEtapa etapa={p.etapa} />
                     </div>
