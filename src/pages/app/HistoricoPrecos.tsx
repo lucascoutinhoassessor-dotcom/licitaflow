@@ -1,6 +1,6 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Link } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 import { CalendarRange, MapPin, Package, Search, Tag, Wrench } from 'lucide-react'
 import MenuFiltros, { ChipFiltro, SecaoFiltro } from '@/components/MenuFiltros'
 import BotaoInverterOrdem from '@/components/BotaoInverterOrdem'
@@ -17,21 +17,64 @@ const iso = (d: Date) => d.toLocaleDateString('en-CA', { timeZone: 'America/Sao_
 const anosAtras = (n: number) => { const d = new Date(); d.setFullYear(d.getFullYear() - n); return iso(d) }
 const limiteAntigo = anosAtras(6)
 
+type Tipo = '' | 'M' | 'S'
+const tipoDe = (v: string | null): Tipo => (v === 'M' || v === 'S' ? v : '')
+const dataDe = (v: string | null, padrao: string) => (v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : padrao)
+const CHAVE_ROLAGEM = 'lf-rolagem-historico-precos'
+// Resultados ficam guardados 30 min: ao voltar de uma compra a tela aparece na hora, sem consultar de novo.
+const GUARDA = { staleTime: 30 * 60_000, gcTime: 30 * 60_000 }
+
+/**
+ * Pesquisa, item escolhido, filtros, refino e ordem ficam no endereço da página (?q=&t=&item=…).
+ * Assim, ao abrir uma compra e voltar, a tela volta como estava, na mesma rolagem.
+ */
 export default function HistoricoPrecos() {
-  const [termo, setTermo] = useState(''), [tipo, setTipo] = useState<'' | 'M' | 'S'>('')
-  const [pesquisa, setPesquisa] = useState<{ termo: string; tipo: '' | 'M' | 'S' } | null>(null)
-  const [item, setItem] = useState<ItemCatalogo | null>(null)
+  const [sp, setSp] = useSearchParams()
+  const pesquisa = sp.get('q') ? { termo: sp.get('q')!, tipo: tipoDe(sp.get('t')) } : null
+  const codigo = Number(sp.get('item')?.slice(1))
+  const item: ItemCatalogo | null = sp.get('item') && Number.isInteger(codigo) && codigo > 0
+    ? { tipo: sp.get('item')![0] === 'S' ? 'S' : 'M', codigo, nome: sp.get('nome') ?? `Item ${codigo}`, classe: sp.get('classe') ?? '' } : null
   const umAno = new Date(); umAno.setFullYear(umAno.getFullYear() - 1)
-  const [filtros, setFiltros] = useState({ uf: '', de: iso(umAno), ate: iso(new Date()) })
-  const [refino, setRefino] = useState(''), [antigasPrimeiro, setAntigasPrimeiro] = useState(false)
-  const catalogo = useQuery({ queryKey: ['catalogo', pesquisa], enabled: !!pesquisa, staleTime: 300_000, retry: 1, queryFn: ({ signal }) => buscarCatalogo(pesquisa!.termo, pesquisa!.tipo, signal) })
-  const precos = useQuery({ queryKey: ['precos', item?.tipo, item?.codigo, filtros], enabled: !!item, staleTime: 300_000, retry: 1, queryFn: ({ signal }) => historicoPrecos(item!, filtros, signal) })
+  const filtros = { uf: UFS.includes(sp.get('uf') ?? '') ? sp.get('uf')! : '', de: dataDe(sp.get('de'), iso(umAno)), ate: dataDe(sp.get('ate'), iso(new Date())) }
+  const refino = sp.get('r') ?? '', antigasPrimeiro = sp.get('ordem') === 'antigas'
+  const [termo, setTermo] = useState(pesquisa?.termo ?? ''), [tipo, setTipo] = useState<Tipo>(pesquisa?.tipo ?? '')
+
+  /** Muda parâmetros do endereço sem criar nova entrada no histórico do navegador. */
+  const mudar = (novos: Record<string, string | null>) => setSp((atual) => {
+    const p = new URLSearchParams(atual)
+    for (const [k, v] of Object.entries(novos)) { if (v) p.set(k, v); else p.delete(k) }
+    return p
+  }, { replace: true })
+  const setFiltros = (f: (atual: typeof filtros) => typeof filtros) => { const n = f(filtros); mudar({ uf: n.uf || null, de: n.de, ate: n.ate }) }
+  const setItem = (c: ItemCatalogo | null) => mudar(c ? { item: `${c.tipo}${c.codigo}`, nome: c.nome, classe: c.classe || null } : { item: null, nome: null, classe: null, r: null })
+  const setRefino = (v: string) => mudar({ r: v || null })
+  const setAntigasPrimeiro = (v: boolean) => mudar({ ordem: v ? 'antigas' : null })
+
+  const catalogo = useQuery({ queryKey: ['catalogo', pesquisa], enabled: !!pesquisa, ...GUARDA, retry: 1, queryFn: ({ signal }) => buscarCatalogo(pesquisa!.termo, pesquisa!.tipo, signal) })
+  const precos = useQuery({ queryKey: ['precos', item?.tipo, item?.codigo, filtros], enabled: !!item, ...GUARDA, retry: 1, queryFn: ({ signal }) => historicoPrecos(item!, filtros, signal) })
+
+  // Rolagem: guarda ao sair da página e devolve quando a lista já está na tela.
+  const restaurou = useRef(false)
+  useEffect(() => () => {
+    const v = document.getElementById('conteudo-principal')
+    if (v) sessionStorage.setItem(CHAVE_ROLAGEM, JSON.stringify({ url: location.search, y: v.scrollTop }))
+  }, [])
+  const pronto = !pesquisa || (!catalogo.isLoading && (!item || !precos.isLoading))
+  useEffect(() => {
+    if (restaurou.current || !pronto) return
+    restaurou.current = true
+    try {
+      const salvo = JSON.parse(sessionStorage.getItem(CHAVE_ROLAGEM) ?? 'null') as { url: string; y: number } | null
+      const v = document.getElementById('conteudo-principal')
+      if (salvo && v && salvo.url === location.search) requestAnimationFrame(() => { v.scrollTop = salvo.y })
+    } catch { /* sem rolagem guardada */ }
+  }, [pronto])
 
   function pesquisar(e: FormEvent) {
     e.preventDefault()
     if (!termo.trim()) return
-    setItem(null); setRefino('')
-    setPesquisa({ termo: termo.trim(), tipo })
+    // Nova pesquisa: troca o item e o refino; os filtros de período e UF continuam.
+    mudar({ q: termo.trim(), t: tipo || null, item: null, nome: null, classe: null, r: null })
   }
   const filtradas = (precos.data?.compras ?? []).filter((c) => !refino.trim() || normalizar(`${c.descricao} ${c.marca ?? ''} ${c.fornecedor ?? ''}`).includes(normalizar(refino.trim())))
   // A fonte entrega das mais recentes para as mais antigas; o botão inverte.
