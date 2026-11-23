@@ -25,7 +25,7 @@ function TodasPropostas({ propostas }: { propostas: PropostaPreco[] }) {
                 <Link className="font-semibold text-sky-700 hover:underline dark:text-sky-300" to={`/app/analise-empresas/${p.cnpj}`}>{p.fornecedor ?? p.cnpj}</Link>
                 <Badge cor={SELO[p.situacao].cor}>{SELO[p.situacao].texto}</Badge>
               </span>
-              <span className="block text-xs text-muted-foreground">Marca: {p.marca ?? 'não informada'}{p.modelo && p.modelo !== p.marca ? ` · ${p.modelo}` : ''}</span>
+              <span className="block text-xs text-muted-foreground">Marca: {p.marca ?? 'não informada'}{p.modelo && p.modelo !== p.marca ? ` · ${p.modelo}` : ''}{p.quantidade ? ` · Qtd. ofertada ${p.quantidade.toLocaleString('pt-BR')}` : ''}</span>
               {p.motivo && <span className="block text-xs text-muted-foreground">Motivo: {p.motivo.length > 200 ? `${p.motivo.slice(0, 197)}…` : p.motivo}</span>}
             </span>
             <span className="text-right">

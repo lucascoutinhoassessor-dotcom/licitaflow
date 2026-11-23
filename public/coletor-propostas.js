@@ -40,7 +40,7 @@
           c: String(part.identificacao || '').replace(/\D/g, ''), nm: texto(part.nome, 200), uf: texto(part.endereco && part.endereco.uf, 2),
           me: !!p.declaracaoMeEpp, v: unitario(vals, final), vt: total(vals, final), vi: unitario(vals, 'valorPropostaInicial'),
           cl: Number.isInteger(p.classificacao) ? p.classificacao : null, st: texto(String(p.situacao || ''), 4), mo: motivo(p),
-          ma: texto(p.marcaFabricante, 80), mod: texto(p.modeloVersao, 120),
+          ma: texto(p.marcaFabricante, 80), mod: texto(p.modeloVersao, 120), q: num(p.quantidadeOfertada),
         }
       }),
     }

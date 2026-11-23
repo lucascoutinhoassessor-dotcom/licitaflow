@@ -442,7 +442,7 @@ export function itensDoPortal(itens) {
       const situacao = SITUACAO_PORTAL[Number(p?.st)] ?? (colocacao ? 'classificada' : 'participou')
       empresas.push({
         cnpj, nome: txt(p?.nm, 200), valor: valorOk(p?.v), situacao, motivo: txt(p?.mo, 400),
-        colocacao, valorTotal: valorOk(p?.vt), valorInicial: valorOk(p?.vi), marca: txt(p?.ma, 80), modelo: txt(p?.mod, 120),
+        colocacao, valorTotal: valorOk(p?.vt), valorInicial: valorOk(p?.vi), marca: txt(p?.ma, 80), modelo: txt(p?.mod, 120), quantidade: valorOk(p?.q),
         uf: /^[A-Z]{2}$/.test(String(p?.uf ?? '')) ? p.uf : null, meEpp: p?.me === true, adjudicada: Number(p?.st) === 6,
       })
     }

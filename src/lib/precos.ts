@@ -11,7 +11,7 @@ export interface CompraPreco {
   propostas?: PropostaPreco[]
 }
 export interface PropostaPreco {
-  colocacao: number | null; fornecedor: string | null; cnpj: string; marca: string | null; modelo: string | null
+  colocacao: number | null; fornecedor: string | null; cnpj: string; marca: string | null; modelo: string | null; quantidade?: number | null
   preco: number | null; precoInicial: number | null; situacao: 'vencedora' | 'classificada' | 'participou' | 'recusa' | 'desclassificacao' | 'inabilitacao'; motivo: string | null
 }
 export interface HistoricoPrecos {

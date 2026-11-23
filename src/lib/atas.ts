@@ -11,7 +11,7 @@ export interface ParticipanteAta { cnpj: string; nome: string | null; mencoes: n
 /** Empresa de um item: lida no termo de julgamento enviado ou capturada no Compras.gov.br (fonte 'portal', com mais campos). */
 export interface EmpresaItemAta {
   cnpj: string; nome: string | null; valor: number | null; situacao: 'classificada' | 'participou' | 'recusa' | 'desclassificacao' | 'inabilitacao'; motivo: string | null
-  colocacao?: number | null; valorTotal?: number | null; valorInicial?: number | null; marca?: string | null; modelo?: string | null
+  colocacao?: number | null; valorTotal?: number | null; valorInicial?: number | null; marca?: string | null; modelo?: string | null; quantidade?: number | null
   uf?: string | null; meEpp?: boolean; adjudicada?: boolean
 }
 /** Empresas de um item (ou grupo): do termo de julgamento enviado ou das propostas do Compras.gov.br (fonte 'portal'). */

@@ -29,7 +29,7 @@ export function LinhaConcorrente({ c }: { c: Concorrente }) {
           {c.cnpj && /^\d{14}$/.test(c.cnpj) ? <Link className="font-semibold text-sky-700 hover:underline dark:text-sky-300" to={`/app/analise-empresas/${c.cnpj}`}>{c.nome ?? `CNPJ ${formatarCnpj(c.cnpj)}`}</Link> : <span className="font-semibold">{c.nome}</span>}
           <Badge cor={selo.cor}>{selo.texto}</Badge>
         </span>
-        <span className="block text-xs text-muted-foreground">{c.cnpj ? `CNPJ ${formatarCnpj(c.cnpj)}` : 'CNPJ não informado na ata'}{c.porte ? ` · ${c.porte}` : ''}{c.meEpp ? ' · benefício ME/EPP' : ''}{c.marca ? ` · Marca: ${c.marca}` : ''}{ORIGEM_FONTE[c.fonte]}</span>
+        <span className="block text-xs text-muted-foreground">{c.cnpj ? `CNPJ ${formatarCnpj(c.cnpj)}` : 'CNPJ não informado na ata'}{c.porte ? ` · ${c.porte}` : ''}{c.meEpp ? ' · benefício ME/EPP' : ''}{c.marca ? ` · Marca: ${c.marca}` : ''}{c.quantidade ? ` · Qtd. ofertada ${c.quantidade.toLocaleString('pt-BR')}` : ''}{ORIGEM_FONTE[c.fonte]}</span>
         {c.motivo && <span className="mt-1 block text-xs text-muted-foreground">{c.situacao === 'cancelado' ? 'Motivo do cancelamento: ' : 'Motivo: '}{c.motivo.length > 220 ? `${c.motivo.slice(0, 217)}…` : c.motivo}</span>}
       </span>
       {(c.valorUnitario || c.valorTotal) && (

@@ -15,7 +15,7 @@ export interface Concorrente {
   chave: string; cnpj: string | null; nome: string | null; porte: string | null; meEpp: boolean
   colocacao: number | null; valorUnitario: number | null; valorTotal: number | null
   situacao: SituacaoConcorrente; motivo: string | null; fonte: 'oficial' | 'ata' | 'portal'
-  marca?: string | null; valorInicial?: number | null
+  marca?: string | null; valorInicial?: number | null; quantidade?: number | null
 }
 
 /** "Itens 1, 3 a 5" → { tipo: 'item', numeros: {1,3,4,5} }. Lote e grupo viram 'grupo'. */
@@ -104,7 +104,7 @@ export function concorrentesDoItem(item: ItemCompraFederal, todos: ItemCompraFed
         atual.motivo ??= e.motivo
         continue
       }
-      lista.push({ chave: `t${lista.length}`, cnpj: e.cnpj, nome: e.nome, porte: portal && e.meEpp ? 'ME/EPP' : null, meEpp: false, colocacao: e.colocacao ?? null, valorUnitario: e.valor, valorTotal: e.valorTotal ?? null, situacao: portal && e.adjudicada ? 'vencedora' : e.situacao, motivo: e.motivo, fonte: portal ? 'portal' : 'ata', marca: e.marca ?? null, valorInicial: e.valorInicial ?? null })
+      lista.push({ chave: `t${lista.length}`, cnpj: e.cnpj, nome: e.nome, porte: portal && e.meEpp ? 'ME/EPP' : null, meEpp: false, colocacao: e.colocacao ?? null, valorUnitario: e.valor, valorTotal: e.valorTotal ?? null, situacao: portal && e.adjudicada ? 'vencedora' : e.situacao, motivo: e.motivo, fonte: portal ? 'portal' : 'ata', marca: e.marca ?? null, valorInicial: e.valorInicial ?? null, quantidade: e.quantidade ?? null })
     }
   }
   for (const c of lista) if (c.cnpj) deOutroItem.delete(c.cnpj)

@@ -20,7 +20,7 @@ export function comPropostas(compras, guardadas) {
     const item = (guardadas[c.idCompra] ?? []).find((i) => i.tipo === 'item' && i.numero === c.numeroItem)
     if (!item) return c
     const propostas = item.empresas.map((e) => ({
-      colocacao: e.colocacao ?? null, fornecedor: e.nome, cnpj: e.cnpj, marca: e.marca ?? null, modelo: e.modelo ?? null,
+      colocacao: e.colocacao ?? null, fornecedor: e.nome, cnpj: e.cnpj, marca: e.marca ?? null, modelo: e.modelo ?? null, quantidade: e.quantidade ?? null,
       preco: e.valor, precoInicial: e.valorInicial ?? null, situacao: e.adjudicada ? 'vencedora' : e.situacao, motivo: e.motivo,
     })).sort((a, b) => (a.colocacao ?? 9999) - (b.colocacao ?? 9999) || (a.preco ?? Infinity) - (b.preco ?? Infinity))
     return { ...c, propostas }
