@@ -1,12 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { avisarPorPush, compararFotos, dataLegivel, fotoDoPncp, proximaVerificacao, verificarEdital } from './sentinela.js'
+import { avisarPorPush, categoriaDocumento, compararFotos, dataLegivel, fotoDoPncp, identificacao, nomeDocumento, proximaVerificacao, verificarEdital } from './sentinela.js'
 import { criarHandler, MODELOS } from './agentes.js'
 
 const CONTROLE = '11222333000144-1-000045/2026'
 const json = (corpo: unknown, status = 200) => new Response(JSON.stringify(corpo), { status, headers: { 'Content-Type': 'application/json' } })
 const compra = (x: Record<string, unknown> = {}) => ({
   numeroControlePNCP: CONTROLE, dataAtualizacaoGlobal: '2026-11-20T10:00:00', situacaoCompraId: 1, situacaoCompraNome: 'Divulgada no PNCP',
-  dataAberturaProposta: '2026-11-21T08:00:00', dataEncerramentoProposta: '2026-12-05T09:00:00', valorTotalEstimado: 1000, existeResultado: false, ...x,
+  dataAberturaProposta: '2026-11-21T08:00:00', dataEncerramentoProposta: '2026-12-05T09:00:00', valorTotalEstimado: 1000, existeResultado: false,
+  modalidadeNome: 'Pregão - Eletrônico', numeroCompra: '45', anoCompra: 2026, orgaoEntidade: { razaoSocial: 'Prefeitura de Cidade' }, unidadeOrgao: { ufSigla: 'MG', municipioNome: 'Cidade' }, ...x,
 })
 const arq = (seq: number, titulo: string, tipo = 'Outros Documentos', ativo = true) => ({ sequencialDocumento: seq, titulo, tipoDocumentoNome: tipo, statusAtivo: ativo, dataPublicacaoPncp: '2026-11-20T10:00:00', url: `https://pncp/${seq}` })
 const AGORA = new Date('2026-11-21T12:00:00-03:00')
@@ -28,7 +29,13 @@ describe('comparação das fotos do edital', () => {
     expect(tipos).toContain('resultado:medio')
     expect(ev.find((e) => e.detalhe.seq === 2)?.nivel).toBe('alto') // errata é importante
     expect(ev.find((e) => e.detalhe.seq === 3)?.nivel).toBe('medio')
-    expect(ev.find((e) => e.tipo === 'encerramento')?.titulo).toContain('05/12/2026 09:00 → 10/12/2026 09:00')
+    const enc = ev.find((e) => e.tipo === 'encerramento')!
+    expect(enc.titulo).toBe('Prazo final das propostas adiado para 10/12/2026 09:00 (+5 dias)')
+    expect(enc.detalhe).toMatchObject({ antes: '05/12/2026 09:00', depois: '10/12/2026 09:00' })
+    expect(enc.orientacao).toContain('art. 164')
+    expect(ev.find((e) => e.tipo === 'situacao')?.titulo).toBe('Compra suspensa pelo órgão')
+    expect(ev.find((e) => e.detalhe.seq === 2)?.titulo).toBe('Errata / retificação do edital: Errata 01')
+    expect(ev.every((e) => e.detalhe.contexto === 'Pregão Eletrônico nº 45/2026 · Prefeitura de Cidade (MG)')).toBe(true)
   })
 
   it('documento inativado vira "retirado" e edital fora do PNCP gera alerta', () => {
@@ -40,6 +47,36 @@ describe('comparação das fotos do edital', () => {
   it('mostra datas do PNCP no formato brasileiro', () => {
     expect(dataLegivel('2026-12-05T09:00:00')).toBe('05/12/2026 09:00')
     expect(dataLegivel(null)).toBe('sem data')
+  })
+})
+
+describe('textos profissionais dos avisos', () => {
+  it('limpa o nome do arquivo e tira códigos internos', () => {
+    expect(nomeDocumento('Relatorio__Edital__WCO6211023740RFJWGXPLHZASK1.pdf')).toBe('Relatorio Edital')
+    expect(nomeDocumento('ERRATA_01-PE_045-2026.PDF')).toBe('ERRATA 01 - PE 045 - 2026')
+    expect(nomeDocumento('')).toBe('documento sem nome')
+  })
+  it('classifica o documento e orienta o licitante', () => {
+    expect(categoriaDocumento('Outros Documentos', 'Resposta ao pedido de esclarecimento 02.pdf')).toMatchObject({ rotulo: 'Resposta a pedido de esclarecimento', nivel: 'alto' })
+    expect(categoriaDocumento('Edital', 'Edital retificado.pdf').rotulo).toBe('Errata / retificação do edital')
+    expect(categoriaDocumento('Ata', 'Ata da sessão pública.pdf').rotulo).toBe('Ata / julgamento da sessão')
+    expect(categoriaDocumento('Ata de Registro de Preço', 'ARP 12.pdf').rotulo).toBe('Contrato / ata de registro de preços')
+    expect(categoriaDocumento('Outros Documentos', 'Contrarrazões empresa X.pdf').orientacao).toContain('art. 165')
+    expect(categoriaDocumento('Termo de Referência', 'TR.pdf').rotulo).toBe('Anexo do edital')
+    expect(categoriaDocumento('Outros Documentos', 'foto.jpg').rotulo).toBe('Documento publicado')
+  })
+  it('identifica a compra em uma linha', () => {
+    expect(identificacao({ modalidade: 'Pregão - Eletrônico', numero: '45/2026', orgao: 'Prefeitura de Cidade', uf: 'MG' })).toBe('Pregão Eletrônico nº 45/2026 · Prefeitura de Cidade (MG)')
+    expect(identificacao(null)).toBeNull()
+  })
+  it('compra retomada depois de suspensa é aviso de atenção', () => {
+    const antes = fotoDoPncp(compra({ situacaoCompraId: 4, situacaoCompraNome: 'Suspensa' }), [], AGORA)
+    const ev = compararFotos(antes, fotoDoPncp(compra(), [], AGORA))
+    expect(ev).toMatchObject([{ tipo: 'situacao', nivel: 'alto', titulo: 'Compra retomada pelo órgão' }])
+  })
+  it('valor estimado mostra a variação em reais e em percentual', () => {
+    const ev = compararFotos(fotoDoPncp(compra(), [], AGORA), fotoDoPncp(compra({ valorTotalEstimado: 1250 }), [], AGORA))
+    expect(ev[0].titulo.replace(/\s/g, ' ')).toBe('Valor estimado alterado para R$ 1.250,00 (+25%)')
   })
 })
 
@@ -92,14 +129,14 @@ describe('push da Sentinela', () => {
       return null
     })
     const r = await avisarPorPush([
+      { titulo: 'Novo documento', nivel: 'medio', org_id: 'o1', processo_id: 'p1', contexto: 'Pregão nº 1/2026' },
       { titulo: 'Compra suspensa', nivel: 'alto', org_id: 'o1', processo_id: 'p1' },
-      { titulo: 'Novo documento', nivel: 'medio', org_id: 'o1', processo_id: 'p1' },
       { titulo: 'Valor mudou', nivel: 'baixo', org_id: 'o2', processo_id: 'p2' },
     ], { chamar, webpush })
     expect(r).toEqual({ enviados: 1, falhas: 0 })
     const [destino, payload] = webpush.sendNotification.mock.calls[0] as unknown as [{ endpoint: string }, string]
     expect(destino.endpoint).toBe('https://p/1')
-    expect(JSON.parse(payload)).toMatchObject({ titulo: 'Sentinela: atenção no edital', texto: 'Compra suspensa · Novo documento', url: '/app/processos/p1' })
+    expect(JSON.parse(payload)).toMatchObject({ titulo: 'Sentinela · Atenção · Pregão nº 1/2026', texto: 'Compra suspensa (+1 outra mudança)', url: '/app/processos/p1' })
   })
 })
 
