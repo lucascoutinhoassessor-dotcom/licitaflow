@@ -90,6 +90,16 @@ ok(uso.radar.usadas === 2, 'uso do plano mostra as empresas monitoradas')
 const planos = Object.fromEntries((await db.query('select id, limites_ia from public.plataforma_planos')).rows.map((r) => [r.id, r.limites_ia]))
 ok(planos.trial.radar === 1 && planos.essencial.radar === 1 && planos.profissional.radar === 3 && planos.assessoria.radar === null && planos.cancelado.radar === 0, 'Radar definido em todos os planos (1, 1, 3, sem limite, 0)')
 
+// Busca incremental: depois da primeira, só olha publicações recentes, a menos que o perfil mude.
+await db.query(`insert into public.oportunidades_indice (controle, objeto, orgao_cnpj, orgao_nome, uf, modalidade, portal_id, publicacao, encerramento, situacao, valor, srp, compra)
+  values ('11222333000144-1-000099/2026', 'Papel kraft para embalagem', '11222333000144', 'Prefeitura MG', 'MG', 6, 'comprasnet', now() - interval '10 days', now() + interval '15 days', 1, 500, false, '{}')`)
+await db.exec(`update licitaflow_radar.execucoes set executado_em = now() - interval '1 hour'; update public.radar_perfis set updated_at = now() - interval '1 day'`)
+await db.query('select licitaflow_radar.buscar($1)', [e1])
+ok(!(await sugestoes(e1)).some((x) => x.controle.endsWith('000099/2026')), 'depois da primeira busca, edital publicado há muito tempo não entra')
+await db.exec(`update licitaflow_radar.execucoes set executado_em = now() - interval '1 hour'; update public.radar_perfis set updated_at = now()`)
+await db.query('select licitaflow_radar.buscar($1)', [e1])
+ok((await sugestoes(e1)).some((x) => x.controle.endsWith('000099/2026')), 'perfil alterado depois da última busca: olha todos os abertos de novo')
+
 // Push: só as não avisadas, uma vez.
 const token = (await db.query('select token from licitaflow_radar.config')).rows[0].token
 await db.exec(`update public.radar_sugestoes set notificado_em = null, status = 'nova'`)
