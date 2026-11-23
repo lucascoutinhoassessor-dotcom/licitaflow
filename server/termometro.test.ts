@@ -54,6 +54,11 @@ describe('leitura da CAPAG', () => {
   it('escolhe o arquivo mais recente e a posição pelo nome', () => {
     const pacote = { resources: [{ id: 'a', format: 'XLSX', url: 'u1', name: 'Capag 2026 - 01/06/2026', last_modified: '2026-06-18' }, { id: 'b', format: 'XLSX', url: 'u2', name: 'Capag Municípios 2026 - 01/09/2026', last_modified: '2026-11-23' }, { id: 'c', format: 'PDF', url: 'u3', last_modified: '2026-12-01' }] }
     expect(recursoMaisNovo(pacote, 'XLSX')?.id).toBe('b')
+    // Arquivo antigo reenviado depois do novo (caso real de 23/11/2026): vale a data de posição do nome.
+    const reenvio = { resources: [{ id: 'set', format: 'XLSX', url: 'u', name: 'Capag Municípios 2026 - 01/09/2026', last_modified: '2026-11-23T15:15' }, { id: 'jun', format: 'XLSX', url: 'u', name: 'Capag Municípios 2026 - 01/06/2026', last_modified: '2026-11-23T18:37' }] }
+    expect(recursoMaisNovo(reenvio, 'XLSX')?.id).toBe('set')
+    const estados = { resources: [{ id: 'r24', format: 'CSV', url: 'u', name: 'Capag Estados 2024 - Revisão', last_modified: '2025-04-24' }, { id: 'e26', format: 'CSV', url: 'u', name: 'Capag Estados 2026', last_modified: '2026-11-18' }, { id: 'e25', format: 'CSV', url: 'u', name: 'Capag Estados 2025', last_modified: '2026-03-10' }] }
+    expect(recursoMaisNovo(estados, 'CSV')?.id).toBe('e26')
     expect(posicaoDoNome('Capag Municípios 2026 - 01/09/2026')).toBe('01/09/2026')
     expect(posicaoDoNome('Capag Estados 2026')).toBe('2026')
   })

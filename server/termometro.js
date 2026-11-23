@@ -36,10 +36,22 @@ export function posicaoDoNome(nome) {
   return /(\d{2}\/\d{2}\/\d{4})/.exec(s)?.[1] ?? /(20\d{2})/.exec(s)?.[1] ?? null
 }
 
-/** Arquivo mais recente do conjunto no formato pedido (pelo último envio). */
+/** Data de posição do nome para ordenar: "… 01/09/2026" → "20260901"; "… 2026" → "20260000". */
+function ordemDoNome(nome) {
+  const d = /(\d{2})\/(\d{2})\/(\d{4})/.exec(String(nome ?? ''))
+  if (d) return `${d[3]}${d[2]}${d[1]}`
+  const a = /(20\d{2})/.exec(String(nome ?? ''))
+  return a ? `${a[1]}0000` : '00000000'
+}
+
+/**
+ * Arquivo mais recente do conjunto no formato pedido: pela data de posição no nome; empate, pelo último envio.
+ * (O Tesouro às vezes reenvia um arquivo antigo depois do novo: em 23/11/2026 o de 01/06 subiu depois do de 01/09.)
+ */
 export function recursoMaisNovo(pacote, formato) {
   const lista = (pacote?.resources ?? []).filter((r) => String(r.format ?? '').toUpperCase() === formato && r.url)
-  return lista.sort((a, b) => String(b.last_modified ?? b.created ?? '').localeCompare(String(a.last_modified ?? a.created ?? '')))[0] ?? null
+  const envio = (r) => String(r.last_modified ?? r.created ?? '')
+  return lista.sort((a, b) => ordemDoNome(b.name).localeCompare(ordemDoNome(a.name)) || envio(b).localeCompare(envio(a)))[0] ?? null
 }
 
 /** CSV dos estados (";" e vírgula decimal): UF;Indicador 1;Nota 1;Indicador 2;Nota 2;Indicador 3;Nota 3;Classificação…;Qualidade…;Observação */
