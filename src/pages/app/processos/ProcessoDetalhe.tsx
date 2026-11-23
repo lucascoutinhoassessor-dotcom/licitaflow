@@ -4,6 +4,8 @@ import { useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useModulos } from '@/hooks/useModulos'
 import { rotaLeitor } from '@/lib/leitor'
+import { SeloTermometroAuto } from '@/components/Termometro'
+import { alvoPeloNome } from '@/lib/termometro'
 import { ArrowLeft, Calculator, Check, ExternalLink, FileSearch, FileSignature, FileText, MessageSquarePlus, Pencil, Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Abas, Badge, Button, Campo, Card, Carregando, Input, Modal, Select, Textarea, Vazio } from '@/components/ui'
@@ -392,6 +394,7 @@ export default function ProcessoDetalhe() {
           </div>
           <h1 className="mt-2 text-xl font-semibold leading-snug sm:text-2xl">{p.objeto}</h1>
           {p.orgao_nome && <p className="mt-1 text-sm text-muted-foreground">{p.orgao_nome}</p>}
+          <SeloTermometroAuto className="mt-1.5" alvo={alvoPeloNome(p.orgao_nome, p.uf, p.municipio)} peloNome />
         </div>
         <div className="flex shrink-0 flex-wrap gap-2">
           {podeEditar && (

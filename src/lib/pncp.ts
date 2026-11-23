@@ -13,8 +13,8 @@ export interface CompraPNCP {
   objetoCompra: string
   modalidadeId: number
   modalidadeNome: string
-  orgaoEntidade: { cnpj: string; razaoSocial: string }
-  unidadeOrgao: { ufSigla: string; municipioNome: string }
+  orgaoEntidade: { cnpj: string; razaoSocial: string; esferaId?: string; poderId?: string }
+  unidadeOrgao: { ufSigla: string; municipioNome: string; codigoIbge?: string }
   valorTotalEstimado: number | null
   dataPublicacaoPncp: string | null
   dataAberturaProposta: string | null

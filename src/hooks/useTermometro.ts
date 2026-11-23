@@ -1,0 +1,49 @@
+import { useQuery } from '@tanstack/react-query'
+import { supabase } from '@/lib/supabase'
+import { useOrg } from '@/providers/OrgProvider'
+import { useModulos } from '@/hooks/useModulos'
+import type { LimiteIA } from '@/lib/agentesIA'
+import type { AlvoCapag, CapagEnte } from '@/lib/termometro'
+
+/** O Termômetro aparece com o módulo "agentes" liberado e o plano incluindo o agente (limite diferente de 0). */
+export function useTermometroLiberado() {
+  const { org } = useOrg()
+  const { estado } = useModulos()
+  const liberado = estado('/app/agentes') === 'liberado'
+  const uso = useQuery({ queryKey: ['ia-uso-resumo', org?.id], enabled: !!org && liberado, staleTime: 300_000, queryFn: async () => {
+    const { data, error } = await supabase.rpc('ia_uso_resumo', { p_org: org!.id }); if (error) throw error; return data as Record<string, LimiteIA>
+  } })
+  return liberado && uso.data?.termometro?.limite !== 0 && !!uso.data
+}
+
+/** Notas CAPAG de vários alvos de uma vez (chave direta ou município pelo nome). */
+export function useCapag(alvos: AlvoCapag[], habilitado = true) {
+  const chaves = [...new Set(alvos.flatMap((a) => (a?.tipo === 'chave' ? [a.chave] : [])))].sort()
+  const nomes = [...new Set(alvos.flatMap((a) => (a?.tipo === 'municipio' ? [`${a.uf}|${a.nome}`] : [])))].sort()
+  return useQuery({
+    queryKey: ['capag', chaves.join(','), nomes.join(',')],
+    enabled: habilitado && (chaves.length > 0 || nomes.length > 0),
+    staleTime: 3_600_000,
+    queryFn: async () => {
+      const linhas: CapagEnte[] = []
+      if (chaves.length) {
+        const { data, error } = await supabase.from('capag').select('*').in('chave', chaves)
+        if (error) throw error
+        linhas.push(...(data as CapagEnte[]))
+      }
+      if (nomes.length) {
+        const { data, error } = await supabase.from('capag').select('*').eq('esfera', 'M').in('nome_busca', [...new Set(nomes.map((n) => n.split('|')[1]))])
+        if (error) throw error
+        linhas.push(...(data as (CapagEnte & { nome_busca: string })[]).filter((d) => nomes.includes(`${d.uf}|${d.nome_busca}`)))
+      }
+      return linhas
+    },
+  })
+}
+
+/** Nota de um alvo dentro do resultado de useCapag. */
+export function notaDe(lista: (CapagEnte & { nome_busca?: string })[] | undefined, alvo: AlvoCapag): CapagEnte | null | undefined {
+  if (!lista || !alvo || alvo.tipo === 'federal') return undefined
+  if (alvo.tipo === 'chave') return lista.find((l) => l.chave === alvo.chave) ?? null
+  return lista.find((l) => l.esfera === 'M' && l.uf === alvo.uf && l.nome_busca === alvo.nome) ?? null
+}

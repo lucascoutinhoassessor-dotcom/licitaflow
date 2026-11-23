@@ -7,6 +7,8 @@ import {
 } from 'lucide-react'
 import { Aviso, Badge, Button, Card, Carregando, Vazio } from '@/components/ui'
 import { useOrg } from '@/providers/OrgProvider'
+import { CartaoTermometro } from '@/components/Termometro'
+import { alvoPeloNome, alvoPeloPncp } from '@/lib/termometro'
 import { formatarDataHora, formatarMoeda } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import {
@@ -255,6 +257,12 @@ export default function LeitorEdital() {
     <>
       {voltar}
       <Ficha f={leitura?.resultado.ficha ?? ficha.data ?? null} controle={controle} leitura={leitura} />
+      {(() => {
+        const f = ficha.data ?? leitura?.resultado.ficha ?? null
+        if (!f) return null
+        const alvoPncp = alvoPeloPncp(f.esfera, f.codigo_ibge, f.uf)
+        return <CartaoTermometro alvo={alvoPncp ?? alvoPeloNome(f.orgao, f.uf, f.municipio)} peloNome={!alvoPncp} className="mb-5" />
+      })()}
 
       {!leitura && (
         <Card className="mb-5 flex flex-col items-center gap-3 p-6 text-center">

@@ -14,6 +14,9 @@ import { MODALIDADES } from '@/lib/filtrosOportunidades'
 import { UFS } from '@/lib/pecasJuridicas'
 import { aderencia, faltam, lerPalavras, lerValor, type EmpresaRadar, type PerfilRadar, type ResumoRadar, type SugestaoRadar } from '@/lib/radar'
 import { cn } from '@/lib/utils'
+import { alvoPeloNome } from '@/lib/termometro'
+import { notaDe, useCapag, useTermometroLiberado } from '@/hooks/useTermometro'
+import { SeloTermometro } from '@/components/Termometro'
 import { Abas, Aviso, Badge, Button, Campo, Card, Carregando, Input, Modal, Textarea, Vazio } from '@/components/ui'
 import Paginacao, { POR_PAGINA } from '@/components/Paginacao'
 
@@ -130,6 +133,10 @@ export default function Radar() {
   // Decidir a última sugestão de uma página leva para a anterior.
   useEffect(() => { if (pagina > totalPaginas) setPagina(totalPaginas) }, [pagina, totalPaginas])
   const nomeEmpresa = (id: string) => { const e = resumo.data?.empresas.find((x) => x.empresa_id === id); return e ? (e.nome_fantasia || e.razao_social) : '' }
+  // Termômetro de Pagamento de cada sugestão (pelo nome do órgão e pela cidade; o resumo guardado não traz a esfera).
+  const termometroLiberado = useTermometroLiberado()
+  const alvoDe = (s: SugestaoRadar) => alvoPeloNome(s.orgao, s.uf, s.compra?.unidadeOrgao?.municipioNome)
+  const capag = useCapag(lista.map(alvoDe), termometroLiberado)
   const atualizar = () => Promise.all([qc.invalidateQueries({ queryKey: ['radar-sugestoes'] }), qc.invalidateQueries({ queryKey: ['radar-resumo'] })])
 
   async function buscarAgora(e: EmpresaRadar) {
@@ -267,6 +274,7 @@ export default function Radar() {
                 </div>
                 <p className="mt-1.5 font-medium leading-snug">{s.objeto}</p>
                 {s.orgao && <p className="mt-0.5 text-sm text-muted-foreground">{s.orgao}</p>}
+                {termometroLiberado && capag.data && <SeloTermometro className="mt-1" alvo={alvoDe(s)} ente={notaDe(capag.data, alvoDe(s))} peloNome />}
                 <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
                   <span className="font-medium">{s.valor ? formatarMoeda(s.valor) : 'Valor não divulgado'}</span>
                   {s.encerramento && <span className="flex items-center gap-1"><CalendarClock className="h-4 w-4 text-muted-foreground" />{formatarDataHora(s.encerramento)} <span className="text-xs text-muted-foreground">({faltam(s.encerramento)})</span></span>}

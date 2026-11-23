@@ -8,7 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "vitest run && node scripts/test-db.mjs supabase/migrations && npm run test:indice && node scripts/test-desertas.mjs && node scripts/test-pecas.mjs && node scripts/test-push.mjs && node scripts/test-deploy-enxugar.mjs && node scripts/test-catalogo.mjs && node scripts/test-fornecedores.mjs && node scripts/test-limites-ia.mjs && node scripts/test-sentinela.mjs && node scripts/test-radar.mjs && node scripts/test-cotador.mjs",
+    "test": "vitest run && node scripts/test-db.mjs supabase/migrations && npm run test:indice && node scripts/test-desertas.mjs && node scripts/test-pecas.mjs && node scripts/test-push.mjs && node scripts/test-deploy-enxugar.mjs && node scripts/test-catalogo.mjs && node scripts/test-fornecedores.mjs && node scripts/test-limites-ia.mjs && node scripts/test-sentinela.mjs && node scripts/test-radar.mjs && node scripts/test-cotador.mjs && node scripts/test-termometro.mjs",
     "test:watch": "vitest",
     "test:indice": "node scripts/test-indice-oportunidades.mjs"
   },

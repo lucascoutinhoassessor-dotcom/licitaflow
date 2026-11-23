@@ -25,6 +25,8 @@ import ContagemDisputa from '@/components/ContagemDisputa'
 import { ConcorrentesEdital, FavoritoPropostas } from '@/components/ConcorrentesItem'
 import { atasDaCompra, atasEnviadas, juntarAtas } from '@/lib/atas'
 import { comGrupos } from '@/lib/itensEdital'
+import { CartaoTermometro } from '@/components/Termometro'
+import { alvoPeloNome, alvoPeloPncp } from '@/lib/termometro'
 import { gruposDaCompra, idCompraComprasnet, resultadosDoEdital } from '@/lib/resultadosEdital'
 
 async function buscarCompra(cnpj: string, ano: string, seq: string, signal?: AbortSignal): Promise<CompraPNCP> {
@@ -126,6 +128,13 @@ export default function OportunidadeDetalhe() {
           </>
         ) : <p className="text-sm text-muted-foreground">Peça a um administrador para adicionar este edital aos processos.</p>}
       </Card>
+
+      {/* Termômetro de Pagamento: nota CAPAG do órgão comprador (esfera e IBGE do PNCP; sem eles, pelo nome). */}
+      {(() => {
+        const alvoPncp = alvoPeloPncp(compra.orgaoEntidade.esferaId, compra.unidadeOrgao?.codigoIbge, compra.unidadeOrgao?.ufSigla)
+        const alvo = alvoPncp ?? alvoPeloNome(compra.orgaoEntidade.razaoSocial, compra.unidadeOrgao?.ufSigla, compra.unidadeOrgao?.municipioNome)
+        return <CartaoTermometro alvo={alvo} peloNome={!alvoPncp} className="mb-5" />
+      })()}
 
       {/* Depois da abertura das propostas, as atas publicadas no PNCP mostram quem disputou. */}
       {encerrada && <EmpresasDisputa controle={compra.numeroControlePNCP} colocacoes={resultados.data} carregandoResultados={resultados.isLoading && resultados.fetchStatus !== 'idle'} />}

@@ -8,12 +8,14 @@
  * tipo 'simultaneo': o limite é de itens acompanhados ao mesmo tempo (ex.: processos vigiados pela Sentinela).
  * O modelo de IA de cada agente fica no servidor (MODELOS em server/agentes.js).
  */
-export interface AgenteIA { id: string; nome: string; unidade: string; tipo: 'mensal' | 'simultaneo' }
+export interface AgenteIA { id: string; nome: string; unidade: string; tipo: 'mensal' | 'simultaneo'; semContagem?: boolean }
 export const AGENTES_IA: AgenteIA[] = [
   { id: 'leitor-editais', nome: 'Leitor de editais', unidade: 'leituras', tipo: 'mensal' },
   { id: 'sentinela', nome: 'Sentinela', unidade: 'processos vigiados', tipo: 'simultaneo' },
   { id: 'radar', nome: 'Radar', unidade: 'empresas monitoradas', tipo: 'simultaneo' },
   { id: 'cotador', nome: 'Cotador', unidade: 'processos cotados', tipo: 'mensal' },
+  // Consulta sem custo: não conta uso; o plano só define se está incluído (sem limite) ou não (0).
+  { id: 'termometro', nome: 'Termômetro de Pagamento', unidade: 'consultas', tipo: 'mensal', semContagem: true },
 ]
 export const nomeAgente = (id: string) => AGENTES_IA.find((a) => a.id === id)?.nome ?? id
 export const agente = (id: string) => AGENTES_IA.find((a) => a.id === id)

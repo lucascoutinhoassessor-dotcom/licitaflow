@@ -10,6 +10,8 @@ export interface FichaCompra {
   modalidade: string | null; numero: string | null; processo: string | null; orgao: string | null; unidade: string | null
   municipio: string | null; uf: string | null; objeto: string | null; valor_estimado: number | null; srp: boolean | null
   modo_disputa: string | null; amparo_legal: string | null; situacao: string | null; abertura: string | null; encerramento: string | null; link_origem: string | null
+  /** Esfera do órgão (M, E, F…) e IBGE da unidade, para o Termômetro de Pagamento. Leituras antigas não têm. */
+  esfera?: string | null; codigo_ibge?: string | null
 }
 export interface AvaliacaoLeitor { nivel: 'favoravel' | 'atencao' | 'critico'; resumo: string; pontos_decisivos: string[] }
 export interface CaracteristicasCompra {
@@ -53,6 +55,7 @@ export function fichaDaCompra(c: any): FichaCompra | null {
     amparo_legal: c.amparoLegal?.nome ?? null, situacao: c.situacaoCompraNome ?? null,
     abertura: c.dataAberturaProposta ?? null, encerramento: c.dataEncerramentoProposta ?? null,
     link_origem: typeof c.linkSistemaOrigem === 'string' && /^https?:\/\//.test(c.linkSistemaOrigem) ? c.linkSistemaOrigem : null,
+    esfera: c.orgaoEntidade?.esferaId ?? null, codigo_ibge: c.unidadeOrgao?.codigoIbge ?? null,
   }
 }
 
