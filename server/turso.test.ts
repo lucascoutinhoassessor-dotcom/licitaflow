@@ -183,3 +183,133 @@ describe('endereço /api/oportunidades', () => {
     expect(r.status).toHaveBeenCalledWith(409)
   })
 })
+
+describe('economia de cota no Turso', () => {
+  async function preparar() {
+    const turso = tursoLocal()
+    const fetcher = vi.fn(async (url: string) => {
+      if (url.includes('/contratacoes/proposta') && url.includes('codigoModalidadeContratacao=6&pagina=1')) return new Response(JSON.stringify({ data: [edital(1), edital(3, { objetoCompra: 'Material de consumo' })], totalPaginas: 1 }))
+      if (url.includes('/compras/2026/3/itens')) return new Response(JSON.stringify([{ numeroItem: 1, descricao: 'Notebook i5 16GB', materialOuServico: 'M', valorUnitarioEstimado: 4500 }]))
+      if (url.includes('/itens?')) return new Response('[]')
+      return new Response(null, { status: 204 })
+    })
+    await coletarRodada(turso as never, { fetcher: fetcher as never, maxConsultas: 60, intervaloMs: 0 })
+    return { turso, fetcher }
+  }
+  const escritas = (turso: ReturnType<typeof tursoLocal>) => (turso.db.prepare('select total_changes() as n').get() as { n: number }).n
+
+  it('data nova no PNCP sem mudança de conteúdo: uma escrita, itens mantidos e só conferidos', async () => {
+    const { turso, fetcher } = await preparar()
+    const { gravarEditais } = await import('./turso.js')
+    const antes = escritas(turso)
+    expect(await gravarEditais(turso as never, [edital(3, { objetoCompra: 'Material de consumo', dataAtualizacaoGlobal: pncpData(dias(0)) })])).toBe(1)
+    expect(escritas(turso) - antes).toBe(1)
+    expect(await turso.consultar("select itens_completos c from editais where sequencial = 3")).toEqual([{ c: 2 }])
+    expect(await turso.consultar("select count(*) n from itens")).toEqual([{ n: 1 }]) // a busca por item continua funcionando
+    expect((await buscarTurso(turso as never, { itemMinimo: '1000' })).totalRegistros).toBe(1)
+    // A conferência acha a mesma lista: só marca como completa, sem apagar e regravar os itens.
+    const antes2 = escritas(turso)
+    await coletarRodada(turso as never, { fetcher: fetcher as never, maxConsultas: 60, intervaloMs: 0 })
+    expect(await turso.consultar("select itens_completos c from editais where sequencial = 3")).toEqual([{ c: 1 }])
+    expect(escritas(turso) - antes2).toBeLessThan(10)
+    // Conteúdo mudou: regrava a linha e o FTS.
+    expect(await gravarEditais(turso as never, [edital(3, { objetoCompra: 'Aquisição de impressoras', dataAtualizacaoGlobal: pncpData(dias(1)) })])).toBe(1)
+    expect((await buscarTurso(turso as never, { busca: 'impressora' })).totalRegistros).toBe(1)
+  })
+
+  it('migra a base antiga: colunas de hash, índices que cobrem os filtros e fila parcial de itens', async () => {
+    const turso = tursoLocal()
+    turso.db.exec(`create table editais (controle text primary key, cnpj text not null, ano integer not null, sequencial integer not null, modalidade integer not null, portal text not null, uf text not null, situacao integer, srp integer, modo_disputa integer, valor real, orgao_cnpj text not null, orgao_nome text not null, publicacao text, encerramento text, tipo_objeto text, tipo_itens text, dia_util integer not null default 0, itens_completos integer not null default 0, quantidade_itens integer, itens_tentativas integer not null default 0, atualizado_pncp text, coletado_em text not null, compra text not null);
+      create index editais_encerramento on editais(encerramento); create index editais_itens_pendentes on editais(itens_completos, encerramento);
+      create table coleta_estado (chave text primary key, valor text not null, atualizado_em text not null)`)
+    const { migrarOtimizacao } = await import('./turso.js')
+    await migrarOtimizacao(turso as never)
+    await migrarOtimizacao(turso as never) // de novo: nada quebra
+    const cols = (turso.db.prepare('pragma table_info(editais)').all() as { name: string }[]).map((c) => c.name)
+    expect(cols).toEqual(expect.arrayContaining(['hash', 'itens_hash']))
+    const plano = (sql: string) => (turso.db.prepare(`explain query plan ${sql}`).all() as { detail: string }[]).map((p) => p.detail).join(' | ')
+    expect(plano("select controle from editais where itens_completos <> 1 and itens_tentativas < 5 and encerramento >= '' and encerramento <= 'z' order by encerramento limit 9")).toContain('editais_fila_itens')
+    const filtro = montarFiltros({})
+    expect(plano(`select count(*) from editais e where ${filtro.onde.join(' and ')}`.replace(/\?/g, "'x'"))).toContain('COVERING INDEX editais_abertos')
+    expect(plano(`select e.compra from editais e where ${filtro.onde.join(' and ')} order by e.encerramento, e.controle limit 20`.replace(/\?/g, "'x'"))).not.toContain('TEMP B-TREE')
+  })
+
+  it('contagens da busca ficam no Turso para as outras instâncias', async () => {
+    const { turso } = await preparar()
+    await buscarTurso(turso as never, { uf: 'MG' })
+    expect(await turso.consultar('select count(*) n from cache_busca')).toEqual([{ n: 1 }])
+    // "Outra instância" (sem a memória da primeira): lê a contagem guardada em vez de contar.
+    const outra = { ...turso, lote: vi.fn(turso.lote) }
+    const r = await buscarTurso(outra as never, { uf: 'MG' })
+    expect(r.totalRegistros).toBe(2)
+    expect(outra.lote).toHaveBeenCalledTimes(1) // sem a segunda ida para contar
+  })
+
+  it('cota no fim: a busca manda para o Postgres e a coleta para', async () => {
+    const { turso, fetcher } = await preparar()
+    const { cicloAtual } = await import('./turso-cota.js')
+    const { CotaTurso } = await import('./turso.js')
+    const ciclo = cicloAtual(new Date()).chave
+    turso.db.prepare("insert or replace into coleta_estado values(?, ?, datetime('now'))").run(`lidas:${ciclo}`, String(460_000_000))
+    const outra = { ...turso } // instância sem nível em memória
+    await expect(buscarTurso(outra as never, { busca: 'qualquer' })).rejects.toBeInstanceOf(CotaTurso)
+    turso.db.prepare("insert or replace into coleta_estado values(?, ?, datetime('now'))").run(`lidas:${ciclo}`, String(490_000_000))
+    fetcher.mockClear()
+    expect(await coletarRodada(turso as never, { fetcher: fetcher as never, intervaloMs: 0 })).toEqual([expect.objectContaining({ cota: 'parado' })])
+    expect(fetcher).not.toHaveBeenCalled()
+  })
+})
+
+describe('medição e níveis da cota', () => {
+  it('planos, ciclo de cobrança e níveis', async () => {
+    const { configCota, cicloAtual, nivelCota } = await import('./turso-cota.js')
+    expect(configCota({})).toMatchObject({ plano: 'gratis', leituras: 500_000_000, escritas: 10_000_000, diaCiclo: 1 })
+    expect(configCota({ TURSO_PLANO: 'Developer', TURSO_CICLO_DIA: '15' })).toMatchObject({ plano: 'developer', leituras: 2_500_000_000, diaCiclo: 15 })
+    expect(configCota({ TURSO_PLANO: 'free', TURSO_LIMITE_LEITURAS: '1000' })).toMatchObject({ plano: 'gratis', leituras: 1000 })
+    expect(cicloAtual(new Date('2026-11-10T00:00:00Z'), 15).chave).toBe('2026-10-15')
+    expect(cicloAtual(new Date('2026-01-03T00:00:00Z'), 5).chave).toBe('2025-12-05')
+    const cfg = configCota({}), agora = new Date('2026-11-16T00:00:00Z') // metade do ciclo
+    const n = (lidas: number, escritas = 0) => nivelCota({ 'lidas:2026-11-01': String(lidas), 'escritas:2026-11-01': String(escritas) }, cfg, { agora })
+    expect(n(100_000_000).nivel).toBe('normal')
+    expect(n(200_000_000).leituras).toBe('normal') // 40% na metade do mês: projeção de 80%
+    expect(n(300_000_000).leituras).toBe('economia') // 60% na metade: projeção de 120%
+    expect(n(460_000_000).leituras).toBe('critico')
+    expect(n(0, 9_800_000)).toMatchObject({ escritasNivel: 'parado', nivel: 'parado', leituras: 'normal' })
+  })
+
+  it('o cliente soma as linhas que o Turso informa e grava o total junto do pedido seguinte', async () => {
+    const corpos: { requests: { type: string; stmt?: { sql: string; args: { value?: string }[] } }[] }[] = []
+    const fetcher = vi.fn(async (_url: string, op: { body: string }) => {
+      const corpo = JSON.parse(op.body); corpos.push(corpo)
+      return new Response(JSON.stringify({ results: corpo.requests.filter((r: { type: string }) => r.type === 'execute').map(() => ({ type: 'ok', response: { type: 'execute', result: { cols: [], rows: [], rows_read: 70_000, rows_written: 3 } } })) }))
+    })
+    const t = clienteTurso({ TURSO_DATABASE_URL: 'libsql://medicao-x.turso.io', TURSO_AUTH_TOKEN: 't' }, fetcher as never)!
+    await t.pipeline([['select 1']])
+    expect(t.pendente()).toEqual({ lidas: 70_000, escritas: 3 })
+    await t.pipeline([['select 2']], { descarregar: true })
+    const somas = corpos[1].requests.filter((r) => r.stmt?.sql.includes('coleta_estado'))
+    expect(somas.map((r) => [r.stmt!.args[0].value?.split(':')[0], r.stmt!.args[1].value])).toEqual([['lidas', '70000'], ['escritas', '3']])
+    // O que foi somado sai do pendente; fica só o consumo do próprio pedido (2 comandos de soma + 1 select).
+    expect(t.pendente()).toEqual({ lidas: 210_000, escritas: 9 })
+  })
+
+  it('busca com a cota no fim responde 409 e o app volta para o Postgres', async () => {
+    const { cicloAtual } = await import('./turso-cota.js')
+    const ciclo = cicloAtual(new Date()).chave
+    const resultados = (sql: string) => sql.includes('coleta_estado')
+      ? { cols: [{ name: 'chave' }, { name: 'valor' }], rows: [[{ type: 'text', value: 'carga_completa_em' }, { type: 'text', value: '2026-11-01' }], [{ type: 'text', value: `lidas:${ciclo}` }, { type: 'text', value: '480000000' }]] }
+      : { cols: [], rows: [] }
+    const fetcher = vi.fn(async (url: string, op: { body: string }) => {
+      if (url.includes('/v2/pipeline')) {
+        const corpo = JSON.parse(op.body)
+        return new Response(JSON.stringify({ results: corpo.requests.filter((r: { type: string }) => r.type === 'execute').map((r: { stmt: { sql: string } }) => ({ type: 'ok', response: { type: 'execute', result: resultados(r.stmt.sql) } })) }))
+      }
+      return new Response('true')
+    })
+    const h = criarHandler({ env: { SUPABASE_URL: 'https://s', SUPABASE_ANON_KEY: 'a', TURSO_DATABASE_URL: 'libsql://cota-x.turso.io', TURSO_AUTH_TOKEN: 't' }, fetcher: fetcher as unknown as typeof fetch, validarSessao: async () => 'u1' })
+    const r = { setHeader: vi.fn(), status: vi.fn().mockReturnThis(), json: vi.fn() }
+    await h({ method: 'POST', query: { acao: 'turso-buscar' }, headers: { authorization: 'Bearer t' }, body: { filtros: { uf: 'RJ' }, pagina: 1 } }, r)
+    expect(r.status).toHaveBeenCalledWith(409)
+    expect(r.json).toHaveBeenCalledWith(expect.objectContaining({ codigo: 'turso_cota' }))
+  })
+})

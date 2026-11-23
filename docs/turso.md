@@ -5,7 +5,8 @@
 1. **O Supabase dispara.** O pg_cron roda `licitaflow_turso.disparar()` a cada minuto. Ela faz um POST em
    `/api/oportunidades?acao=turso-coletar`, com o cabeçalho `x-coleta`.
 2. **A Vercel coleta.** `server/turso.js` lê no PNCP os editais atualizados no dia, por modalidade, a partir da
-   última página vista. Depois grava o JSON bruto no Turso, nas tabelas `editais_brutos` e `editais_busca` (FTS5).
+   última página vista. Depois grava no Turso, nas tabelas `editais` e `itens`, com a busca por palavra em
+   `editais_fts` e `itens_fts` (FTS5).
 3. **Os painéis leem.** `/api/oportunidades?acao=turso-buscar` confere a sessão no Supabase e consulta o Turso.
    O master acompanha tudo em **Integrações → Base rápida de dados brutos**.
 
@@ -36,7 +37,9 @@ Para desligar: `update licitaflow_turso.config set ativo = false where id;`
 2. **Carga completa:** uma vez por dia, lê todos os editais com proposta aberta (cerca de 32 mil, ou 650 páginas)
    e continua de onde parou. Só grava o edital que é novo ou que mudou na fonte.
 3. **Itens:** coleta os itens dos editais que abrem em até 30 dias, os mais próximos primeiro, 4 por vez.
-4. **Limpeza:** apaga os editais encerrados há mais de 2 dias.
+4. **Limpeza:** apaga os editais encerrados há mais de 2 dias e as contagens vencidas do cache da busca.
+5. **Contagens guardadas:** a cobertura dos itens é contada a cada hora e o tamanho da base a cada 6 h. Os números
+   ficam em `coleta_estado`, e a busca e o cartão do master só leem o resultado.
 
 Se o PNCP responder 429 (pedido para esperar), a coleta pausa por 5 minutos.
 
@@ -58,8 +61,72 @@ O modo "por data de publicação" continua no Postgres.
 Depois que a busca no Turso estiver conferida, enxugar no Supabase `oportunidades_indice`,
 `oportunidades_itens_indice` e a fila de itens, medindo `pg_database_size` antes e depois.
 
-### Limites do plano grátis do Turso
+## Cota do mês (para o Turso não bloquear o banco)
 
-- 500 milhões de linhas lidas e 10 milhões de linhas escritas por mês, e 5 GB de espaço.
-- Cada busca conta e agrupa os editais que passam pelo filtro, então lê milhares de linhas.
-- O cache de 60 s e a gravação só do que mudou seguram o consumo. Acompanhe em Turso → Usage.
+O plano grátis bloqueia o banco quando o mês passa de 500 milhões de linhas lidas ou 10 milhões de linhas escritas.
+O app mede o próprio consumo e freia sozinho antes disso.
+
+### Como o app mede
+
+Cada resposta do Turso informa as linhas lidas e escritas (`rows_read` e `rows_written`). O cliente soma esses
+números e grava o total do ciclo em `coleta_estado`, nas chaves `lidas:<início do ciclo>` e
+`escritas:<início do ciclo>`. A soma vai junto do pedido seguinte, sem ida extra ao banco. A medição é do app: o
+painel do Turso (**Usage**) continua sendo a referência oficial.
+
+### Como o app freia
+
+| Nível | Quando | O que muda |
+|---|---|---|
+| normal | menos de 70% | nada |
+| economia | de 70% a 90%, ou ritmo que passaria de 100% no fim do ciclo | contagens da busca valem 30 min; se for escrita, a coleta roda em minutos alternados e os logs de uso param |
+| crítico | de 90% a 97% | a busca do app volta para o Supabase; a coleta só acompanha as atualizações do dia |
+| parado | 97% ou mais | coleta e busca no Turso param até virar o ciclo |
+
+O cartão **Integrações → Base rápida de dados brutos** mostra o plano, as duas barras de consumo, a projeção do
+ciclo e o nível atual.
+
+### O que foi feito para gastar menos
+
+- **Leituras da busca:**
+  - Os índices `editais_abertos`, `editais_uf_abertos` e `editais_orgao_abertos` cobrem todas as colunas dos
+    filtros. Contar, paginar e listar órgãos lê só o índice, sem abrir cada linha da tabela.
+  - A ordem do índice é a mesma da busca, então não há ordenação extra.
+- **Cache das contagens:**
+  - O total e a lista de órgãos de cada combinação de filtros ficam guardados no próprio Turso (`cache_busca`).
+    Valem para todas as instâncias da Vercel.
+  - Antes, a chave do cache levava a hora atual, e o cache nunca acertava.
+- **Contagens globais:** o tamanho da base e a cobertura dos itens eram contados a cada busca e a cada 5 min no
+  cartão do master. Agora quem conta é a coleta, de hora em hora ou a cada 6 h.
+- **Escritas da coleta:**
+  - Se só a data do edital mudou no PNCP, sem mudar o conteúdo, a coleta faz uma escrita em vez de regravar a linha
+    e o FTS.
+  - Os itens não são mais apagados quando o edital muda. Eles são conferidos de novo e só regravados se a lista
+    mudou de fato. Enquanto isso, `itens_completos = 2` e a busca segue usando os itens guardados.
+- **Fila de itens:** um índice parcial (`editais_fila_itens`) faz a fila ler só os editais que faltam.
+
+As mudanças entram sozinhas na primeira rodada da coleta depois do deploy (chave `otimizacao` em
+`coleta_estado`). A migração cria os índices novos uma vez, o que lê e escreve cada edital uma vez.
+
+### Trocar de plano
+
+Ao comprar um plano pago no Turso:
+
+1. Na Vercel (projeto `licitaflow-prod` → Settings → Environment Variables, ambiente Production), cadastre
+   `TURSO_PLANO` com um destes valores: `gratis`, `developer`, `scaler` ou `pro`.
+2. Se o ciclo de cobrança não começa no dia 1, cadastre `TURSO_CICLO_DIA` com o dia em que ele começa, de 1 a 28.
+3. Faça um **Redeploy**.
+
+Os limites de cada plano estão em `server/turso-cota.js` (`PLANOS`):
+
+| Plano | Linhas lidas por mês | Linhas escritas por mês |
+|---|---|---|
+| gratis | 500 milhões | 10 milhões |
+| developer | 2,5 bilhões | 25 milhões |
+| scaler | 100 bilhões | 100 milhões |
+| pro | 250 bilhões | 250 milhões |
+
+Confira os limites em turso.tech/pricing antes de cadastrar. Se o Turso mudar os números, cadastre
+`TURSO_LIMITE_LEITURAS` e `TURSO_LIMITE_ESCRITAS` com os valores novos, sem mudar o código.
+
+Nos planos pagos, passar da cota não bloqueia o banco: o excedente é cobrado à parte. O freio continua usando a cota
+incluída no plano, para não gerar cobrança extra sem aviso. Para usar o excedente, aumente os dois limites.
