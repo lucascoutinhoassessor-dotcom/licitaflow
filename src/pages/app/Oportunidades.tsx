@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import BotaoInverterOrdem from '@/components/BotaoInverterOrdem'
 import { Link, useNavigate } from 'react-router-dom'
-import { Package, Radar, Search } from 'lucide-react'
+import { Package, Radar, Search, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Badge, Button, CabecalhoPagina, Campo, Card, Input, Select, Vazio } from '@/components/ui'
 import { SeletorEmpresa, useEmpresaPadrao } from '@/components/Situacoes'
@@ -117,6 +117,12 @@ export default function Oportunidades() {
     const novo={...f,situacao:'abertas' as const,...periodoAbertura(dias)}
     setF(novo);setPagina(1);setConsulta(novo)
   }
+  /** Tira um filtro aplicado e refaz a busca mantendo os demais. */
+  function removerFiltro(remover:Partial<Filtros>) {
+    if(!consulta)return
+    const novo={...consulta,...remover}
+    setF(x=>({...x,...remover}));setPagina(1);setConsulta(novo)
+  }
   const periodoAtual=PERIODOS_ABERTURA.find(([d])=>{const p=periodoAbertura(d);return p.aberturaDe===f.aberturaDe&&p.aberturaAte===f.aberturaAte})?.[0]
   async function importar(c:CompraPNCP) {
     if(!empresaId){toast.error('Selecione a empresa para importar.');return}
@@ -149,7 +155,10 @@ export default function Oportunidades() {
       </form>
     </Card>
     {!consulta?<Vazio icone={Radar} titulo="Encontre sua próxima oportunidade" texto="Pesquise o produto ou serviço. Por padrão, a busca inclui o Brasil inteiro e editais recebendo propostas." />:<>
-      {efetiva&&<div className="mb-2 flex flex-wrap items-center gap-1.5" aria-label="Filtros aplicados"><span className="mr-1 text-xs font-medium text-muted-foreground">Filtros aplicados:</span>{resumoFiltros(efetiva,modalidadesLiberadas(estados).length,PORTAIS.length).map(t=><span key={t} className="max-w-full truncate rounded-full border bg-card px-2.5 py-0.5 text-xs">{t}</span>)}</div>}
+      {efetiva&&<div className="mb-2 flex flex-wrap items-center gap-1.5" aria-label="Filtros aplicados"><span className="mr-1 text-xs font-medium text-muted-foreground">Filtros aplicados:</span>{resumoFiltros(efetiva,modalidadesLiberadas(estados).length,PORTAIS.length).map(({rotulo,remover})=><span key={rotulo} className="inline-flex max-w-full items-center gap-1 rounded-full border border-emerald-500/60 bg-emerald-500/15 py-0.5 pl-2.5 pr-1 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
+        <span className={`truncate ${remover?'':'pr-1.5'}`}>{rotulo}</span>
+        {remover&&<button type="button" onClick={()=>removerFiltro(remover)} disabled={q.isFetching} aria-label={`Tirar o filtro ${rotulo}`} title="Tirar este filtro" className="grid h-5 w-5 shrink-0 place-items-center rounded-full transition-colors hover:bg-emerald-500/30 disabled:opacity-50"><X className="h-3.5 w-3.5" /></button>}
+      </span>)}</div>}
       <div role="status" aria-live="polite" className="mb-4 space-y-2">
         {q.isFetching?<p className="text-sm text-muted-foreground">Pesquisando...</p>:q.isError?<div role="alert" className="flex flex-wrap items-center gap-3 text-sm text-destructive"><p>{q.error.message}</p><Button tamanho="sm" variante="contorno" onClick={()=>q.refetch()}>Tentar novamente</Button></div>:<div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm font-medium">{q.data?.totalRegistros??0} {(q.data?.totalRegistros??0)===1?'oportunidade encontrada':'oportunidades encontradas'}</p>
           <BotaoInverterOrdem invertido={!!consulta.inverter} aoMudar={inverter=>{const novo={...consulta,inverter};setF(v=>({...v,inverter}));setPagina(1);setConsulta(novo)}}

@@ -72,37 +72,42 @@ export async function consultarItens(c: CompraPNCP, signal?: AbortSignal): Promi
   throw new Error('O edital excede o limite de verificação de itens. Consulte seu detalhamento original.')
 }
 
+/** Um filtro aplicado: o rótulo curto e, quando pode ser tirado, os campos que voltam ao padrão. */
+export interface FiltroAplicado { rotulo: string; remover?: Partial<FiltrosOportunidades> }
+
 /**
  * Filtros aplicados numa busca, em rótulos curtos para mostrar acima da contagem de resultados.
  * `modalidadesPossiveis` é quantas modalidades o cliente pode usar (todas marcadas = não mostra).
+ * Rótulos sem `remover` já são o padrão (Brasil inteiro, todo o período) ou são obrigatórios (publicação).
  */
-export function resumoFiltros(f: FiltrosOportunidades, modalidadesPossiveis: number, portaisPossiveis: number): string[] {
-  const r: string[] = []
+export function resumoFiltros(f: FiltrosOportunidades, modalidadesPossiveis: number, portaisPossiveis: number): FiltroAplicado[] {
+  const r: FiltroAplicado[] = []
+  const add = (rotulo: string, remover?: Partial<FiltrosOportunidades>) => { r.push({ rotulo, remover }) }
   const data = (iso: string) => iso.split('-').reverse().join('/')
   const moeda = (v: string) => Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })
   const faixa = (min: string, max: string) => min && max ? `${moeda(min)} a ${moeda(max)}` : min ? `a partir de ${moeda(min)}` : `até ${moeda(max)}`
-  if (f.busca.trim()) r.push(`Busca: ${f.busca.trim()}`)
-  r.push(f.uf ? `UF: ${f.uf}` : 'Brasil inteiro')
+  if (f.busca.trim()) add(`Busca: ${f.busca.trim()}`, { busca: '' })
+  if (f.uf) add(`UF: ${f.uf}`, { uf: '' }); else add('Brasil inteiro')
   if (f.situacao === 'publicacoes') {
-    if (f.inicio || f.fim) r.push(`Publicação: ${f.inicio ? data(f.inicio) : '…'} a ${f.fim ? data(f.fim) : '…'}`)
+    if (f.inicio || f.fim) add(`Publicação: ${f.inicio ? data(f.inicio) : '…'} a ${f.fim ? data(f.fim) : '…'}`)
   } else if (f.aberturaDe || f.aberturaAte) {
-    r.push(f.aberturaDe === f.aberturaAte ? `Abertura em ${data(f.aberturaDe)}` : `Abertura: ${f.aberturaDe ? data(f.aberturaDe) : '…'} a ${f.aberturaAte ? data(f.aberturaAte) : '…'}`)
-  } else r.push('Abertura: todo o período')
-  if (f.diasUteis) r.push('Só dias úteis')
+    add(f.aberturaDe === f.aberturaAte ? `Abertura em ${data(f.aberturaDe)}` : `Abertura: ${f.aberturaDe ? data(f.aberturaDe) : '…'} a ${f.aberturaAte ? data(f.aberturaAte) : '…'}`, { aberturaDe: '', aberturaAte: '' })
+  } else add('Abertura: todo o período')
+  if (f.diasUteis) add('Só dias úteis', { diasUteis: false })
   if (f.modalidades.length && f.modalidades.length < modalidadesPossiveis) {
     const nomes = f.modalidades.map((m) => MODALIDADES.find((x) => x[0] === m)?.[1] ?? m)
-    r.push(nomes.length <= 2 ? nomes.join(' e ') : `${nomes.length} modalidades`)
+    add(nomes.length <= 2 ? nomes.join(' e ') : `${nomes.length} modalidades`, { modalidades: filtrosExtras.modalidades })
   }
-  if (f.portais.length && f.portais.length < portaisPossiveis) r.push(f.portais.length === 1 ? '1 portal' : `${f.portais.length} portais`)
-  if (f.orgao) r.push(`Órgão: ${f.orgao}`)
-  if (f.minimo || f.maximo) r.push(`Valor do edital ${faixa(f.minimo, f.maximo)}`)
-  if (f.itemMinimo || f.itemMaximo) r.push(`Valor do item ${faixa(f.itemMinimo, f.itemMaximo)}`)
-  if (f.maxItens) r.push(`Até ${f.maxItens} ${f.maxItens === '1' ? 'item' : 'itens'}`)
-  if (f.tipoItem) r.push(TIPOS_ITEM.find((t) => t[0] === f.tipoItem)?.[1] ?? f.tipoItem)
-  if (f.modosDisputa.length) r.push(`Disputa: ${f.modosDisputa.map((m) => MODOS_DISPUTA.find((x) => x[0] === m)?.[1] ?? m).join(', ')}`)
-  if (f.naoDivulgado) r.push('Valor não divulgado')
-  if (f.exclusivo) r.push('Item exclusivo ME/EPP')
-  if (f.excluirSrp) r.push('Sem registro de preços')
-  if (f.excluir.trim()) r.push(`Sem: ${f.excluir.trim()}`)
+  if (f.portais.length && f.portais.length < portaisPossiveis) add(f.portais.length === 1 ? '1 portal' : `${f.portais.length} portais`, { portais: filtrosExtras.portais })
+  if (f.orgao) add(`Órgão: ${f.orgao}`, { orgao: '' })
+  if (f.minimo || f.maximo) add(`Valor do edital ${faixa(f.minimo, f.maximo)}`, { minimo: '', maximo: '' })
+  if (f.itemMinimo || f.itemMaximo) add(`Valor do item ${faixa(f.itemMinimo, f.itemMaximo)}`, { itemMinimo: '', itemMaximo: '' })
+  if (f.maxItens) add(`Até ${f.maxItens} ${f.maxItens === '1' ? 'item' : 'itens'}`, { maxItens: '' })
+  if (f.tipoItem) add(TIPOS_ITEM.find((t) => t[0] === f.tipoItem)?.[1] ?? f.tipoItem, { tipoItem: '' })
+  if (f.modosDisputa.length) add(`Disputa: ${f.modosDisputa.map((m) => MODOS_DISPUTA.find((x) => x[0] === m)?.[1] ?? m).join(', ')}`, { modosDisputa: [] })
+  if (f.naoDivulgado) add('Valor não divulgado', { naoDivulgado: false })
+  if (f.exclusivo) add('Item exclusivo ME/EPP', { exclusivo: false })
+  if (f.excluirSrp) add('Sem registro de preços', { excluirSrp: false })
+  if (f.excluir.trim()) add(`Sem: ${f.excluir.trim()}`, { excluir: '' })
   return r
 }
