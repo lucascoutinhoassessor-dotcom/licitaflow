@@ -8,11 +8,14 @@ export interface OcorrenciaAta {
 export interface DocumentoAta { titulo: string; url: string; lido: boolean; paginas?: number; ocorrencias?: number; aviso?: string }
 export interface SituacaoAta { tipo: TipoOcorrencia; itens: string | null; motivo: string }
 export interface ParticipanteAta { cnpj: string; nome: string | null; mencoes: number; documento: string; url: string; colocacao?: number | null; situacoes?: SituacaoAta[] }
-/** Empresas de um item (ou grupo) lidas no termo de julgamento enviado pelo usuário. */
-export interface ItemAta {
-  tipo: 'item' | 'grupo'; numero: number
-  empresas: { cnpj: string; nome: string | null; valor: number | null; situacao: 'classificada' | 'participou' | 'recusa' | 'desclassificacao' | 'inabilitacao'; motivo: string | null }[]
+/** Empresa de um item: lida no termo de julgamento enviado ou capturada no Compras.gov.br (fonte 'portal', com mais campos). */
+export interface EmpresaItemAta {
+  cnpj: string; nome: string | null; valor: number | null; situacao: 'classificada' | 'participou' | 'recusa' | 'desclassificacao' | 'inabilitacao'; motivo: string | null
+  colocacao?: number | null; valorTotal?: number | null; valorInicial?: number | null; marca?: string | null; modelo?: string | null
+  uf?: string | null; meEpp?: boolean; adjudicada?: boolean
 }
+/** Empresas de um item (ou grupo): do termo de julgamento enviado ou das propostas do Compras.gov.br (fonte 'portal'). */
+export interface ItemAta { tipo: 'item' | 'grupo'; numero: number; fonte?: 'portal'; empresas: EmpresaItemAta[] }
 export interface AtasCompra { controle: string; documentos: DocumentoAta[]; ocorrencias: OcorrenciaAta[]; participantes?: ParticipanteAta[]; itens?: ItemAta[] }
 export interface AtaEnviada { hash: string; arquivo: string; created_at: string; resultado: Omit<AtasCompra, 'controle'> }
 export interface AtasEmpresa { cnpj: string; comprasConsultadas: number; comAta: number; ocorrencias: OcorrenciaAta[] }
@@ -64,6 +67,19 @@ export async function enviarAta(idCompra: string, controle: string | null, arqui
   const corpo = await r.json().catch(() => null)
   if (!r.ok) throw new Error(corpo?.error ?? 'Não foi possível ler o arquivo.')
   return corpo as AtaEnviada
+}
+
+/** Propostas capturadas pelo botão favorito no Compras.gov.br (formato curto do coletor). */
+export interface PropostasColetadas { v: 1; idCompra: string; itens: { t: 'i' | 'g'; n: number; d?: string | null; p: unknown[] }[] }
+
+/** Grava na compra as propostas capturadas; o servidor junta com as que já estavam guardadas. */
+export async function enviarPropostas(dados: PropostasColetadas): Promise<AtaEnviada & { novos: number }> {
+  const r = await fetch(`/api/atas?acao=propostas&idCompra=${encodeURIComponent(dados.idCompra)}`, {
+    method: 'POST', headers: { ...(await comLogin()), 'Content-Type': 'application/json' }, body: JSON.stringify({ itens: dados.itens }),
+  })
+  const corpo = await r.json().catch(() => null)
+  if (!r.ok) throw new Error(corpo?.error ?? 'Não foi possível gravar as propostas.')
+  return corpo
 }
 
 /** Junta as atas do PNCP com as enviadas pelos usuários num só conjunto. */

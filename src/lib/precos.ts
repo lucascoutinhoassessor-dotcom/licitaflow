@@ -7,6 +7,12 @@ export interface CompraPreco {
   fornecedor: string | null; cnpj: string | null; marca: string | null; orgao: string | null; uasg: string | null
   uf: string | null; municipio: string | null; modalidade: number | null; idCompra: string
   numeroItem: number | null; objeto: string | null; detalhe: string | null; dataCompra: string | null; unidadeCompradora: string | null
+  /** Todas as propostas do item (qualquer colocação), quando alguém trouxe a compra do Compras.gov.br pelo botão favorito. */
+  propostas?: PropostaPreco[]
+}
+export interface PropostaPreco {
+  colocacao: number | null; fornecedor: string | null; cnpj: string; marca: string | null; modelo: string | null
+  preco: number | null; precoInicial: number | null; situacao: 'vencedora' | 'classificada' | 'participou' | 'recusa' | 'desclassificacao' | 'inabilitacao'; motivo: string | null
 }
 export interface HistoricoPrecos {
   tipo: 'M' | 'S'; codigo: number; incompleto: boolean; total: number

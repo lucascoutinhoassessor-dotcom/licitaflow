@@ -5,11 +5,39 @@ import { toast } from 'sonner'
 import { Badge } from '@/components/ui'
 import { controleDaCompra } from '@/lib/compraFederal'
 import { rotaPorControle } from '@/lib/analiseEmpresa'
-import { identificacaoCompra, linkPesquisaMarca, type CompraPreco } from '@/lib/precos'
+import { identificacaoCompra, linkPesquisaMarca, type CompraPreco, type PropostaPreco } from '@/lib/precos'
+import { SELO } from '@/components/ConcorrentesItem'
 import { formatarData, formatarMoeda } from '@/lib/format'
 import { UF_NOME } from '@/lib/mercado'
 import { cn } from '@/lib/utils'
 
+/** Todas as propostas do item, em ordem de colocação, com marca e situação (vindas do Compras.gov.br). */
+function TodasPropostas({ propostas }: { propostas: PropostaPreco[] }) {
+  return (
+    <div>
+      <p className="mb-2 text-[11px] font-semibold uppercase text-muted-foreground">Todas as propostas do item · {propostas.length}</p>
+      <ol className="divide-y rounded-xl border">
+        {propostas.map((p) => (
+          <li key={p.cnpj} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2">
+            <span className="w-8 shrink-0 text-xs font-bold tabular-nums text-muted-foreground">{p.colocacao ? `${p.colocacao}º` : '–'}</span>
+            <span className="min-w-0 flex-1">
+              <span className="flex flex-wrap items-center gap-2">
+                <Link className="font-semibold text-sky-700 hover:underline dark:text-sky-300" to={`/app/analise-empresas/${p.cnpj}`}>{p.fornecedor ?? p.cnpj}</Link>
+                <Badge cor={SELO[p.situacao].cor}>{SELO[p.situacao].texto}</Badge>
+              </span>
+              <span className="block text-xs text-muted-foreground">Marca: {p.marca ?? 'não informada'}{p.modelo && p.modelo !== p.marca ? ` · ${p.modelo}` : ''}</span>
+              {p.motivo && <span className="block text-xs text-muted-foreground">Motivo: {p.motivo.length > 200 ? `${p.motivo.slice(0, 197)}…` : p.motivo}</span>}
+            </span>
+            <span className="text-right">
+              <span className="block font-bold tabular-nums">{p.preco ? formatarMoeda(p.preco) : '—'}</span>
+              {p.precoInicial && p.preco && p.precoInicial !== p.preco && <span className="block text-[11px] text-muted-foreground">inicial {formatarMoeda(p.precoInicial)}</span>}
+            </span>
+          </li>
+        ))}
+      </ol>
+    </div>
+  )
+}
 
 /** Uma compra do histórico de preços, no formato: órgão · modalidade, "Item N — descrição", objeto e dados do item. */
 export default function CartaoCompraPreco({ compra: c }: { compra: CompraPreco }) {
@@ -49,6 +77,7 @@ export default function CartaoCompraPreco({ compra: c }: { compra: CompraPreco }
         <ChevronDown className={cn('mt-0.5 h-5 w-5 shrink-0 text-muted-foreground transition-transform', aberto && 'rotate-180')} />
       </button>
       {c.objeto && <p className="mt-1 line-clamp-3 text-sm text-muted-foreground">{c.objeto}</p>}
+      {c.propostas?.length ? <button type="button" onClick={() => setAberto(true)} className="mt-2 inline-flex items-center rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-500/20 dark:text-emerald-300">{c.propostas.length} propostas com marca e colocação</button> : null}
 
       <dl className="mt-3 grid grid-cols-2 gap-3 rounded-xl bg-muted/60 p-3 text-sm sm:grid-cols-4">
         <div><dt className="text-[11px] font-semibold uppercase text-muted-foreground">Data</dt><dd className="mt-0.5 font-semibold">{formatarData(c.data ?? c.dataCompra)}</dd></div>
@@ -70,6 +99,7 @@ export default function CartaoCompraPreco({ compra: c }: { compra: CompraPreco }
           </div>
           <p><span className="text-[11px] font-semibold uppercase text-muted-foreground">Vencedor </span>
             {c.fornecedor ? (c.cnpj && /^\d{14}$/.test(c.cnpj) ? <Link className="font-semibold text-sky-700 hover:underline dark:text-sky-300" to={`/app/analise-empresas/${c.cnpj}`}>{c.fornecedor}</Link> : c.fornecedor) : 'Não informado'}</p>
+          {c.propostas?.length ? <TodasPropostas propostas={c.propostas} /> : null}
           {c.detalhe && <p className="whitespace-pre-wrap break-words text-muted-foreground">{c.detalhe}</p>}
           <p className="text-xs text-muted-foreground">{c.unidadeCompradora ?? ''}{c.municipio ? ` · ${c.municipio}` : ''}{c.uf ? `/${c.uf}` : ''}</p>
           {idValido && <div className="flex flex-wrap gap-2">

@@ -1,6 +1,7 @@
 import { emCache, excedeuLimite, guardarNoNavegador, usuarioLogado } from './protecao.js'
 import { cnpjBloqueado } from './bloqueio.js'
 import { createHash } from 'node:crypto'
+import { HASH_PORTAL } from './propostas-portal.js'
 // Leitura das atas de sessão publicadas no PNCP: abre os PDFs (ata da sessão, julgamento, homologação)
 // e separa os trechos de desclassificação, inabilitação e recusa, com empresa, itens e motivo.
 // As atas do Compras.gov.br (federais) ficam atrás de captcha e normalmente não vão para o PNCP;
@@ -396,6 +397,7 @@ async function atasEnviadas({ base, anon, token, servico, req, res, q, usuario }
     return res.json({ enviadas: await r.json() })
   }
   if (req.method !== 'POST') return res.status(405).json({ error: 'Método não permitido' })
+  if (q.acao === 'propostas') return propostasDoPortal({ base, servico, req, res, idCompra, usuario })
   if (!servico) return res.status(503).json({ error: 'Envio de atas indisponível no momento.' })
   if (excedeuLimite('atas-enviar', usuario, 5)) return res.status(429).json({ error: 'Muitos envios em pouco tempo. Aguarde um minuto.' })
   const corpo = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : req.body ?? {}
@@ -416,6 +418,63 @@ async function atasEnviadas({ base, anon, token, servico, req, res, q, usuario }
   return res.json({ hash, arquivo, resultado, created_at: new Date().toISOString() })
 }
 
+// Situação da proposta no Compras.gov (SituacaoPropostaItemEnum) → situação usada nos concorrentes do item.
+const SITUACAO_PORTAL = { 1: 'desclassificacao', 2: 'desclassificacao', 9: 'desclassificacao', 5: 'inabilitacao', 3: 'classificada', 4: 'classificada', 6: 'classificada' }
+const ARQUIVO_PORTAL = 'Propostas do Compras.gov.br'
+const txt = (v, max) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : null)
+const valorOk = (v) => (typeof v === 'number' && Number.isFinite(v) && v > 0 && v < 1e12 ? v : null)
+
+/** Propostas de cada item capturadas pelo botão favorito na página de acompanhamento do Compras.gov.br. */
+export function itensDoPortal(itens) {
+  if (!Array.isArray(itens)) return []
+  const saida = []
+  for (const i of itens.slice(0, 600)) {
+    const numero = Number(i?.n)
+    if (!Number.isInteger(numero) || numero < 1 || numero > 99999 || !Array.isArray(i?.p)) continue
+    const empresas = []
+    const vistos = new Set()
+    for (const p of i.p.slice(0, 300)) {
+      const cnpj = String(p?.c ?? '')
+      // Pessoa física (CPF) fica de fora: só empresas com CNPJ válido.
+      if (!cnpjValido(cnpj) || vistos.has(cnpj) || cnpjBloqueado(cnpj)) continue
+      vistos.add(cnpj)
+      const colocacao = Number.isInteger(p?.cl) && p.cl > 0 && p.cl < 10000 ? p.cl : null
+      const situacao = SITUACAO_PORTAL[Number(p?.st)] ?? (colocacao ? 'classificada' : 'participou')
+      empresas.push({
+        cnpj, nome: txt(p?.nm, 200), valor: valorOk(p?.v), situacao, motivo: txt(p?.mo, 400),
+        colocacao, valorTotal: valorOk(p?.vt), valorInicial: valorOk(p?.vi), marca: txt(p?.ma, 80), modelo: txt(p?.mod, 120),
+        uf: /^[A-Z]{2}$/.test(String(p?.uf ?? '')) ? p.uf : null, meEpp: p?.me === true, adjudicada: Number(p?.st) === 6,
+      })
+    }
+    if (empresas.length) saida.push({ tipo: i.t === 'g' ? 'grupo' : 'item', numero, fonte: 'portal', empresas })
+  }
+  return saida
+}
+
+async function propostasDoPortal({ base, servico, req, res, idCompra, usuario }) {
+  if (!servico) return res.status(503).json({ error: 'Envio indisponível no momento.' })
+  if (excedeuLimite('atas-propostas', usuario, 10)) return res.status(429).json({ error: 'Muitos envios em pouco tempo. Aguarde um minuto.' })
+  const corpo = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : req.body ?? {}
+  const novos = itensDoPortal(corpo.itens)
+  if (!novos.length) return res.status(422).json({ error: 'Nenhuma proposta com CNPJ veio do Compras.gov.br. Abra os itens na página da compra e tente de novo.' })
+  const cabecalho = { apikey: servico, Authorization: `Bearer ${servico}`, 'Content-Type': 'application/json' }
+  // Uma linha por compra: cada envio junta os itens novos aos já guardados (o item reenviado substitui o antigo).
+  const atual = await fetch(`${base}/rest/v1/atas_enviadas?id_compra=eq.${idCompra}&hash=eq.${HASH_PORTAL}&select=resultado`, { headers: cabecalho, signal: AbortSignal.timeout(15000) })
+  const antigos = atual.ok ? ((await atual.json())[0]?.resultado?.itens ?? []) : []
+  const porChave = new Map([...antigos, ...novos].map((i) => [`${i.tipo}${i.numero}`, i]))
+  const itens = [...porChave.values()].sort((a, b) => a.numero - b.numero)
+  const hoje = new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })
+  const url = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/public/compras/acompanhamento-compra?compra=${idCompra}`
+  const resultado = { documentos: [{ titulo: `${ARQUIVO_PORTAL} (${itens.length} itens, ${hoje})`, url, lido: true }], ocorrencias: [], participantes: [], itens }
+  const linha = { id_compra: idCompra, hash: HASH_PORTAL, arquivo: ARQUIVO_PORTAL, resultado, enviado_por: /^[0-9a-f-]{36}$/i.test(usuario) ? usuario : null }
+  const r = await fetch(`${base}/rest/v1/atas_enviadas?on_conflict=id_compra,hash`, {
+    method: 'POST', body: JSON.stringify(linha), signal: AbortSignal.timeout(15000),
+    headers: { ...cabecalho, Prefer: 'resolution=merge-duplicates,return=minimal' },
+  })
+  if (!r.ok) return res.status(502).json({ error: 'As propostas chegaram, mas não foi possível guardá-las. Tente de novo.' })
+  return res.json({ hash: HASH_PORTAL, arquivo: ARQUIVO_PORTAL, resultado, created_at: new Date().toISOString(), novos: novos.length })
+}
+
 async function emLotes(lista, n, fn) {
   const saida = []
   for (let i = 0; i < lista.length; i += n) saida.push(...(await Promise.all(lista.slice(i, i + n).map(fn))))
@@ -425,8 +484,8 @@ async function emLotes(lista, n, fn) {
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store')
   const q = req.query ?? {}
-  const envio = q.acao === 'enviar' || q.acao === 'enviadas'
-  if (req.method !== 'GET' && !(q.acao === 'enviar' && req.method === 'POST')) return res.status(405).json({ error: 'Método não permitido' })
+  const envio = q.acao === 'enviar' || q.acao === 'enviadas' || q.acao === 'propostas'
+  if (req.method !== 'GET' && !((q.acao === 'enviar' || q.acao === 'propostas') && req.method === 'POST')) return res.status(405).json({ error: 'Método não permitido' })
   const env = process.env
   const base = env.SUPABASE_URL || env.VITE_SUPABASE_URL
   const anon = env.SUPABASE_ANON_KEY || env.VITE_SUPABASE_ANON_KEY

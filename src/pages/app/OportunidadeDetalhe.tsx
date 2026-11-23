@@ -22,6 +22,8 @@ import { codigoComprasnet, portalCompra, urlOrigem } from '@/lib/portais'
 import { formatarMoeda } from '@/lib/format'
 import type { Processo } from '@/types/db'
 import ContagemDisputa from '@/components/ContagemDisputa'
+import { ConcorrentesEdital, FavoritoPropostas } from '@/components/ConcorrentesItem'
+import { atasDaCompra, atasEnviadas, juntarAtas } from '@/lib/atas'
 import { comGrupos } from '@/lib/itensEdital'
 import { gruposDaCompra, idCompraComprasnet, resultadosDoEdital } from '@/lib/resultadosEdital'
 
@@ -58,6 +60,11 @@ export default function OportunidadeDetalhe() {
   const itens = useQuery({ queryKey: ['itens-edital', compra?.numeroControlePNCP], enabled: !!compra, queryFn: ({ signal }) => itensCompletos(compra!, signal), staleTime: 300_000, retry: 1 })
   const encerrada = !!compra?.dataEncerramentoProposta && new Date(compra.dataEncerramentoProposta) < new Date()
   const resultados = useQuery({ queryKey: ['resultados-edital', compra?.numeroControlePNCP], enabled: encerrada && !!itens.data?.some((i) => i.temResultado), queryFn: ({ signal }) => resultadosDoEdital(compra!, itens.data!, signal), staleTime: 600_000, retry: 1 })
+  // Mesmas consultas do quadro de empresas e da página da compra (cache compartilhado): atas do PNCP e propostas enviadas.
+  const idCompra = compra ? idCompraComprasnet(compra) : null
+  const atasPncp = useQuery({ queryKey: ['atas-compra', compra?.numeroControlePNCP], enabled: encerrada && !!compra, staleTime: 3_600_000, retry: 1, queryFn: ({ signal }) => atasDaCompra(compra!.numeroControlePNCP, signal) })
+  const enviadas = useQuery({ queryKey: ['atas-enviadas', idCompra], enabled: encerrada && !!idCompra, staleTime: 300_000, retry: 1, queryFn: ({ signal }) => atasEnviadas(idCompra!, signal) })
+  const atasJuntas = juntarAtas(atasPncp.data, enviadas.data)
   const processos = useLista<Processo>('processos', { porEmpresa: false })
   const { salvar } = useSalvar('processos', ['processo_eventos', 'prazos'])
   // "Ver itens" na lista abre a página já na seção de itens.
@@ -127,9 +134,10 @@ export default function OportunidadeDetalhe() {
 
       <section id="itens">
         <h2 className="mb-3 text-lg font-semibold">Itens do edital</h2>
+        {encerrada && idCompra && <FavoritoPropostas idCompra={idCompra} className="mb-4" />}
         {itens.isLoading ? <Carregando texto="Carregando itens…" /> : itens.isError ? (
           <Card className="p-5 text-sm">Não foi possível carregar os itens agora. <button className="font-semibold text-primary underline" onClick={() => itens.refetch()}>Tentar novamente</button></Card>
-        ) : <ItensAcordeao itens={itens.data ?? []} tipoEdital={compra.materialOuServico} />}
+        ) : <ItensAcordeao itens={itens.data ?? []} tipoEdital={compra.materialOuServico} extra={encerrada ? (i) => <ConcorrentesEdital item={i} todos={itens.data ?? []} colocacoes={resultados.data} atas={atasJuntas} /> : undefined} />}
       </section>
     </>
   )

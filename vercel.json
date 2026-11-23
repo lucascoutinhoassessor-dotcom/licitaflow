@@ -9,7 +9,7 @@
       "destination": "https://pncp.gov.br/pncp-api/v1/:caminho*"
     },
     {
-      "source": "/((?!assets/|api/|pncp-arquivos/|icons/|manifest.webmanifest|master.webmanifest|pwa.js|sw.js|offline.html|favicon.svg|tema.js).*)",
+      "source": "/((?!assets/|api/|pncp-arquivos/|icons/|manifest.webmanifest|master.webmanifest|pwa.js|coletor-propostas.js|sw.js|offline.html|favicon.svg|tema.js).*)",
       "destination": "/index.html"
     }
   ],

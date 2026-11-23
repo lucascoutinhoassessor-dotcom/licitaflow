@@ -1,5 +1,6 @@
 import { emCache, excedeuLimite, guardarNoNavegador, usuarioLogado } from './protecao.js'
 import { cnpjBloqueado } from './bloqueio.js'
+import { comPropostas, propostasGuardadas } from './propostas-portal.js'
 // Histórico de preços sob demanda: compras homologadas de um material (PDM) ou serviço do catálogo federal,
 // direto do Painel de Preços (dados abertos do Compras.gov.br). Nada é guardado no banco.
 
@@ -103,8 +104,10 @@ export default async function handler(req, res) {
       const { todas, incompleto } = await buscarCompras(tipo, codigo, { uf, de, ate })
       return { tipo, codigo, incompleto, ...resumirPrecos(todas) }
     })
+    // Todas as propostas (não só a homologada) das compras que alguém trouxe do Compras.gov.br pelo botão favorito.
+    const guardadas = await propostasGuardadas(base, anon, token, corpo.compras.map((c) => c.idCompra))
     guardarNoNavegador(res, 600)
-    return res.json(corpo)
+    return res.json(Object.keys(guardadas).length ? { ...corpo, compras: comPropostas(corpo.compras, guardadas) } : corpo)
   } catch (e) {
     return res.status(e.status ?? 500).json({ error: e.status ? e.message : 'Não foi possível consultar os preços agora.' })
   }
