@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { consultarItens, filtrosExtras, MODALIDADES, periodoAbertura, periodoEntre, resumoFiltros, validarFiltros, type FiltrosOportunidades } from './filtrosOportunidades'
+import { comUfs, consultarItens, filtrosExtras, MODALIDADES, periodoAbertura, periodoEntre, resumoFiltros, ufsDe, validarFiltros, type FiltrosOportunidades } from './filtrosOportunidades'
 import { portalCompra, urlOrigem, PORTAIS } from './portais'
 import type { CompraPNCP } from './pncp'
 const f: FiltrosOportunidades={...filtrosExtras,modalidades:['6','8'],busca:'computadores',inicio:'2026-11-09',fim:'2026-11-16',uf:'',modalidade:'6'}
@@ -67,5 +67,18 @@ describe('resumoFiltros', () => {
     expect(achar('Somente materiais')?.remover).toEqual({ tipoItem: '' })
     const semPeriodo = { ...base, ...achar('Abertura: 22/11/2026 a 07/12/2026')!.remover }
     expect(resumoFiltros(semPeriodo, MODALIDADES.length, PORTAIS.length).find((x) => x.rotulo === 'Abertura: todo o período')?.remover).toBeUndefined()
+  })
+})
+
+describe('vários estados', () => {
+  it('lê a lista nova e a UF única das buscas antigas, e mantém uf em dia', () => {
+    expect(ufsDe({ uf: 'SP', ufs: [] })).toEqual(['SP'])
+    expect(ufsDe({ uf: '', ufs: ['SP', 'RJ', 'XX'] })).toEqual(['RJ', 'SP'])
+    expect(comUfs(['RJ'])).toEqual({ ufs: ['RJ'], uf: 'RJ' })
+    expect(comUfs(['SP', 'RJ'])).toEqual({ ufs: ['RJ', 'SP'], uf: '' })
+    const rotulos = (x: Partial<FiltrosOportunidades>) => resumoFiltros({ ...f, ...x }, MODALIDADES.length, PORTAIS.length).map((r) => r.rotulo)
+    expect(rotulos({ ufs: ['SP', 'RJ'] })).toContain('UF: RJ, SP')
+    expect(rotulos({ ufs: ['AC', 'AL', 'AP', 'AM', 'BA'] })).toContain('5 estados')
+    expect(rotulos({ ufs: [] })).toContain('Brasil inteiro')
   })
 })

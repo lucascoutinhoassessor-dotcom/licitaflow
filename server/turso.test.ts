@@ -144,6 +144,9 @@ describe('coleta e busca no Turso', () => {
     expect((await buscarTurso(turso as never, { busca: 'grampeador; limpeza' })).totalRegistros).toBe(2)
     expect((await buscarTurso(turso as never, { busca: 'notebook', excluir: 'secretaria' })).data.map((c) => c.sequencialCompra)).toEqual([3])
     expect((await buscarTurso(turso as never, { uf: 'SP' })).totalRegistros).toBe(1)
+    expect((await buscarTurso(turso as never, { ufs: ['SP', 'MG'] })).totalRegistros).toBe(3) // vários estados de uma vez
+    expect((await buscarTurso(turso as never, { ufs: ['SP', 'RJ'] })).totalRegistros).toBe(1)
+    expect((await buscarTurso(turso as never, { ufs: [], uf: 'SP' })).totalRegistros).toBe(1) // busca antiga, só com uf
     expect((await buscarTurso(turso as never, { excluirSrp: true })).totalRegistros).toBe(2)
     expect((await buscarTurso(turso as never, { minimo: '10000' })).totalRegistros).toBe(1)
     expect((await buscarTurso(turso as never, { tipoItem: 'S' })).data[0].materialOuServico).toBe('S')

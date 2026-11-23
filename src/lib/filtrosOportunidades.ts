@@ -23,8 +23,18 @@ export interface FiltrosOportunidades extends FiltrosPNCP {
   diasUteis: boolean
   /** Inverte a ordem: abertas mais distantes primeiro; publicações mais antigas primeiro. */
   inverter: boolean
+  /** Estados escolhidos (vários de uma vez); vazio = Brasil inteiro. `uf` fica igual quando há um só (compatibilidade). */
+  ufs: string[]
 }
-export const filtrosExtras = { modalidades: MODALIDADES.map(m=>m[0]) as string[], portais: PORTAIS.map(p => p[0]) as string[], busca: '', orgao: '', minimo: '', maximo: '', itemMinimo: '', itemMaximo: '', maxItens: '', naoDivulgado: false, exclusivo: false, excluirSrp: false, excluir: '', tipoItem: '' as '' | 'M' | 'S', modosDisputa: [] as string[], aberturaDe: '', aberturaAte: '', diasUteis: true, inverter: false }
+export const UFS = 'AC AL AP AM BA CE DF ES GO MA MT MS MG PA PB PR PE PI RJ RN RS RO RR SC SP SE TO'.split(' ')
+/** Estados da busca: a lista nova ou, em buscas guardadas antes dela, o estado único. */
+export function ufsDe(f: Pick<FiltrosOportunidades, 'uf' | 'ufs'>): string[] {
+  const lista = Array.isArray(f.ufs) && f.ufs.length ? f.ufs : f.uf ? [f.uf] : []
+  return UFS.filter((u) => lista.includes(u))
+}
+/** Troca os estados mantendo `uf` em dia (um estado só: o próprio; vários ou nenhum: vazio). */
+export const comUfs = (ufs: string[]) => { const l = UFS.filter((u) => ufs.includes(u)); return { ufs: l, uf: l.length === 1 ? l[0] : '' } }
+export const filtrosExtras = { modalidades: MODALIDADES.map(m=>m[0]) as string[], portais: PORTAIS.map(p => p[0]) as string[], busca: '', orgao: '', minimo: '', maximo: '', itemMinimo: '', itemMaximo: '', maxItens: '', naoDivulgado: false, exclusivo: false, excluirSrp: false, excluir: '', tipoItem: '' as '' | 'M' | 'S', modosDisputa: [] as string[], aberturaDe: '', aberturaAte: '', diasUteis: true, inverter: false, ufs: [] as string[] }
 export interface ItemCompra {
   numeroItem: number; descricao?: string; quantidade?: number; unidadeMedida?: string
   valorUnitarioEstimado: number | null; valorTotal?: number | null; orcamentoSigiloso?: boolean
@@ -87,7 +97,8 @@ export function resumoFiltros(f: FiltrosOportunidades, modalidadesPossiveis: num
   const moeda = (v: string) => Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })
   const faixa = (min: string, max: string) => min && max ? `${moeda(min)} a ${moeda(max)}` : min ? `a partir de ${moeda(min)}` : `até ${moeda(max)}`
   if (f.busca.trim()) add(`Busca: ${f.busca.trim()}`, { busca: '' })
-  if (f.uf) add(`UF: ${f.uf}`, { uf: '' }); else add('Brasil inteiro')
+  const ufs = ufsDe(f)
+  if (ufs.length) add(ufs.length <= 4 ? `UF: ${ufs.join(', ')}` : `${ufs.length} estados`, { uf: '', ufs: [] }); else add('Brasil inteiro')
   if (f.situacao === 'publicacoes') {
     if (f.inicio || f.fim) add(`Publicação: ${f.inicio ? data(f.inicio) : '…'} a ${f.fim ? data(f.fim) : '…'}`)
   } else if (f.aberturaDe || f.aberturaAte) {

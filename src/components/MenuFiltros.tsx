@@ -9,9 +9,12 @@ import { cn } from '@/lib/utils'
  * `colunas={2}` divide as seções em duas colunas na janela do computador (telas com muitos filtros).
  * `children` pode ser uma função que recebe `fechar`, para botões do rodapé que aplicam e fecham.
  */
-export default function MenuFiltros({ ativos = 0, rotulo = 'Filtros', aoLimpar, rodape, children, colunas = 1, className }: {
+export default function MenuFiltros({ ativos = 0, rotulo = 'Filtros', titulo, icone: Icone = SlidersHorizontal, aoLimpar, rodape, children, colunas = 1, className }: {
   ativos?: number
   rotulo?: string
+  /** Título da janela (padrão: o próprio rótulo do botão). */
+  titulo?: string
+  icone?: LucideIcon
   aoLimpar?: () => void
   rodape?: (fechar: () => void) => ReactNode
   children: ReactNode | ((fechar: () => void) => ReactNode)
@@ -34,18 +37,18 @@ export default function MenuFiltros({ ativos = 0, rotulo = 'Filtros', aoLimpar, 
   return <div className={className}>
     <button ref={botao} type="button" aria-haspopup="dialog" aria-expanded={aberto} onClick={() => setAberto(true)}
       className={cn('inline-flex h-10 w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-full border bg-card px-4 text-sm font-semibold hover:bg-muted sm:w-auto', ativos > 0 && 'border-primary text-primary')}>
-      <SlidersHorizontal className="h-4 w-4 text-sky-500" />{rotulo}
+      <Icone className="h-4 w-4 shrink-0 text-sky-500" /><span className="truncate">{rotulo}</span>
       {ativos > 0 && <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-bold text-primary-foreground">{ativos}</span>}
       <ChevronDown className={cn('h-4 w-4 transition-transform', aberto && 'rotate-180')} />
     </button>
     {aberto && createPortal(<div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-6">
     <div aria-hidden className="absolute inset-0 bg-black/60 sm:backdrop-blur-[2px]" onClick={fechar} />
-    <div role="dialog" aria-modal="true" aria-label={rotulo} className={cn('relative flex max-h-[85dvh] w-full flex-col rounded-t-2xl border-t bg-card text-left text-card-foreground shadow-2xl sm:max-h-[85vh] sm:rounded-2xl sm:border', colunas === 2 ? 'sm:max-w-4xl' : 'sm:max-w-lg')}>
+    <div role="dialog" aria-modal="true" aria-label={titulo ?? rotulo} className={cn('relative flex max-h-[85dvh] w-full flex-col rounded-t-2xl border-t bg-card text-left text-card-foreground shadow-2xl sm:max-h-[85vh] sm:rounded-2xl sm:border', colunas === 2 ? 'sm:max-w-4xl' : 'sm:max-w-lg')}>
       <div className="px-2 pt-2 sm:border-b sm:px-4 sm:py-3">
         <div className="mx-auto mb-2 h-1.5 w-10 rounded-full bg-muted sm:hidden" aria-hidden />
         <div className="flex items-center justify-between pb-1 pl-3 sm:p-0">
-          <p className="flex items-center gap-2 text-base font-semibold sm:text-lg"><SlidersHorizontal className="hidden h-5 w-5 text-sky-500 sm:block" />{rotulo}</p>
-          <button type="button" aria-label={`Fechar ${rotulo.toLowerCase()}`} onClick={fechar} className="inline-flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground hover:bg-muted"><X className="h-5 w-5" /></button>
+          <p className="flex items-center gap-2 text-base font-semibold sm:text-lg"><Icone className="hidden h-5 w-5 text-sky-500 sm:block" />{titulo ?? rotulo}</p>
+          <button type="button" aria-label={`Fechar ${(titulo ?? rotulo).toLowerCase()}`} onClick={fechar} className="inline-flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground hover:bg-muted"><X className="h-5 w-5" /></button>
         </div>
       </div>
       <div className={cn('min-h-0 flex-1 space-y-1.5 overflow-y-auto p-2 sm:p-4', colunas === 2 && 'sm:columns-2 sm:gap-3 sm:space-y-0 sm:[&>*]:mb-3 sm:[&>*]:break-inside-avoid')}>{typeof children === 'function' ? children(fechar) : children}</div>
