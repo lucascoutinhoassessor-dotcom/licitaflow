@@ -38,6 +38,22 @@ export const ESQUEMA = [
     on conflict(chave) do update set valor = excluded.valor, atualizado_em = excluded.atualizado_em`,
 ]
 
+/**
+ * Uma vez só: refaz os FTS com o rowid do edital (antes era um rowid qualquer e o apagar procurava por "controle",
+ * coluna sem índice, lendo a tabela inteira a cada edital gravado; foi isso que estourou a cota de leituras).
+ * Roda com turso.transacao (batch com condições): se um passo falha, os seguintes não rodam e tudo volta atrás;
+ * a próxima rodada tenta de novo.
+ * Atenção: o rowid implícito de "editais" (chave de texto) pode mudar num VACUUM. O Turso não faz VACUUM sozinho;
+ * se um dia alguém rodar, apague 'fts_rowid' de coleta_estado para a migração refazer o vínculo.
+ */
+export const MIGRAR_FTS_ROWID = [...['editais_fts', 'itens_fts'].flatMap((t) => [
+  [`drop table if exists ${t}_n`],
+  [`create virtual table ${t}_n using fts5(controle unindexed, texto, tokenize = 'unicode61 remove_diacritics 2')`],
+  [`insert into ${t}_n(rowid, controle, texto) select e.rowid, e.controle, f.texto from (select controle, max(texto) as texto from ${t} group by controle) f join editais e on e.controle = f.controle`],
+  [`drop table ${t}`],
+  [`alter table ${t}_n rename to ${t}`],
+]), ["insert into coleta_estado(chave,valor,atualizado_em) values('fts_rowid','1',datetime('now')) on conflict(chave) do update set valor=excluded.valor, atualizado_em=excluded.atualizado_em"]]
+
 /** libsql://banco-org.turso.io → https://banco-org.turso.io */
 export function urlHttp(url) {
   const u = String(url ?? '').trim().replace(/^libsql:\/\//, 'https://').replace(/\/+$/, '')
@@ -61,17 +77,35 @@ export function linhas(resultado) {
 export function clienteTurso(env = process.env, fetcher = fetch) {
   const base = urlHttp(env.TURSO_DATABASE_URL), token = env.TURSO_AUTH_TOKEN
   if (!base || !token) return null
-  async function pipeline(comandos) {
-    const requests = [...comandos.map(([sql, args = []]) => ({ type: 'execute', stmt: { sql, args: args.map(valor) } })), { type: 'close' }]
-    const r = await fetcher(`${base}/v2/pipeline`, { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ requests }), signal: AbortSignal.timeout(25000) })
+  async function enviar(requests, ms = 25000) {
+    const r = await fetcher(`${base}/v2/pipeline`, { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ requests: [...requests, { type: 'close' }] }), signal: AbortSignal.timeout(ms) })
     const j = await r.json().catch(() => null)
     if (!r.ok || !j) throw Object.assign(new Error(`Turso respondeu ${r.status}`), { status: 502 })
+    return j
+  }
+  /** Transação de verdade: no pipeline um erro não para os passos seguintes; no batch, cada passo só roda se o anterior deu certo. */
+  async function transacao(comandos) {
+    const n = comandos.length
+    const steps = [{ stmt: { sql: 'begin' } },
+      ...comandos.map(([sql, args = []], i) => ({ condition: { type: 'ok', step: i }, stmt: { sql, args: args.map(valor) } })),
+      { condition: { type: 'ok', step: n }, stmt: { sql: 'commit' } },
+      { condition: { type: 'not', cond: { type: 'ok', step: n + 1 } }, stmt: { sql: 'rollback' } }]
+    const j = await enviar([{ type: 'batch', batch: { steps } }], 55000)
+    const res = j.results?.[0]
+    if (res?.type === 'error') throw Object.assign(new Error(`Turso: ${res.error?.message ?? 'erro'}`), { status: 502 })
+    const b = res?.response?.result
+    const erro = b?.step_errors?.find(Boolean)
+    if (erro) throw Object.assign(new Error(`Turso: ${erro.message ?? 'erro'}`), { status: 502 })
+    if (!b?.step_results?.[n + 1]) throw Object.assign(new Error('Turso: transação não confirmada'), { status: 502 })
+  }
+  async function pipeline(comandos) {
+    const j = await enviar(comandos.map(([sql, args = []]) => ({ type: 'execute', stmt: { sql, args: args.map(valor) } })))
     const erro = j.results?.find((x) => x.type === 'error')
     if (erro) throw Object.assign(new Error(`Turso: ${erro.error?.message ?? 'erro'}`), { status: 502 })
     return j.results.slice(0, comandos.length)
   }
   return {
-    pipeline,
+    pipeline, transacao,
     consultar: async (sql, args) => linhas((await pipeline([[sql, args]]))[0]),
     /** Várias consultas numa ida só; devolve as linhas de cada uma. */
     lote: async (comandos) => (await pipeline(comandos)).map(linhas),
@@ -121,8 +155,10 @@ export async function gravarEditais(turso, lista, agora = agoraIso()) {
         encerramento=excluded.encerramento,tipo_objeto=excluded.tipo_objeto,dia_util=excluded.dia_util,atualizado_pncp=excluded.atualizado_pncp,
         coletado_em=excluded.coletado_em,compra=excluded.compra,itens_completos=0,quantidade_itens=null,tipo_itens=null,itens_tentativas=0`,
     [n.controle, n.cnpj, n.ano, n.sequencial, n.modalidade, n.portal, n.uf, n.situacao, n.srp, n.modo_disputa, n.valor, n.orgao_cnpj, n.orgao_nome, n.publicacao, n.encerramento, n.tipo_objeto, n.dia_util, n.atualizado_pncp, agora, n.compra]])
-    comandos.push(['delete from editais_fts where controle = ?', [n.controle]], ['insert into editais_fts(controle, texto) values(?, ?)', [n.controle, n.texto]])
-    if (existentes.has(n.controle)) comandos.push(['delete from itens where controle = ?', [n.controle]], ['delete from itens_fts where controle = ?', [n.controle]])
+    // As linhas do FTS usam o rowid do edital: apagar por "controle" (coluna sem índice) lia a tabela inteira a cada edital.
+    comandos.push(['delete from editais_fts where rowid = (select rowid from editais where controle = ?)', [n.controle]],
+      ['insert into editais_fts(rowid, controle, texto) select rowid, controle, ? from editais where controle = ?', [n.texto, n.controle]])
+    if (existentes.has(n.controle)) comandos.push(['delete from itens where controle = ?', [n.controle]], ['delete from itens_fts where rowid = (select rowid from editais where controle = ?)', [n.controle]])
   }
   await turso.pipeline(comandos)
   return mudaram.length
@@ -152,7 +188,7 @@ async function coletarItens(turso, e, fetcher) {
   }
   const unicos = [...new Map(itens.filter((i) => Number.isInteger(i?.numeroItem)).map((i) => [i.numeroItem, i])).values()]
   const tipos = [...new Set(unicos.map((i) => i.materialOuServico).filter((t) => t === 'M' || t === 'S'))].sort().join('') || null
-  const comandos = [['delete from itens where controle = ?', [e.controle]], ['delete from itens_fts where controle = ?', [e.controle]]]
+  const comandos = [['delete from itens where controle = ?', [e.controle]], ['delete from itens_fts where rowid = (select rowid from editais where controle = ?)', [e.controle]]]
   for (const i of unicos) {
     const sigilo = i.orcamentoSigiloso === true
     comandos.push(['insert into itens(controle,numero,descricao,valor_unitario,beneficio,sigiloso,tipo,quantidade,unidade,valor_total,beneficio_nome,criterio,situacao,grupo,lote) values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
@@ -160,7 +196,7 @@ async function coletarItens(turso, e, fetcher) {
         i.materialOuServico ?? null, Number(i.quantidade) || null, i.unidadeMedida ?? null, sigilo ? null : Number(i.valorTotal) || null, i.tipoBeneficioNome ?? null,
         i.criterioJulgamentoNome ?? null, i.situacaoCompraItemNome ?? null, i.numeroGrupo != null ? String(i.numeroGrupo) : null, i.numeroLote != null ? String(i.numeroLote) : null]])
   }
-  if (unicos.length) comandos.push(['insert into itens_fts(controle, texto) values(?, ?)', [e.controle, unicos.map((i) => i.descricao ?? '').join(' ').slice(0, 400000)]])
+  if (unicos.length) comandos.push(['insert into itens_fts(rowid, controle, texto) select rowid, controle, ? from editais where controle = ?', [unicos.map((i) => i.descricao ?? '').join(' ').slice(0, 400000), e.controle]])
   comandos.push(['update editais set itens_completos = 1, quantidade_itens = ?, tipo_itens = ? where controle = ?', [unicos.length, tipos, e.controle]])
   await turso.pipeline(comandos)
   return true
@@ -197,6 +233,7 @@ export async function coletarRodada(turso, { prazo = Date.now() + 40_000, fetche
   try { estadoLinhas = await turso.consultar('select chave, valor from coleta_estado') } catch { estadoLinhas = [] }
   let estado = Object.fromEntries(estadoLinhas.map((l) => [l.chave, l.valor]))
   if (estado.esquema !== VERSAO_ESQUEMA) { await turso.prepararEsquema(); estado = {} }
+  if (estado.fts_rowid !== '1') await turso.transacao(MIGRAR_FTS_ROWID)
   if (estado.pausado_ate && estado.pausado_ate > agoraIso()) return [{ pausado: estado.pausado_ate }]
   const data = dia(hoje), feitos = [], tempoAte = (fracao) => Date.now() < prazo - (1 - fracao) * 40_000
   const pncp = pncpComLimite(fetcher, maxConsultas, intervaloMs)
@@ -270,11 +307,12 @@ export async function coletarRodada(turso, { prazo = Date.now() + 40_000, fetche
     const velhos = (await turso.consultar('select controle from editais where encerramento < ? limit 300', [new Date(Date.now() - 2 * 86400_000).toISOString()])).map((l) => l.controle)
     if (!velhos.length) return
     const marcas = velhos.map(() => '?').join(',')
-    await turso.pipeline([[`delete from itens where controle in (${marcas})`, velhos], [`delete from itens_fts where controle in (${marcas})`, velhos], [`delete from editais_fts where controle in (${marcas})`, velhos], [`delete from editais where controle in (${marcas})`, velhos]])
+    await turso.pipeline([[`delete from itens where controle in (${marcas})`, velhos], [`delete from itens_fts where rowid in (select rowid from editais where controle in (${marcas}))`, velhos], [`delete from editais_fts where rowid in (select rowid from editais where controle in (${marcas}))`, velhos], [`delete from editais where controle in (${marcas})`, velhos]])
     feitos.push({ etapa: 'limpeza', editais: velhos.length })
   })
-  // A cada 10 minutos a resposta traz o tamanho da base (aparece em net._http_response no Supabase).
-  if (hoje.getUTCMinutes() % 10 === 0) await etapa('situacao', async () => { const s = await situacaoTurso(turso); feitos.push({ etapa: 'situacao', editais: s.editais, abertos: s.abertos, comItens: s.comItens, cargaCompletaEm: s.cargaCompletaEm }) })
+  // Uma vez por hora a resposta traz o tamanho da base (aparece em net._http_response no Supabase).
+  // Eram 10 min, mas cada vez conta a base inteira (~75 mil linhas lidas).
+  if (hoje.getUTCMinutes() === 0) await etapa('situacao', async () => { const s = await situacaoTurso(turso); feitos.push({ etapa: 'situacao', editais: s.editais, abertos: s.abertos, comItens: s.comItens, cargaCompletaEm: s.cargaCompletaEm }) })
   const fim = [guardar('ultima_coleta_em', agoraIso())]
   if (pausar) fim.push(guardar('pausado_ate', new Date(Date.now() + 3 * 60_000).toISOString()))
   await turso.pipeline(fim)
@@ -323,8 +361,9 @@ export function montarFiltros(f, agora = agoraIso()) {
   const porItem = iMin !== null || iMax !== null || maxItens !== null || f.exclusivo === true
 
   const onde = [], args = []
-  if (q) { onde.push('e.controle in (select controle from editais_fts where editais_fts match ? union select controle from itens_fts where itens_fts match ?)'); args.push(q, q) }
-  if (qEx) { onde.push('e.controle not in (select controle from editais_fts where editais_fts match ?)'); args.push(qEx) }
+  // Pelo rowid (o mesmo do edital): ler "controle" faria o FTS abrir a tabela de conteúdo, mais uma linha lida por resultado.
+  if (q) { onde.push('e.rowid in (select rowid from editais_fts where editais_fts match ? union select rowid from itens_fts where itens_fts match ?)'); args.push(q, q) }
+  if (qEx) { onde.push('e.rowid not in (select rowid from editais_fts where editais_fts match ?)'); args.push(qEx) }
   onde.push(`e.modalidade in (${mods.map(() => '?').join(',')})`, `e.portal in (${portais.map(() => '?').join(',')})`); args.push(...mods, ...portais)
   if (/^[A-Z]{2}$/.test(f.uf ?? '')) { onde.push('e.uf = ?'); args.push(f.uf) }
   if (/^\d{14}$/.test(f.orgao ?? '')) { onde.push('e.orgao_cnpj = ?'); args.push(f.orgao) }
@@ -370,6 +409,8 @@ export async function situacaoTurso(turso) {
   return { editais: n?.n ?? 0, abertos: abertos?.n ?? 0, comItens: itens?.n ?? 0, ultimaColeta: e.ultima_coleta_em ?? null, cargaCompletaEm: e.carga_completa_em ?? null, pausadoAte: e.pausado_ate ?? null, carga: e.carga ?? null }
 }
 
+const GLOBAIS = new WeakMap(), POR_FILTRO = new WeakMap()
+
 /** Busca no Turso no formato de resposta do buscar_oportunidades (ResultadoIndice). */
 export async function buscarTurso(turso, filtros, pagina = 1, tamanho = 20) {
   if (!Number.isInteger(pagina) || pagina < 1 || pagina > 100000) throw new FiltroInvalido('Filtros inválidos')
@@ -377,16 +418,38 @@ export async function buscarTurso(turso, filtros, pagina = 1, tamanho = 20) {
   const ordem = inverter ? 'e.encerramento desc, e.controle' : 'e.encerramento asc, e.controle'
   const comandos = [
     [`select e.compra, e.modo_disputa, e.tipo_itens, e.tipo_objeto from editais e where ${onde.join(' and ')} order by ${ordem} limit ? offset ?`, [...args, tamanho, (pagina - 1) * tamanho]],
-    [`select count(*) as n from editais e where ${onde.join(' and ')}`, args],
-    [`select e.orgao_cnpj as cnpj, min(e.orgao_nome) as razaoSocial from editais e where ${base.onde.join(' and ')} group by e.orgao_cnpj order by 2 limit 200`, base.args],
     ['select chave, valor from coleta_estado'],
-    ['select count(*) as n from editais'],
   ]
-  // Cobertura dos itens nos editais que abrem em até 30 dias (a palavra-chave também procura nos itens).
-  const agora = agoraIso(), ate30 = new Date(Date.now() + 30 * 86400_000).toISOString()
-  comandos.push(['select count(*) as total, sum(itens_completos) as com from editais where encerramento >= ? and encerramento <= ?', [agora, ate30]])
-  if (porItem) comandos.push([`select count(*) as n from editais e where ${base.onde.join(' and ')} and e.itens_completos = 0`, base.args])
-  const [paginaLinhas, [total], orgaos, estado, [indexados], [cobertura], pendentes] = await turso.lote(comandos)
+  // Total, órgãos e pendentes dependem só dos filtros (não da página) e varrem todos os abertos (~72 mil linhas):
+  // ficam 10 min em memória, para que mudar de página não conte tudo de novo.
+  const porFiltro = POR_FILTRO.get(turso) ?? new Map(), chaveFiltro = JSON.stringify([onde, args, porItem])
+  POR_FILTRO.set(turso, porFiltro)
+  let contagem = porFiltro.get(chaveFiltro)
+  if (contagem && Date.now() - contagem.em > 10 * 60_000) { porFiltro.delete(chaveFiltro); contagem = undefined }
+  const inicioContagem = comandos.length
+  if (!contagem) {
+    comandos.push([`select count(*) as n from editais e where ${onde.join(' and ')}`, args],
+      [`select e.orgao_cnpj as cnpj, min(e.orgao_nome) as razaoSocial from editais e where ${base.onde.join(' and ')} group by e.orgao_cnpj order by 2 limit 200`, base.args])
+    if (porItem) comandos.push([`select count(*) as n from editais e where ${base.onde.join(' and ')} and e.itens_completos = 0`, base.args])
+  }
+  // Tamanho da base e cobertura dos itens (até 30 dias) são iguais para todas as buscas e cada um lê dezenas de
+  // milhares de linhas no Turso: ficam 10 min em memória.
+  let globais = GLOBAIS.get(turso)
+  const buscarGlobais = !globais || Date.now() - globais.em > 10 * 60_000
+  if (buscarGlobais) {
+    const agora = agoraIso(), ate30 = new Date(Date.now() + 30 * 86400_000).toISOString()
+    comandos.push(['select count(*) as n from editais'], ['select count(*) as total, sum(itens_completos) as com from editais where encerramento >= ? and encerramento <= ?', [agora, ate30]])
+  }
+  const res = await turso.lote(comandos)
+  const [paginaLinhas, estado] = res
+  if (!contagem) {
+    contagem = { em: Date.now(), total: res[inicioContagem][0], orgaos: res[inicioContagem + 1], pendentes: porItem ? res[inicioContagem + 2] : null }
+    if (porFiltro.size >= 300) porFiltro.delete(porFiltro.keys().next().value)
+    porFiltro.set(chaveFiltro, contagem)
+  }
+  const { total, orgaos, pendentes } = contagem
+  if (buscarGlobais) { globais = { em: Date.now(), indexados: res.at(-2)[0], cobertura: res.at(-1)[0] }; GLOBAIS.set(turso, globais) }
+  const { indexados, cobertura } = globais
   const e = Object.fromEntries(estado.map((l) => [l.chave, l.valor]))
   const n = total?.n ?? 0
   return {

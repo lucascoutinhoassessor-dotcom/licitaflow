@@ -17,8 +17,12 @@ function tursoLocal() {
       return { type: 'ok', response: { type: 'execute', result: { cols: cols.map((name) => ({ name })), rows: rows.map((r) => cols.map((c) => tipo(r[c]))) } } }
     })
   }
+  async function transacao(comandos: [string, unknown[]?][]) {
+    db.exec('begin')
+    try { await pipeline(comandos); db.exec('commit') } catch (e) { db.exec('rollback'); throw e }
+  }
   return {
-    db, pipeline,
+    db, pipeline, transacao,
     consultar: async (sql: string, args?: unknown[]) => linhas((await pipeline([[sql, args]]))[0]),
     lote: async (comandos: [string, unknown[]?][]) => (await pipeline(comandos)).map(linhas),
     prepararEsquema: async () => { const { ESQUEMA } = await import('./turso.js'); return pipeline(ESQUEMA.map((s: string) => [s])) },
@@ -92,6 +96,24 @@ describe('coleta e busca no Turso', () => {
     expect(e).toEqual({ n: 3, c: 3 })
     expect((await turso.consultar("select valor from coleta_estado where chave = 'carga_completa_em'")).length).toBe(1)
     expect((await turso.consultar("select portal, tipo_objeto from editais where sequencial = 1"))[0]).toEqual({ portal: 'pcp', tipo_objeto: 'M' })
+  })
+
+  it('migra o FTS antigo para o rowid do edital e apaga sem varrer a tabela', async () => {
+    const { turso } = await preparar()
+    const { MIGRAR_FTS_ROWID, gravarEditais } = await import('./turso.js')
+    // Simula a base antiga: linhas do FTS com rowid que não bate com o do edital.
+    turso.db.exec("create table v as select controle, texto from editais_fts; delete from editais_fts; insert into editais_fts(rowid, controle, texto) select 1000 + rowid, controle, texto from v; delete from coleta_estado where chave = 'fts_rowid'")
+    await turso.transacao(MIGRAR_FTS_ROWID as never)
+    expect(await turso.consultar('select count(*) n from editais_fts f join editais e on e.rowid = f.rowid and e.controle = f.controle')).toEqual([{ n: 3 }])
+    expect(await turso.consultar('select count(*) n from itens_fts f join editais e on e.rowid = f.rowid and e.controle = f.controle')).toEqual([{ n: 1 }])
+    expect((await buscarTurso(turso as never, { busca: 'grampeador' })).data.map((c) => c.sequencialCompra)).toEqual([3])
+    // Edital que mudou: troca a linha do FTS, sem duplicar.
+    expect(await gravarEditais(turso as never, [edital(1, { objetoCompra: 'Aquisição de impressoras', dataAtualizacaoGlobal: pncpData(dias(0)) })])).toBe(1)
+    expect(await turso.consultar('select count(*) n from editais_fts')).toEqual([{ n: 3 }])
+    expect((await buscarTurso(turso as never, { busca: 'impressora' })).totalRegistros).toBe(1)
+    expect((await buscarTurso(turso as never, { busca: 'computador' })).totalRegistros).toBe(0)
+    const plano = turso.db.prepare("explain query plan delete from editais_fts where rowid = (select rowid from editais where controle = 'x')").all() as { detail: string }[]
+    expect(plano[0].detail).toContain('VIRTUAL TABLE INDEX 0:=') // busca pelo rowid; o antigo era 'INDEX 0:' (varredura)
   })
 
   it('não regrava edital que não mudou na fonte', async () => {

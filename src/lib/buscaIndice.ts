@@ -23,10 +23,13 @@ async function pesquisarTurso(f:FiltrosOportunidades,pagina:number,token:string,
   if(r.ok&&valido(corpo))return corpo
   if(r.status===400&&corpo?.error)throw new Error(corpo.error)
   if(r.status===409&&corpo?.codigo!=='turso_itens')tursoPausadoAte=Date.now()+3*60_000
+  // Turso fora (ex.: cota do plano estourada): 10 min só no Postgres, sem esperar a ida ao Turso em cada busca.
+  if(r.status>=500)tursoPausadoAte=Date.now()+10*60_000
   return null
  }catch(e){
   if(signal?.aborted)throw e
   if(e instanceof Error&&!(e instanceof TypeError))throw e
+  tursoPausadoAte=Date.now()+10*60_000
   return null
  }
 }
