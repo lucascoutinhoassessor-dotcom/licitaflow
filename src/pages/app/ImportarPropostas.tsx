@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { CheckCircle2, ListChecks } from 'lucide-react'
 import { Button, Card, Carregando } from '@/components/ui'
-import { FavoritoPropostas } from '@/components/ConcorrentesItem'
 import { enviarPropostas, type PropostasColetadas } from '@/lib/atas'
 
 /** Desfaz o que o coletor pôs depois do #: "z." = JSON comprimido (deflate-raw), "j." = JSON puro, em base64url. */
@@ -49,8 +48,7 @@ export default function ImportarPropostas() {
       <h1 className="mb-4 flex items-center gap-2 text-xl font-semibold"><ListChecks className="h-5 w-5 text-emerald-400" />Propostas do Compras.gov.br</h1>
       {!dados && !erroLeitura && (
         <>
-          <p className="mb-4 text-sm text-muted-foreground">Nenhuma proposta chegou. Use o botão favorito na página da compra no Compras.gov.br e clique em "Enviar para o LicitaForce".</p>
-          <FavoritoPropostas idCompra={null} />
+          <p className="mb-4 text-sm text-muted-foreground">Nenhuma proposta chegou do Compras.gov.br.</p>
         </>
       )}
       {erroLeitura && <Card className="p-5 text-sm text-red-600 dark:text-red-400">Não foi possível ler os dados enviados pelo favorito. Volte à página da compra e clique em "Enviar para o LicitaForce" de novo.</Card>}

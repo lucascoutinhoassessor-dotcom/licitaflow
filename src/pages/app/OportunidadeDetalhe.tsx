@@ -22,7 +22,7 @@ import { codigoComprasnet, portalCompra, urlOrigem } from '@/lib/portais'
 import { formatarMoeda } from '@/lib/format'
 import type { Processo } from '@/types/db'
 import ContagemDisputa from '@/components/ContagemDisputa'
-import { ConcorrentesEdital, FavoritoPropostas } from '@/components/ConcorrentesItem'
+import { ConcorrentesEdital, DisputaComprasGov } from '@/components/ConcorrentesItem'
 import { atasDaCompra, atasEnviadas, juntarAtas } from '@/lib/atas'
 import { comGrupos } from '@/lib/itensEdital'
 import { CartaoTermometro } from '@/components/Termometro'
@@ -143,10 +143,10 @@ export default function OportunidadeDetalhe() {
 
       <section id="itens">
         <h2 className="mb-3 text-lg font-semibold">Itens do edital</h2>
-        {encerrada && idCompra && <FavoritoPropostas idCompra={idCompra} className="mb-4" />}
+        {encerrada && idCompra && <DisputaComprasGov idCompra={idCompra} itens={(itens.data ?? []).map((i) => i.numeroItem)} className="mb-4" />}
         {itens.isLoading ? <Carregando texto="Carregando itens…" /> : itens.isError ? (
           <Card className="p-5 text-sm">Não foi possível carregar os itens agora. <button className="font-semibold text-primary underline" onClick={() => itens.refetch()}>Tentar novamente</button></Card>
-        ) : <ItensAcordeao itens={itens.data ?? []} tipoEdital={compra.materialOuServico} extra={encerrada ? (i) => <ConcorrentesEdital item={i} todos={itens.data ?? []} colocacoes={resultados.data} atas={atasJuntas} /> : undefined} />}
+        ) : <ItensAcordeao itens={itens.data ?? []} tipoEdital={compra.materialOuServico} extra={encerrada ? (i) => <ConcorrentesEdital item={i} todos={itens.data ?? []} colocacoes={resultados.data} atas={atasJuntas} comDisputa={!!idCompra} /> : undefined} />}
       </section>
     </>
   )

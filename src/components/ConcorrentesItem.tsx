@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Bookmark, Copy, ExternalLink, ListChecks, Trophy } from 'lucide-react'
+import { ExternalLink, ListChecks, Trophy } from 'lucide-react'
 import { Badge, Card } from '@/components/ui'
 import { formatarCnpj, formatarMoeda } from '@/lib/format'
-import { linkCompraComprasGov, type ItemCompraFederal } from '@/lib/compraFederal'
+import type { ItemCompraFederal } from '@/lib/compraFederal'
 import { concorrentesDoItem, type Concorrente, type SituacaoConcorrente } from '@/lib/concorrentesItem'
 import type { ItemCompra } from '@/lib/filtrosOportunidades'
 import type { ColocacaoItem } from '@/lib/resultadosEdital'
@@ -43,41 +43,52 @@ export function LinhaConcorrente({ c }: { c: Concorrente }) {
   )
 }
 
-/** Código do botão favorito: carrega o coletor deste site na página de acompanhamento do Compras.gov.br. */
-export function codigoFavorito(origem = window.location.origin) {
-  return `javascript:(function(){var s=document.createElement('script');s.src='${origem}/coletor-propostas.js?v='+Date.now();document.body.appendChild(s)})()`
+const PORTAL = 'https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/public/compras/acompanhamento-compra'
+const EVENTO_ITEM = 'lf-disputa-item'
+
+/** Leva a seção "Disputa completa" até o item pedido (os botões ficam dentro de cada item da lista). */
+export function verDisputaDoItem(numero: number) {
+  window.dispatchEvent(new CustomEvent(EVENTO_ITEM, { detail: numero }))
+  document.getElementById('disputa-completa')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
+export function BotaoDisputaItem({ numero }: { numero: number }) {
+  return (
+    <button type="button" onClick={() => verDisputaDoItem(numero)} className="mt-3 inline-flex h-8 items-center gap-1.5 rounded-full border border-emerald-500/50 bg-emerald-500/10 px-3 text-xs font-semibold text-emerald-700 hover:bg-emerald-500/20 dark:text-emerald-300">
+      <ListChecks className="h-3.5 w-3.5" />Ver todas as propostas deste item (marcas, colocações e situação)
+    </button>
+  )
 }
 
 /**
- * Como trazer todas as propostas de uma compra federal: botão favorito que, na página da compra no Compras.gov.br
- * (com o captcha resolvido pela própria pessoa), guarda as propostas de cada item aberto e manda para o LicitaForce.
+ * A própria página de acompanhamento do Compras.gov.br, embutida: todas as propostas de cada item
+ * (colocação, valores, marca, modelo, quantidade, desclassificadas e inabilitadas com motivo).
+ * Carrega no navegador do usuário, com a verificação invisível do portal; o LicitaForce não lê o conteúdo.
  */
-export function FavoritoPropostas({ idCompra, className }: { idCompra: string | null; className?: string }) {
-  const link = useRef<HTMLAnchorElement>(null)
-  const [copiado, setCopiado] = useState(false)
-  // O React bloqueia href "javascript:" no JSX; o endereço entra direto no elemento.
-  useEffect(() => { link.current?.setAttribute('href', codigoFavorito()) }, [])
-  const copiar = async () => {
-    try { await navigator.clipboard.writeText(codigoFavorito()); setCopiado(true); setTimeout(() => setCopiado(false), 2500) } catch { /* sem permissão de cópia */ }
-  }
+export function DisputaComprasGov({ idCompra, itens = [], className }: { idCompra: string; itens?: number[]; className?: string }) {
+  const [item, setItem] = useState<number | null>(null)
+  useEffect(() => {
+    const ouvir = (e: Event) => setItem(Number((e as CustomEvent<number>).detail) || null)
+    window.addEventListener(EVENTO_ITEM, ouvir)
+    return () => window.removeEventListener(EVENTO_ITEM, ouvir)
+  }, [])
+  const endereco = `${PORTAL}${item ? `/item/${item}` : ''}?compra=${encodeURIComponent(idCompra)}`
   return (
-    <Card className={cn('p-4 text-sm', className)}>
-      <span className="flex items-center gap-2 font-semibold"><ListChecks className="h-4 w-4 text-emerald-400" />Todas as propostas de cada item, direto do Compras.gov.br</span>
-      <span className="mt-0.5 block text-xs text-muted-foreground">Os dados abertos só trazem as empresas homologadas. Com o botão favorito, você abre a compra no Compras.gov.br e o LicitaForce guarda todas as propostas (valores, classificação, desclassificadas e motivos) para todos os usuários. Use no computador.</span>
-      <ol className="mt-3 list-decimal space-y-1.5 pl-5 text-xs">
-        <li>
-          Arraste este botão para a barra de favoritos do navegador (só na primeira vez):{' '}
-          <a ref={link} onClick={(e) => e.preventDefault()} draggable title="Arraste para a barra de favoritos" className="ml-1 inline-flex h-7 cursor-grab items-center gap-1 rounded-full border border-emerald-500/50 bg-emerald-500/10 px-2.5 font-semibold text-emerald-700 dark:text-emerald-300">
-            <Bookmark className="h-3.5 w-3.5" />LicitaForce: propostas
-          </a>
-          <button type="button" onClick={copiar} className="ml-2 inline-flex items-center gap-1 text-muted-foreground underline hover:text-foreground"><Copy className="h-3 w-3" />{copiado ? 'Copiado: crie um favorito e cole no endereço' : 'ou copiar o código'}</button>
-        </li>
-        <li>
-          {idCompra ? <a href={linkCompraComprasGov(idCompra)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-semibold text-sky-700 hover:underline dark:text-sky-300">Abra esta compra no Compras.gov.br<ExternalLink className="h-3 w-3" /></a> : 'Abra a compra no Compras.gov.br'} e clique no favorito.
-        </li>
-        <li>Abra os itens que quiser (ícone de lista ao lado de cada item). O quadro do LicitaForce conta os itens guardados.</li>
-        <li>Clique em <b>Enviar para o LicitaForce</b>. As propostas aparecem aqui, em cada item.</li>
-      </ol>
+    <Card id="disputa-completa" className={cn('scroll-mt-20 overflow-hidden', className)}>
+      <div className="flex flex-wrap items-center gap-2 border-b p-4">
+        <span className="min-w-0 flex-1">
+          <span className="flex items-center gap-2 font-semibold"><ListChecks className="h-4 w-4 text-emerald-400" />Disputa completa no Compras.gov.br</span>
+          <span className="mt-0.5 block text-xs text-muted-foreground">Todas as empresas de cada item: colocação, valor ofertado e negociado, marca, modelo, quantidade e se foi vencedora, desclassificada ou inabilitada (com o motivo). Clique numa empresa para abrir a proposta.</span>
+        </span>
+        {itens.length > 0 && (
+          <select aria-label="Item da disputa" value={item ?? ''} onChange={(e) => setItem(Number(e.target.value) || null)} className="h-9 rounded-full border bg-card px-3 text-sm">
+            <option value="">Todos os itens</option>
+            {itens.map((n) => <option key={n} value={n}>Item {n}</option>)}
+          </select>
+        )}
+        <a href={endereco} target="_blank" rel="noopener noreferrer" className="inline-flex h-9 items-center gap-1.5 rounded-full border px-3 text-sm font-semibold hover:bg-muted"><ExternalLink className="h-4 w-4" />Abrir no portal</a>
+      </div>
+      <iframe key={endereco} src={endereco} title="Disputa completa no Compras.gov.br" loading="lazy" referrerPolicy="no-referrer" className="block h-[80vh] min-h-[520px] w-full bg-white" />
     </Card>
   )
 }
@@ -95,14 +106,14 @@ export function itemParaConcorrentes(item: ItemCompra, colocacoes: ColocacaoItem
 }
 
 /** Concorrentes de um item da página do edital: homologadas, propostas do Compras.gov.br e leitura das atas. */
-export function ConcorrentesEdital({ item, todos, colocacoes, atas }: { item: ItemCompra; todos: ItemCompra[]; colocacoes?: ColocacaoItem[]; atas?: AtasCompra }) {
+export function ConcorrentesEdital({ item, todos, colocacoes, atas, comDisputa = false }: { item: ItemCompra; todos: ItemCompra[]; colocacoes?: ColocacaoItem[]; atas?: AtasCompra; comDisputa?: boolean }) {
   const { lista } = concorrentesDoItem(itemParaConcorrentes(item, colocacoes), todos.map((i) => itemParaConcorrentes(i)), atas)
-  if (!lista.length) return null
+  if (!lista.length && !comDisputa) return null
   return (
     <div className="mt-4 text-sm">
       <h4 className="mb-2 flex items-center gap-2 font-semibold"><Trophy className="h-4 w-4 text-amber-400" />Concorrentes do item<span className="text-sm font-normal text-muted-foreground">· {lista.length}</span></h4>
-      <ol className="space-y-2">{lista.map((c) => <LinhaConcorrente key={c.chave} c={c} />)}</ol>
-      {!lista.some((c) => c.fonte === 'portal') && <p className="mt-2 text-xs text-muted-foreground">Só as empresas homologadas e as lidas na ata. Para ver todas as propostas, use o botão favorito do Compras.gov.br acima dos itens.</p>}
+      {lista.length > 0 && <ol className="space-y-2">{lista.map((c) => <LinhaConcorrente key={c.chave} c={c} />)}</ol>}
+      {comDisputa && <BotaoDisputaItem numero={item.numeroItem} />}
     </div>
   )
 }

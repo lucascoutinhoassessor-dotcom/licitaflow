@@ -11,7 +11,7 @@ import { linkPesquisaMarca } from '@/lib/precos'
 import { formatarCnpj, formatarData, formatarMoeda } from '@/lib/format'
 import { atasDaCompra, atasEnviadas, enviarAta, juntarAtas, type AtaEnviada, type AtasCompra } from '@/lib/atas'
 import { concorrentesDoItem } from '@/lib/concorrentesItem'
-import { FavoritoPropostas, LinhaConcorrente } from '@/components/ConcorrentesItem'
+import { BotaoDisputaItem, DisputaComprasGov, LinhaConcorrente } from '@/components/ConcorrentesItem'
 import { cn } from '@/lib/utils'
 
 function Item({ item, todos, atas, atasCarregando }: { item: ItemCompraFederal; todos: ItemCompraFederal[]; atas?: AtasCompra; atasCarregando: boolean }) {
@@ -45,6 +45,7 @@ function Item({ item, todos, atas, atasCarregando }: { item: ItemCompraFederal; 
           <div className="mt-2 flex flex-wrap gap-2">{[item.criterio, item.beneficio, item.situacao].filter(Boolean).map((t) => <Badge key={t}>{t}</Badge>)}</div>
           <h4 className="mb-2 mt-4 flex items-center gap-2 font-semibold"><Trophy className="h-4 w-4 text-amber-400" />Concorrentes {item.grupo ? `do item (grupo ${item.grupo})` : 'do item'}{lista.length > 0 && <span className="text-sm font-normal text-muted-foreground">· {lista.length}</span>}</h4>
           {lista.length === 0 ? <p className="text-muted-foreground">Resultado ainda não publicado.</p> : <ol className="space-y-2">{lista.map((c) => <LinhaConcorrente key={c.chave} c={c} />)}</ol>}
+          <BotaoDisputaItem numero={item.numero} />
           {semItem.length > 0 && (
             <details className="mt-3">
               <summary className="cursor-pointer text-sm font-semibold">Outras {semItem.length} empresas citadas na ata desta compra (a ata não diz o item)</summary>
@@ -53,8 +54,8 @@ function Item({ item, todos, atas, atasCarregando }: { item: ItemCompraFederal; 
           )}
           <p className="mt-3 text-xs text-muted-foreground">
             {atasCarregando ? 'Procurando desclassificadas e inabilitadas nas atas da compra…'
-              : lista.some((c) => c.fonte === 'portal') ? 'Todas as propostas vieram da página da compra no Compras.gov.br, capturadas pelo botão favorito.' : lidas ? 'Vencedora, colocações e cancelamentos são os dados oficiais; as demais propostas, desclassificadas e inabilitadas foram lidas na ata (confira no arquivo original).'
-              : 'Os dados abertos publicam só as empresas homologadas (vencedora e cadastro de reserva) e os resultados cancelados. Para ver todas as propostas, use o botão favorito do Compras.gov.br ou envie o termo de julgamento no quadro acima dos itens.'}
+              : lista.some((c) => c.fonte === 'portal') ? 'Todas as propostas vieram da página da compra no Compras.gov.br.' : lidas ? 'Vencedora, colocações e cancelamentos são os dados oficiais; as demais propostas, desclassificadas e inabilitadas foram lidas na ata (confira no arquivo original).'
+              : 'Os dados abertos publicam só as empresas homologadas (vencedora e cadastro de reserva) e os resultados cancelados. Todas as propostas de cada item aparecem no quadro "Disputa completa" acima.'}
           </p>
         </div>
       )}
@@ -137,7 +138,7 @@ export default function CompraDetalhe() {
         </Card>
         <EmpresasDisputa controle={c.controle} colocacoes={colocacoesDa(c)} />
         <h2 className="mb-3 flex items-center gap-2 text-lg font-semibold"><Tag className="h-5 w-5 text-sky-400" />Itens, vencedores e marcas</h2>
-        <FavoritoPropostas idCompra={idCompra} className="mb-4" />
+        <DisputaComprasGov idCompra={idCompra} itens={c.itens.map((i) => i.numero)} className="mb-4" />
         <EnviarAta idCompra={idCompra} controle={c.controle} enviadas={enviadas.data ?? []} />
         <div className="space-y-2">{c.itens.map((i) => <Item key={i.numero} item={i} todos={c.itens} atas={atasJuntas} atasCarregando={(atas.isLoading && atas.fetchStatus !== 'idle') || enviadas.isLoading} />)}</div>
       </>}
