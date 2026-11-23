@@ -87,7 +87,7 @@ describe('rotas no /api/oportunidades', () => {
   it('registrar grava com o id e o e-mail da sessão (não os do corpo)', async () => {
     const pedidos: unknown[] = []
     const fetcher = vi.fn(async (_url: string, init: RequestInit) => { pedidos.push(JSON.parse(String(init.body))); return new Response(JSON.stringify({ results: [] })) })
-    const h = criarHandler({ env, fetcher: fetcher as unknown as typeof fetch, sessaoCompleta: async () => ({ id: U1, email: 'a@x.com' }) })
+    const h = criarHandler({ env, fetcher: fetcher as unknown as typeof fetch, validarSessao: async () => U1, sessaoCompleta: async () => ({ id: U1, email: 'a@x.com' }) })
     const r = resposta()
     await h({ method: 'POST', query: { acao: 'turso-logs-registrar' }, headers: { authorization: 'Bearer z', 'user-agent': 'UA' }, body: { org: ORG, usuario: U2, eventos: [{ tipo: 'erro', mensagem: 'falhou' }] } }, r)
     expect(r.statusCode).toBe(200)
