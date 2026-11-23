@@ -28,7 +28,7 @@ export interface CompraPNCP {
 
 export interface FiltrosPNCP { inicio: string; fim: string; modalidade: string; uf: string; situacao?: 'abertas' | 'publicacoes' }
 
-/** Endereço interno (no LicitaFlow) da página de um edital. */
+/** Endereço interno (no LicitaForce) da página de um edital. */
 export function rotaOportunidade(c: Pick<CompraPNCP, 'orgaoEntidade' | 'anoCompra' | 'sequencialCompra'>) {
   return `/app/oportunidades/${c.orgaoEntidade.cnpj}/${c.anoCompra}/${c.sequencialCompra}`
 }

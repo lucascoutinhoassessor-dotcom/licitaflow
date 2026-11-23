@@ -36,6 +36,6 @@ export function usarAppDoPainel(master: boolean) {
   }
   trocar('link[rel="manifest"]', 'href', master ? '/master.webmanifest' : '/manifest.webmanifest')
   trocar('link[rel="apple-touch-icon"]', 'href', master ? '/icons/master-192.png' : '/icons/icone-192.png')
-  trocar('meta[name="apple-mobile-web-app-title"]', 'content', master ? 'LF Master' : 'LicitaFlow')
+  trocar('meta[name="apple-mobile-web-app-title"]', 'content', master ? 'LF Master' : 'LicitaForce')
   trocar('meta[name="theme-color"]', 'content', master ? '#09090b' : '#0f172a')
 }

@@ -49,7 +49,7 @@ export default function Documentos() {
     <>
       <CabecalhoPagina
         titulo="Documentos e certidões"
-        descricao="Habilitação sempre em dia: cadastre a validade e o LicitaFlow avisa antes de vencer."
+        descricao="Habilitação sempre em dia: cadastre a validade e o LicitaForce avisa antes de vencer."
         acoes={podeEditar && <Button onClick={() => setEditando('novo')}><Plus className="h-4 w-4" /> Novo documento</Button>}
       />
 

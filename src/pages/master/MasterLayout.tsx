@@ -49,7 +49,7 @@ export default function MasterLayout() {
   const { user, sair } = useAuth()
   const navigate = useNavigate()
   const instalacao = useInstalacao()
-  // Enquanto estiver no master, o navegador oferece o app "LicitaFlow Master" (abre em /master).
+  // Enquanto estiver no master, o navegador oferece o app "LicitaForce Master" (abre em /master).
   useEffect(() => { usarAppDoPainel(true); return () => usarAppDoPainel(false) }, [])
 
   const fin = useFinanceiro()
@@ -100,7 +100,7 @@ export default function MasterLayout() {
   return (
     <div className="dark console flex h-dvh min-w-0 flex-col bg-zinc-950 text-zinc-100 xl:pl-72">
       <header className="flex min-h-16 shrink-0 items-center gap-3 border-b border-zinc-800 bg-zinc-950 px-3 py-2 sm:px-5">
-        <MenuLateral titulo="LicitaFlow Console" console>{menu}</MenuLateral>
+        <MenuLateral titulo="LicitaForce Console" console>{menu}</MenuLateral>
         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-amber-500/30 bg-amber-500/10 xl:hidden"><ShieldCheck className="h-5 w-5 text-amber-400"/></div>
         <div className="min-w-0 flex-1"><div className="truncate text-sm font-semibold">Administração da plataforma</div><p className="truncate text-xs text-zinc-500">{user?.email}</p></div>
         {!instalacao.ocultar && <button onClick={() => { void instalacao.instalar() }} aria-label="Instalar aplicativo" className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 text-sm font-medium text-amber-300 hover:bg-amber-500/20"><Download className="h-4 w-4"/><span className="hidden sm:inline">Instalar app</span></button>}

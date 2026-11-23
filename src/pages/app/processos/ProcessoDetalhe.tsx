@@ -165,7 +165,7 @@ function Itens({ processoId, podeEditar }: { processoId: string; podeEditar: boo
         </div>
       )}
       {itens.length === 0 ? (
-        <Vazio titulo="Nenhum item cadastrado" texto="Cadastre os itens ou lotes do edital com seu custo e margem: o LicitaFlow calcula o preço-limite de cada lance." />
+        <Vazio titulo="Nenhum item cadastrado" texto="Cadastre os itens ou lotes do edital com seu custo e margem: o LicitaForce calcula o preço-limite de cada lance." />
       ) : (
         <Card className="divide-y">
           {itens.map((i) => {

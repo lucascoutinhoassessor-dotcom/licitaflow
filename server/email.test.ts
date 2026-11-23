@@ -3,21 +3,21 @@ import { cifrar } from './asaas.js'
 import { emailAcessoLiberado, enviarEmail, montarSmtp } from './email.js'
 
 const env = { SUPABASE_SERVICE_ROLE_KEY: 'privada' }
-const linha = () => ({ ativo: true, boas_vindas: true, host: 'smtp.gmail.com', porta: 465, usuario: 'a@b.com', senha_cifrada: cifrar('segredo', env), remetente_nome: 'Licita"Flow', remetente_email: 'a@b.com' })
+const linha = () => ({ ativo: true, boas_vindas: true, host: 'smtp.gmail.com', porta: 465, usuario: 'a@b.com', senha_cifrada: cifrar('segredo', env), remetente_nome: 'Licita"Force', remetente_email: 'a@b.com' })
 afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); vi.resetModules(); vi.doUnmock('./email.js') })
 
 describe('e-mail da plataforma', () => {
   it('monta o SMTP com a senha decifrada e remetente sem aspas', () => {
     const c = montarSmtp(linha(), env)!
     expect(c.senha).toBe('segredo')
-    expect(c.nome).toBe('LicitaFlow'); expect(c.endereco).toBe('a@b.com')
+    expect(c.nome).toBe('LicitaForce'); expect(c.endereco).toBe('a@b.com')
     expect(montarSmtp({ ...linha(), senha_cifrada: null }, env)).toBeNull()
   })
   it('usa TLS direto na porta 465', async () => {
     const sendMail = vi.fn().mockResolvedValue({}); const criar = vi.fn(() => ({ sendMail }))
     await enviarEmail(montarSmtp(linha(), env)!, { para: 'c@d.com', assunto: 'x', html: '<p/>', texto: 'x' }, criar as never)
     expect(criar.mock.calls[0][0]).toMatchObject({ host: 'smtp.gmail.com', port: 465, secure: true, auth: { user: 'a@b.com', pass: 'segredo' } })
-    expect(sendMail).toHaveBeenCalledWith(expect.objectContaining({ to: 'c@d.com', from: { name: 'LicitaFlow', address: 'a@b.com' } }))
+    expect(sendMail).toHaveBeenCalledWith(expect.objectContaining({ to: 'c@d.com', from: { name: 'LicitaForce', address: 'a@b.com' } }))
   })
   it('escapa os dados do cliente no HTML', () => {
     const e = emailAcessoLiberado({ nome: '<b>Ana</b>', organizacao: 'X & Y', plano: 'Profissional', ciclo: 'mensal', pago_ate: '2026-12-21' })

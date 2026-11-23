@@ -25,7 +25,7 @@ export default function Cadastro() {
     setErro('')
     if (senha.length < 8) return setErro('A senha precisa ter pelo menos 8 caracteres.')
     setEnviando(true)
-    // E-mail de confirmação pela plataforma (nome e logo do LicitaFlow); sem ele configurado, segue o cadastro padrão do Supabase.
+    // E-mail de confirmação pela plataforma (nome e logo do LicitaForce); sem ele configurado, segue o cadastro padrão do Supabase.
     try {
       if (await contaEmailAPI({ acao: 'cadastrar', nome: nome.trim(), email: email.trim(), senha, voltar: destino })) {
         setEnviando(false)

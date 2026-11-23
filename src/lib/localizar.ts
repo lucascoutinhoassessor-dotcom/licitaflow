@@ -32,7 +32,7 @@ export function validarLocalizar(texto: string): string | null {
 
 export interface ResultadoLocalizar { data: CompraPNCP[]; total: number }
 
-/** Procura no catálogo do LicitaFlow por número da compra, processo, UASG, código do Compras.gov ou CNPJ do órgão. */
+/** Procura no catálogo do LicitaForce por número da compra, processo, UASG, código do Compras.gov ou CNPJ do órgão. */
 export async function localizarEdital(texto: string, uf: string, signal?: AbortSignal): Promise<ResultadoLocalizar> {
   const erro = validarLocalizar(texto)
   if (erro) throw new Error(erro)

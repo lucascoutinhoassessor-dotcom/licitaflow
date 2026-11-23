@@ -190,7 +190,7 @@
   html:has([data-barra-inferior]) { --barra-inferior: 4rem; }
 }
 
-/* Ícone animado do LicitaFlow (IconeAnimado em components/ui): o gráfico se desenha ao aparecer e, a cada
+/* Ícone animado do LicitaForce (IconeAnimado em components/ui): o gráfico se desenha ao aparecer e, a cada
    6 s, uma luz percorre a linha, o ponto solta uma onda e um brilho cruza o ícone. */
 .lf-icone { overflow: visible; }
 .lf-icone polyline { fill: none; stroke-linecap: round; stroke-linejoin: round; }

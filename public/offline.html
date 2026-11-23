@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#0f172a">
-  <title>LicitaFlow · Reconectando</title>
+  <title>LicitaForce · Reconectando</title>
   <style>
     body{margin:0;min-height:100dvh;display:grid;place-items:center;background:#0f172a;color:#f8fafc;font:16px system-ui}
     main{box-sizing:border-box;width:100%;max-width:32rem;padding:2rem}
@@ -12,7 +12,7 @@
   </style>
 </head>
 <body><main>
-  <h1>Não foi possível acessar o LicitaFlow</h1>
+  <h1>Não foi possível acessar o LicitaForce</h1>
   <p>A conexão com a plataforma está indisponível. Pode ser uma interrupção da rede ou do serviço. Quando a conexão voltar, esta página tentará reabrir automaticamente.</p>
   <button id="tentar" type="button">Tentar novamente</button>
   <small id="estado" role="status" aria-live="polite">Seus dados precisam de conexão para serem consultados. Esta tela não salva alterações.</small>
@@ -39,7 +39,7 @@
       const resposta = await fetch('/manifest.webmanifest?conexao=' + Date.now(), { cache: 'no-store', signal: abort.signal })
       if (!resposta.ok) throw new Error('Serviço indisponível')
       const manifesto = await resposta.json()
-      if (manifesto.name !== 'LicitaFlow') throw new Error('Resposta inesperada')
+      if (manifesto.name !== 'LicitaForce') throw new Error('Resposta inesperada')
       estado.textContent = 'Conexão restabelecida. Abrindo a plataforma…'
       window.location.reload()
       return

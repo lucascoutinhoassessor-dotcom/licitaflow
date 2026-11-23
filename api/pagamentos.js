@@ -70,7 +70,7 @@ export default async function handler(req,res) {
       const host=(String(body.host ?? '').trim().toLowerCase() || linha?.host || 'smtp.gmail.com')
       const porta=Number(body.porta || linha?.porta || 465)
       const senha=String(body.senha ?? '').replace(/\s+/g,'') // a senha de app do Google vem com espaços
-      const nome=String(body.remetente_nome ?? '').trim().slice(0,80) || linha?.remetente_nome || 'LicitaFlow'
+      const nome=String(body.remetente_nome ?? '').trim().slice(0,80) || linha?.remetente_nome || 'LicitaForce'
       if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(usuario) || usuario.length>254) return res.status(400).json({error:'Informe o e-mail que vai enviar (ex.: contato.licitaflow@gmail.com)'})
       if(!/^[a-z0-9.-]{3,253}$/.test(host)) return res.status(400).json({error:'Servidor SMTP inválido'})
       if(![25,465,587,2525].includes(porta)) return res.status(400).json({error:'Porta deve ser 465 ou 587'})
@@ -184,7 +184,7 @@ export default async function handler(req,res) {
         if(!p || ['trial','cancelado'].includes(p.id) || (!p.ativo && !admin)) return res.status(400).json({error:'Plano indisponível'})
         const valor=ciclo==='anual'?p.anual_centavos:p.mensal_centavos
         if(valor<100) return res.status(400).json({error:'Plano sem valor para cobrança'})
-        await asaas(cfg,`/subscriptions/${gid}`,{method:'PUT',body:{value:valor/100,cycle:ciclo==='anual'?'YEARLY':'MONTHLY',description:`LicitaFlow · Plano ${p.nome} (${ciclo})`,updatePendingPayments:true}})
+        await asaas(cfg,`/subscriptions/${gid}`,{method:'PUT',body:{value:valor/100,cycle:ciclo==='anual'?'YEARLY':'MONTHLY',description:`LicitaForce · Plano ${p.nome} (${ciclo})`,updatePendingPayments:true}})
         await patchSv(`/rest/v1/assinaturas?id=eq.${a.id}`,{plano_id:p.id,ciclo,valor_centavos:valor})
         if(a.status==='ativa') await patchSv(`/rest/v1/organizations?id=eq.${a.org_id}`,{plano:p.id})
         return res.json({ok:true,valor_centavos:valor})

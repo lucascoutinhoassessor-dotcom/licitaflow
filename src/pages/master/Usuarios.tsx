@@ -73,7 +73,7 @@ function NovoUsuario({ aoFechar }: { aoFechar: () => void }) {
   }
 
   if (pronto) {
-    const texto = `Acesso ao LicitaFlow\nEndereço: ${location.origin}/entrar\nE-mail: ${pronto.email}\nSenha: ${pronto.senha}`
+    const texto = `Acesso ao LicitaForce\nEndereço: ${location.origin}/entrar\nE-mail: ${pronto.email}\nSenha: ${pronto.senha}`
     return (
       <div className="space-y-4">
         <p className="text-sm">Usuário criado com o e-mail já confirmado. Envie os dados de acesso e peça para trocar a senha no primeiro acesso.</p>

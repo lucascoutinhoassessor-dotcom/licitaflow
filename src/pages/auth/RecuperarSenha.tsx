@@ -16,7 +16,7 @@ export default function RecuperarSenha() {
     setErro('')
     setEnviando(true)
     try {
-      // E-mail da plataforma (nome e logo do LicitaFlow); sem ele configurado, cai no envio padrão do Supabase.
+      // E-mail da plataforma (nome e logo do LicitaForce); sem ele configurado, cai no envio padrão do Supabase.
       if (!(await contaEmailAPI({ acao: 'recuperar_senha', email: email.trim() }))) {
         const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: `${window.location.origin}/redefinir-senha` })
         if (error) throw error

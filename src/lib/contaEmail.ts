@@ -1,5 +1,5 @@
 /**
- * Cadastro e "esqueci minha senha" pelo e-mail da plataforma (nome e logo do LicitaFlow).
+ * Cadastro e "esqueci minha senha" pelo e-mail da plataforma (nome e logo do LicitaForce).
  * Devolve false quando o servidor ainda não tem e-mail configurado: aí a tela usa o envio padrão do Supabase.
  */
 export async function contaEmailAPI(dados: Record<string, unknown>): Promise<boolean> {

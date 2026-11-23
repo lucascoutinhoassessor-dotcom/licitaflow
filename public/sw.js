@@ -17,7 +17,7 @@ self.addEventListener('fetch', event => {
 })
 
 // Nome que aparece no topo de toda notificação (trocar aqui quando virar LicitaForce).
-const NOME_APP = 'LicitaFlow'
+const NOME_APP = 'LicitaForce'
 
 // Avisos por push: aparece na hora, mesmo com o app fechado. Estilo "app de mensagens": o título é
 // sempre o nome do app e o assunto do aviso vem no corpo, antes do texto.

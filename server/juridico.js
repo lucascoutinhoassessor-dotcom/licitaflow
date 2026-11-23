@@ -122,7 +122,7 @@ export function pecasDoProcesso(documentos = [], frases = []) {
 async function pedir(fetcher, url, tentativas = 2) {
   for (let i = 0; i <= tentativas; i++) {
     try {
-      const r = await fetcher(url, { headers: { Accept: 'application/json', 'User-Agent': 'LicitaFlow/1.0' }, signal: AbortSignal.timeout(15000) })
+      const r = await fetcher(url, { headers: { Accept: 'application/json', 'User-Agent': 'LicitaForce/1.0' }, signal: AbortSignal.timeout(15000) })
       if (r.status === 404) return null
       if (r.ok) return await r.json()
     } catch { /* tenta de novo */ }
@@ -186,7 +186,7 @@ export async function coletarPagina({ dia, pagina, prazo = Infinity }, fetcher =
 /** Texto do PDF da peça (para ler e usar como modelo). */
 export async function lerTexto(url, fetcher = fetch, { maxPaginas = MAX_PAGINAS_PDF } = {}) {
   if (!ARQUIVO.test(url)) { const e = new Error('Arquivo inválido.'); e.status = 400; throw e }
-  const r = await fetcher(url, { headers: { 'User-Agent': 'LicitaFlow/1.0' }, signal: AbortSignal.timeout(20000) })
+  const r = await fetcher(url, { headers: { 'User-Agent': 'LicitaForce/1.0' }, signal: AbortSignal.timeout(20000) })
   if (!r.ok) { const e = new Error('O portal não entregou o arquivo agora.'); e.status = 502; throw e }
   const tamanho = Number(r.headers.get('content-length') ?? 0)
   if (tamanho > MAX_BYTES) return { texto: null, motivo: 'Arquivo grande demais para abrir aqui. Abra no portal.' }

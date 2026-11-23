@@ -1,4 +1,4 @@
-// Notificações push (Web Push) dos avisos do LicitaFlow.
+// Notificações push (Web Push) dos avisos do LicitaForce.
 // GET                      → chave pública VAPID (o aparelho precisa dela para se inscrever)
 // POST {acao:'inscrever'}  → grava a inscrição deste aparelho para o usuário logado
 // POST {acao:'cancelar'}   → remove a inscrição deste aparelho

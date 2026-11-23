@@ -16,7 +16,7 @@ async function situacao(): Promise<Situacao> {
 
 /** Master: base rápida de dados brutos (Turso). Mostra se está conectada e quanto já foi coletado. */
 export default function TursoStatus() {
-  const q = useQuery({ queryKey: ['turso-situacao'], queryFn: situacao, retry: false, refetchInterval: 60_000 })
+  const q = useQuery({ queryKey: ['turso-situacao'], queryFn: situacao, retry: false, refetchInterval: 5 * 60_000 })
   const s = q.data
   return (
     <Card className="mb-6 space-y-3 p-5">

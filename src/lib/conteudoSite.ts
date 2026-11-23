@@ -90,9 +90,9 @@ function sec(tipo: TipoSecao, uid: string, campos: Partial<SecaoSite>): SecaoSit
 export function conteudoPadrao(): ConteudoSite {
   return {
     versao_schema: 2,
-    seo: { titulo_aba: 'LicitaFlow · Gestão de licitações com agentes de IA', descricao: '' },
+    seo: { titulo_aba: 'LicitaForce · Gestão de licitações com agentes de IA', descricao: '' },
     tema: { cor1: '#2563eb', cor2: '#10b981', fundo: '#020617', barra_progresso: true },
-    marca: { nome: 'Licita', nome_destaque: 'Flow', logo: '/favicon.svg' },
+    marca: { nome: 'Licita', nome_destaque: 'Force', logo: '/favicon.svg' },
     menu: {
       links: [
         { texto: 'Produto', link: '#produto' }, { texto: 'Agentes de IA', link: '#agentes' }, { texto: 'Segurança', link: '#seguranca' },
@@ -103,7 +103,7 @@ export function conteudoPadrao(): ConteudoSite {
     secoes: [
       sec('hero', 'hero', {
         selo: 'Agentes de IA para licitações · Lei 14.133', titulo: 'Ganhe mais licitações.', destaque: 'Sem perder nenhum prazo.',
-        texto: 'O LicitaFlow organiza processos, documentos, prazos e contratos para sua empresa acompanhar cada licitação, do edital ao pagamento.',
+        texto: 'O LicitaForce organiza processos, documentos, prazos e contratos para sua empresa acompanhar cada licitação, do edital ao pagamento.',
         botao: { texto: 'Criar minha conta grátis', link: '/cadastro' }, botao2: { texto: 'Ver como funciona', link: '#produto' },
         marcadores: ['Sem cartão de crédito', 'Cancele quando quiser', 'Dados no Brasil'], estilo: 'mockup',
       }),
@@ -154,7 +154,7 @@ export function conteudoPadrao(): ConteudoSite {
       }),
       sec('lateral', 'seguranca', {
         ancora: 'seguranca', selo: 'Segurança', titulo: 'Seus dados protegidos como devem ser', estilo: 'ShieldCheck', colunas: 2,
-        texto: 'Propostas, preços e documentos são o coração do seu negócio. Por isso a segurança do LicitaFlow começa no próprio banco de dados, não só na tela.',
+        texto: 'Propostas, preços e documentos são o coração do seu negócio. Por isso a segurança do LicitaForce começa no próprio banco de dados, não só na tela.',
         itens: [
           item('Database', 'Dados no Brasil', 'Banco de dados hospedado em São Paulo.'),
           item('Lock', 'Isolamento por empresa', 'Cada organização só acessa os próprios dados, com regras aplicadas no próprio banco.'),
@@ -172,12 +172,12 @@ export function conteudoPadrao(): ConteudoSite {
       sec('faq', 'faq', {
         ancora: 'faq', selo: 'Dúvidas', titulo: 'Perguntas frequentes',
         itens: [
-          item('', 'O que é o LicitaFlow?', 'Uma plataforma para fornecedores e assessorias controlarem licitações de ponta a ponta: encontrar oportunidades, organizar documentos e prazos, disputar e gerir contratos e pagamentos no pós-pregão.'),
-          item('', 'Funciona para pregão eletrônico e dispensa eletrônica?', 'Sim. O LicitaFlow é focado nas modalidades eletrônicas da Lei 14.133, especialmente pregão eletrônico e dispensa eletrônica, e também permite cadastrar outras modalidades.'),
+          item('', 'O que é o LicitaForce?', 'Uma plataforma para fornecedores e assessorias controlarem licitações de ponta a ponta: encontrar oportunidades, organizar documentos e prazos, disputar e gerir contratos e pagamentos no pós-pregão.'),
+          item('', 'Funciona para pregão eletrônico e dispensa eletrônica?', 'Sim. O LicitaForce é focado nas modalidades eletrônicas da Lei 14.133, especialmente pregão eletrônico e dispensa eletrônica, e também permite cadastrar outras modalidades.'),
           item('', 'Preciso de cartão de crédito para testar?', 'Não. Você tem {dias} dias grátis com acesso completo, sem informar cartão.'),
           item('', 'Meus dados ficam seguros?', 'Sim. O banco fica no Brasil, cada empresa é isolada das demais por regras aplicadas no próprio banco de dados, as conexões são criptografadas e há histórico de alterações.'),
           item('', 'Sou assessoria. Consigo atender várias empresas?', 'Sim. No plano Assessoria você cadastra vários CNPJs, alterna entre eles em um clique e vê tudo consolidado, com permissões por pessoa da sua equipe.'),
-          item('', 'O LicitaFlow dá lances automáticos?', 'Não. Robôs de lance exigem burlar as proteções dos portais e podem trazer sanções ao fornecedor. Em vez disso, oferecemos um assistente de lances com preço-limite por item, margem e histórico de preços, e você decide.'),
+          item('', 'O LicitaForce dá lances automáticos?', 'Não. Robôs de lance exigem burlar as proteções dos portais e podem trazer sanções ao fornecedor. Em vez disso, oferecemos um assistente de lances com preço-limite por item, margem e histórico de preços, e você decide.'),
           item('', 'Posso cancelar quando quiser?', 'Sim. Sem fidelidade no plano mensal. Seus dados continuam disponíveis para exportação.'),
         ],
       }),
@@ -188,7 +188,7 @@ export function conteudoPadrao(): ConteudoSite {
     ],
     rodape: {
       links: [{ texto: 'Produto', link: '#produto' }, { texto: 'Planos', link: '#planos' }, { texto: 'Segurança', link: '#seguranca' }, { texto: 'Entrar', link: '/entrar' }],
-      contato: '', copyright: 'LicitaFlow', instalar_app: true,
+      contato: '', copyright: 'LicitaForce', instalar_app: true,
     },
   }
 }

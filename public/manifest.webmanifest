@@ -1,7 +1,7 @@
 {
   "id": "/",
-  "name": "LicitaFlow",
-  "short_name": "LicitaFlow",
+  "name": "LicitaForce",
+  "short_name": "LicitaForce",
   "description": "Gestão de licitações, prazos, documentos e contratos.",
   "lang": "pt-BR",
   "start_url": "/app?origem=app",

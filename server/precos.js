@@ -16,14 +16,25 @@ function estatisticas(valores) {
   return { n: v.length, minimo: arred(v[0]), maximo: arred(v[v.length - 1]), media: arred(v.reduce((s, x) => s + x, 0) / v.length), mediana: arred(v.length % 2 ? v[meio] : (v[meio - 1] + v[meio]) / 2) }
 }
 
-/** Uma compra do Painel de Preços no formato usado pelo LicitaFlow. */
+/** Uma compra do Painel de Preços no formato usado pelo LicitaForce. */
+/**
+ * Código da compra (UASG + modalidade + número + ano, 17 dígitos). A fonte manda `idCompra` como número JSON,
+ * que passa do limite de precisão do JavaScript (98052305900062026 vira ...2030); por isso vale o texto de
+ * `idCompraItem` (código da compra + 5 dígitos do item).
+ */
+export function idCompraDe(c) {
+  const item = String(c.idCompraItem ?? '')
+  if (/^\d{20,25}$/.test(item)) return item.slice(0, -5)
+  return c.idCompra == null ? '' : String(c.idCompra)
+}
+
 export function linhaDeCompra(c) {
   const oculto = cnpjBloqueado(c.niFornecedor)
   return {
     data: c.dataResultado ?? c.dataCompra ?? null, preco: Number(c.precoUnitario), quantidade: Number(c.quantidade) || null,
     unidade: (c.siglaUnidadeFornecimento ?? c.siglaUnidadeMedida ?? c.nomeUnidadeFornecimento ?? c.nomeUnidadeMedida ?? 'UN').toString().trim().toUpperCase() || 'UN',
     descricao: c.descricaoItem ?? '', fornecedor: oculto ? null : c.nomeFornecedor ?? null, cnpj: oculto ? null : c.niFornecedor ?? null, marca: c.marca && c.marca !== 'null' ? c.marca : null,
-    orgao: c.nomeOrgao ?? c.nomeUasg ?? null, unidadeCompradora: c.nomeUasg ?? null, uasg: c.codigoUasg ?? null, uf: c.estado ?? null, municipio: c.municipio ?? null, modalidade: c.modalidade ?? null, idCompra: String(c.idCompra ?? ''),
+    orgao: c.nomeOrgao ?? c.nomeUasg ?? null, unidadeCompradora: c.nomeUasg ?? null, uasg: c.codigoUasg ?? null, uf: c.estado ?? null, municipio: c.municipio ?? null, modalidade: c.modalidade ?? null, idCompra: idCompraDe(c),
     numeroItem: Number(c.numeroItemCompra) || null, objeto: c.objetoCompra ?? null, detalhe: c.descricaoDetalhadaItem ?? null, dataCompra: c.dataCompra ?? null,
   }
 }

@@ -597,11 +597,11 @@ export default function Landing() {
     return () => {
       html.style.scrollBehavior = ''
       if (!tinhaDark) html.classList.remove('dark')
-      document.title = 'LicitaFlow'
+      document.title = 'LicitaForce'
     }
   }, [])
   useEffect(() => {
-    document.title = tituloAba || 'LicitaFlow'
+    document.title = tituloAba || 'LicitaForce'
     if (!descricao) return
     let meta = document.head.querySelector<HTMLMetaElement>('meta[name="description"]')
     const anterior = meta?.content

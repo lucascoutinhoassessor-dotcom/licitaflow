@@ -220,7 +220,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
     <div className="flex h-dvh min-w-0 flex-col">
       {/* Barra superior escura, fixa, no padrão de menus agrupados. */}
       <header className="relative z-40 flex h-16 shrink-0 items-center gap-2 border-b border-white/10 bg-black px-3 pt-[env(safe-area-inset-top)] text-sidebar-foreground sm:px-5">
-        <Link to="/app" className="shrink-0 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-white/40" aria-label="LicitaFlow – ir para o painel">
+        <Link to="/app" className="shrink-0 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-white/40" aria-label="LicitaForce – ir para o painel">
           <Logo claro />
         </Link>
         <nav aria-label="Módulos do usuário" className="hidden flex-1 items-center justify-center gap-1 lg:flex">

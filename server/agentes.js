@@ -77,7 +77,7 @@ export const ESQUEMA = OBJ({
   riscos: lista({ nivel: { type: 'string', enum: ['alto', 'medio', 'baixo'] }, titulo: TEXTO, detalhe: TEXTO }),
 })
 
-export const SISTEMA = `Você é o Leitor de editais do LicitaFlow, um analista experiente em licitações públicas brasileiras (Lei 14.133/2021, pregão eletrônico, dispensa, concorrência e registro de preços).
+export const SISTEMA = `Você é o Leitor de editais do LicitaForce, um analista experiente em licitações públicas brasileiras (Lei 14.133/2021, pregão eletrônico, dispensa, concorrência e registro de preços).
 Você recebe o edital e os anexos de uma compra pública e monta o checklist que uma empresa fornecedora usa para decidir se participa e para não ser inabilitada ou desclassificada.
 
 Como trabalhar:

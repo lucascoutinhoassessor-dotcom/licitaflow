@@ -25,6 +25,14 @@ const SINONIMOS: { termo: RegExp; itens: ItemCatalogo[] }[] = [
       { tipo: 'M', codigo: 126, nome: 'PAPEL CÓPIA', classe: 'PAPEL A4 (MODELO ANTIGO DO CATÁLOGO)' },
     ],
   },
+  {
+    // O catálogo não tem "smartphone": o celular é "APARELHO TELEFÔNICO CELULAR" (PDM 1243).
+    termo: /\b(smart ?phones?|iphones?|celular(es)?|telefones? (celular|movel)|galaxy|redmi|moto g)\b/,
+    itens: [
+      { tipo: 'M', codigo: 1243, nome: 'APARELHO TELEFÔNICO CELULAR', classe: 'SMARTPHONE E CELULAR' },
+      { tipo: 'M', codigo: 13528, nome: 'APARELHO TELEFÔNICO CELULAR / ACESSÓRIOS', classe: 'SMARTPHONE COM ACESSÓRIOS' },
+    ],
+  },
 ]
 const semAcento = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
 export function sinonimosDoCatalogo(termo: string, tipo: '' | 'M' | 'S'): ItemCatalogo[] {

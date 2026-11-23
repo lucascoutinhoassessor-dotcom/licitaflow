@@ -24,7 +24,7 @@ export async function pesquisarFornecedores(termo: string, uf: string, pagina: n
   return { ...data, data: data.data.map((f: Fornecedor) => ({ ...f, valor_total: Number(f.valor_total), maior_valor: Number(f.maior_valor) })) } as ResultadoFornecedores
 }
 
-/** Página de busca do PNCP com os contratos da empresa (o detalhe não é guardado no LicitaFlow). */
+/** Página de busca do PNCP com os contratos da empresa (o detalhe não é guardado no LicitaForce). */
 export function linkContratosPNCP(cnpj: string) {
   return `https://pncp.gov.br/app/contratos?q=${encodeURIComponent(cnpj)}`
 }

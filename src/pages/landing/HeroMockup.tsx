@@ -51,7 +51,7 @@ export function HeroMockup() {
           <span className="h-2.5 w-2.5 rounded-full bg-red-400/70" />
           <span className="h-2.5 w-2.5 rounded-full bg-amber-400/70" />
           <span className="h-2.5 w-2.5 rounded-full bg-emerald-400/70" />
-          <span className="ml-3 text-xs text-slate-400">app.licitaflow · Painel</span>
+          <span className="ml-3 text-xs text-slate-400">app.licitaforce · Painel</span>
         </div>
 
         <div className="grid grid-cols-3 gap-2 p-3 sm:gap-3 sm:p-4">

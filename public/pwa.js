@@ -34,6 +34,6 @@
   }
   link('manifest', master ? '/master.webmanifest' : '/manifest.webmanifest');
   link('apple-touch-icon', master ? '/icons/master-192.png' : '/icons/icone-192.png');
-  meta('apple-mobile-web-app-title', master ? 'LF Master' : 'LicitaFlow');
+  meta('apple-mobile-web-app-title', master ? 'LF Master' : 'LicitaForce');
   meta('theme-color', master ? '#09090b' : '#0f172a');
 })();

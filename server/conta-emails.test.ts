@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cifrar } from './asaas.js'
 
 const env = { SUPABASE_URL: 'https://teste.supabase.co', SUPABASE_SERVICE_ROLE_KEY: 'privada' }
-const smtp = (extra = {}) => [{ ativo: true, host: 'smtp.gmail.com', porta: 465, usuario: 'contato@gmail.com', senha_cifrada: cifrar('segredo', env), remetente_nome: 'LicitaFlow', ...extra }]
+const smtp = (extra = {}) => [{ ativo: true, host: 'smtp.gmail.com', porta: 465, usuario: 'contato@gmail.com', senha_cifrada: cifrar('segredo', env), remetente_nome: 'LicitaForce', ...extra }]
 afterEach(() => { vi.unstubAllGlobals(); vi.resetModules(); vi.doUnmock('./email.js') })
 function res() { return { setHeader: vi.fn(), status: vi.fn().mockReturnThis(), json: vi.fn() } }
 
@@ -31,9 +31,9 @@ describe('cadastro e senha pelo e-mail da plataforma', () => {
     const gerar = fetch.mock.calls.find(c => String(c[0]).includes('generate_link'))!
     expect(JSON.parse(String(gerar[1].body))).toEqual({ type: 'recovery', email: 'ana@x.com' })
     const [cfg, msg] = enviar.mock.calls[0]
-    expect(cfg.nome).toBe('LicitaFlow')
+    expect(cfg.nome).toBe('LicitaForce')
     expect(msg.para).toBe('ana@x.com')
-    expect(msg.assunto).toBe('Redefinir sua senha do LicitaFlow')
+    expect(msg.assunto).toBe('Redefinir sua senha do LicitaForce')
     expect(msg.html).toContain('Olá, Ana!')
     expect(msg.html).toContain('https://licitaflow-prod.vercel.app/redefinir-senha?token_hash=abc123&amp;type=recovery')
     expect(msg.html).toContain('cid:licitaflow-logo')

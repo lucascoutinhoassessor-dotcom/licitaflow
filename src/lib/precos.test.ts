@@ -7,6 +7,8 @@ describe('sinônimos do catálogo', () => {
     expect(sinonimosDoCatalogo('papel A4', 'S')).toEqual([])
     expect(sinonimosDoCatalogo('papel kraft', '')).toEqual([])
     expect(sinonimosDoCatalogo('a4tech mouse', '')).toEqual([])
+    for (const t of ['smartphone', 'Smart phone', 'iPhone 15', 'celular', 'telefone celular']) expect(sinonimosDoCatalogo(t, '')[0]).toMatchObject({ codigo: 1243, sinonimo: true })
+    expect(sinonimosDoCatalogo('capa para smartphone', 'S')).toEqual([])
   })
 })
 

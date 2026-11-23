@@ -19,7 +19,7 @@ export default function Cobrancas({ master=false }: {master?:boolean}) {
   const qc=useQueryClient()
   const [novo,setNovo]=useState(false)
   const [ocupado,setOcupado]=useState('')
-  const [f,setF]=useState({org:'',descricao:'Acesso LicitaFlow',valor:'',vencimento:'',gateway:'stripe'})
+  const [f,setF]=useState({org:'',descricao:'Acesso LicitaForce',valor:'',vencimento:'',gateway:'stripe'})
   const q=useQuery({queryKey:['plataforma-cobrancas',master],queryFn:async()=>{
     const {data,error}=await supabase.from('plataforma_cobrancas').select('*').order('created_at',{ascending:false}).limit(200)
     if(error) throw error
@@ -50,7 +50,7 @@ export default function Cobrancas({ master=false }: {master?:boolean}) {
   const lista=q.data ?? []
   const recebido=lista.filter(c=>c.status==='paga').reduce((v,c)=>v+c.valor_centavos,0)
   const aberto=lista.filter(c=>c.status!=='paga').reduce((v,c)=>v+c.valor_centavos,0)
-  return <>{!master && <Link className="mb-4 inline-block text-sm text-primary hover:underline" to="/app">← Voltar ao painel</Link>}<CabecalhoPagina titulo={master?'Financeiro da plataforma':'Cobranças do LicitaFlow'} descricao={master?'Cobranças avulsas (fora da assinatura). Os totais consideram os 200 registros mais recentes.':'Sua assinatura, as faturas e cobranças avulsas da organização.'} acoes={master && <Button onClick={()=>setNovo(true)}>Nova cobrança</Button>}/>
+  return <>{!master && <Link className="mb-4 inline-block text-sm text-primary hover:underline" to="/app">← Voltar ao painel</Link>}<CabecalhoPagina titulo={master?'Financeiro da plataforma':'Cobranças do LicitaForce'} descricao={master?'Cobranças avulsas (fora da assinatura). Os totais consideram os 200 registros mais recentes.':'Sua assinatura, as faturas e cobranças avulsas da organização.'} acoes={master && <Button onClick={()=>setNovo(true)}>Nova cobrança</Button>}/>
     {!master && <AssinaturaDaOrg/>}
     {!master && <h2 className="mb-3 font-semibold">Cobranças avulsas</h2>}
     {master && <div className="mb-5 grid gap-3 sm:grid-cols-2"><Card className="p-5"><p className="text-sm text-muted-foreground">Pagamentos confirmados</p><p className="text-2xl font-semibold">{formatarMoeda(recebido/100)}</p></Card><Card className="p-5"><p className="text-sm text-muted-foreground">Em aberto / preparação</p><p className="text-2xl font-semibold">{formatarMoeda(aberto/100)}</p></Card></div>}

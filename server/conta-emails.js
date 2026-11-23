@@ -1,6 +1,6 @@
 // Cadastro e "esqueci minha senha" com e-mail próprio (padrão CallBot AI), sem login.
 // O link é gerado pelo Supabase (admin/generate_link, que NÃO envia e-mail) e mandado pelo SMTP da plataforma
-// com a marca LicitaFlow. O link aponta para o próprio site (token_hash), então não depende das Redirect URLs do Supabase.
+// com a marca LicitaForce. O link aponta para o próprio site (token_hash), então não depende das Redirect URLs do Supabase.
 // Sem SMTP configurado, responde 503 "sem_smtp" e o site usa o envio padrão do Supabase.
 import { emailConfirmarCadastro, emailRedefinirSenha, enviarEmail, montarSmtp, URL_SITE } from './email.js'
 

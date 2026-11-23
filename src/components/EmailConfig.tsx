@@ -15,11 +15,11 @@ export function EmailConfig() {
   const q = useQuery({ queryKey: ['email-status'], queryFn: async () => {
     const { data, error } = await supabase.rpc('admin_email_status'); if (error) throw error; return data as Status
   }, retry: false })
-  const [f, setF] = useState({ usuario: '', senha: '', nome: 'LicitaFlow', host: 'smtp.gmail.com', porta: '465' })
+  const [f, setF] = useState({ usuario: '', senha: '', nome: 'LicitaForce', host: 'smtp.gmail.com', porta: '465' })
   const [ver, setVer] = useState(false)
   const [ocupado, setOcupado] = useState('')
   useEffect(() => {
-    if (q.data) setF(x => ({ ...x, usuario: q.data.usuario ?? '', nome: q.data.remetente_nome || 'LicitaFlow', host: q.data.host || 'smtp.gmail.com', porta: String(q.data.porta || 465) }))
+    if (q.data) setF(x => ({ ...x, usuario: q.data.usuario ?? '', nome: q.data.remetente_nome || 'LicitaForce', host: q.data.host || 'smtp.gmail.com', porta: String(q.data.porta || 465) }))
   }, [q.data])
 
   async function salvar() {
@@ -47,12 +47,12 @@ export function EmailConfig() {
       <Mail className="h-5 w-5 text-primary" /><h2 className="flex-1 font-semibold">E-mail (acesso e senha dos clientes)</h2>
       {s && <Badge cor={configurado ? 'verde' : 'amarelo'}>{configurado ? 'Configurado' : 'Não configurado'}</Badge>}
     </div>
-    <p className="text-sm text-muted-foreground">Usado para confirmar o cadastro, mandar o link de “Esqueci minha senha” e avisar que o acesso foi liberado quando o cliente paga. Os e-mails saem com o nome e o logo do LicitaFlow. Com Gmail é grátis (até ~500 e-mails por dia).</p>
+    <p className="text-sm text-muted-foreground">Usado para confirmar o cadastro, mandar o link de “Esqueci minha senha” e avisar que o acesso foi liberado quando o cliente paga. Os e-mails saem com o nome e o logo do LicitaForce. Com Gmail é grátis (até ~500 e-mails por dia).</p>
     {q.isError && <Aviso>{mensagemErro(q.error)}</Aviso>}
     {q.isLoading && <Carregando />}
     {s && <>
       <div className="grid gap-3 sm:grid-cols-2">
-        <Input aria-label="Seu Gmail" type="email" placeholder="Seu Gmail (ex.: contato.licitaflow@gmail.com)" value={f.usuario} onChange={e => setF({ ...f, usuario: e.target.value })} />
+        <Input aria-label="Seu Gmail" type="email" placeholder="Seu Gmail (ex.: contato.licitaforce@gmail.com)" value={f.usuario} onChange={e => setF({ ...f, usuario: e.target.value })} />
         <div className="relative">
           <Input aria-label="Senha de app do Google" className="pr-10" type={ver ? 'text' : 'password'} autoComplete="new-password"
             placeholder={s.tem_senha ? 'Senha de app salva ✓ (preencha só para trocar)' : 'Senha de app do Google (16 letras)'}
@@ -61,7 +61,7 @@ export function EmailConfig() {
             {ver ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
           </button>
         </div>
-        <Input aria-label="Nome do remetente" placeholder="Nome do remetente (ex.: LicitaFlow)" value={f.nome} onChange={e => setF({ ...f, nome: e.target.value })} />
+        <Input aria-label="Nome do remetente" placeholder="Nome do remetente (ex.: LicitaForce)" value={f.nome} onChange={e => setF({ ...f, nome: e.target.value })} />
         <details className="text-xs text-muted-foreground">
           <summary className="cursor-pointer py-2">Outro provedor (SMTP)</summary>
           <div className="grid grid-cols-3 gap-2">

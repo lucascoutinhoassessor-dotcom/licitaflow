@@ -60,7 +60,7 @@ export async function asaas(cfg, caminho, { method = 'GET', body } = {}) {
   if (!cfg?.apiKey) throw new ErroAsaas('Asaas ainda não configurado. Cadastre a chave em Master → Integrações.', 503)
   const r = await fetch(BASE[cfg.ambiente] + caminho, {
     method,
-    headers: { access_token: cfg.apiKey, 'Content-Type': 'application/json', 'User-Agent': 'LicitaFlow' },
+    headers: { access_token: cfg.apiKey, 'Content-Type': 'application/json', 'User-Agent': 'LicitaForce' },
     body: body ? JSON.stringify(body) : undefined,
     signal: AbortSignal.timeout(15000),
   })
@@ -82,7 +82,7 @@ export function corpoAssinatura(a, cliente, nomePlano) {
     value: a.valor_centavos / 100,
     nextDueDate: hojeSP(),
     cycle: CICLO_ASAAS[a.ciclo],
-    description: `LicitaFlow · Plano ${nomePlano} (${a.ciclo})`,
+    description: `LicitaForce · Plano ${nomePlano} (${a.ciclo})`,
     externalReference: a.id,
   }
 }

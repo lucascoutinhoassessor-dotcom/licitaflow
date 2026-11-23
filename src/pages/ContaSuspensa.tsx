@@ -29,10 +29,10 @@ export function ContaSuspensa() {
           <h1 className="mt-4 text-lg font-semibold">{teste ? 'Seu teste grátis terminou' : 'Acesso suspenso'}</h1>
           <p className="mt-2 text-sm text-muted-foreground">
             {teste
-              ? <>Esperamos que o LicitaFlow tenha ajudado <strong className="text-foreground">{org?.nome}</strong>. Contrate um plano para continuar: seus processos, documentos e dados estão guardados e voltam assim que o pagamento for confirmado.</>
+              ? <>Esperamos que o LicitaForce tenha ajudado <strong className="text-foreground">{org?.nome}</strong>. Contrate um plano para continuar: seus processos, documentos e dados estão guardados e voltam assim que o pagamento for confirmado.</>
               : atraso
                 ? <>Há uma fatura vencida de <strong className="text-foreground">{org?.nome}</strong>. Pague para liberar o acesso na hora. Seus dados estão preservados.</>
-                : <>O acesso de <strong className="text-foreground">{org?.nome}</strong> está temporariamente suspenso{org?.motivo_suspensao ? `: ${org.motivo_suspensao}.` : '.'} Seus dados estão preservados. Fale com o suporte do LicitaFlow para reativar.</>}
+                : <>O acesso de <strong className="text-foreground">{org?.nome}</strong> está temporariamente suspenso{org?.motivo_suspensao ? `: ${org.motivo_suspensao}.` : '.'} Seus dados estão preservados. Fale com o suporte do LicitaForce para reativar.</>}
           </p>
           {(teste || atraso) && !podeAdministrar && <p className="mt-3 text-sm">Peça ao dono ou a um administrador da organização para regularizar o plano.</p>}
           {outras.length > 0 && (

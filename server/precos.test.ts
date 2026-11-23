@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import handler, { resumirPrecos } from './precos.js'
+import handler, { idCompraDe, resumirPrecos } from './precos.js'
 
 const compra = (o: Record<string, unknown>) => ({ idCompra: 1, dataResultado: '2026-10-01', precoUnitario: 10, quantidade: 5, siglaUnidadeFornecimento: 'UN', descricaoItem: 'CANETA', nomeFornecedor: 'LOJA', niFornecedor: '11111111000111', marca: 'BIC', nomeOrgao: 'ÓRGÃO', estado: 'SP', ...o })
 const resposta = () => ({ setHeader: vi.fn(), status: vi.fn().mockReturnThis(), json: vi.fn() })
@@ -42,5 +42,14 @@ describe('endpoint de preços', () => {
     expect(urls[0]).toContain('estado=SP')
     expect(urls[1]).toContain('3_consultarServico?')
     expect(urls[1]).toContain('codigoItemCatalogo=7250')
+  })
+})
+
+describe('código da compra', () => {
+  it('usa o idCompraItem em texto, porque o idCompra numérico perde precisão', () => {
+    // JSON.parse('98052305900062026') vira 98052305900062030 no JavaScript.
+    expect(idCompraDe({ idCompra: JSON.parse('98052305900062026'), idCompraItem: '9805230590006202600098' })).toBe('98052305900062026')
+    expect(idCompraDe({ idCompra: 16006205900352024 })).toBe('16006205900352024')
+    expect(idCompraDe({})).toBe('')
   })
 })

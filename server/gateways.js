@@ -1,4 +1,4 @@
-// Somente servidor: checkouts hospedados; dados de cartão não passam pelo LicitaFlow.
+// Somente servidor: checkouts hospedados; dados de cartão não passam pelo LicitaForce.
 export const GATEWAYS = ['stripe', 'asaas', 'mercadopago', 'infinitepay']
 const VARS = {stripe:['STRIPE_SECRET_KEY'],asaas:['ASAAS_API_KEY'],mercadopago:['MERCADOPAGO_ACCESS_TOKEN'],infinitepay:['INFINITEPAY_API_KEY','INFINITEPAY_HANDLE']}
 export function configuracao(env) {
@@ -19,7 +19,7 @@ export async function criarCheckout(c,env) {
     return {gateway_id:r.id,checkout_url:r.url}
   }
   if(c.gateway==='asaas') {
-    const r=await chamar(asaasBase(env)+'/paymentLinks',{method:'POST',headers:{access_token:env.ASAAS_API_KEY,'Content-Type':'application/json','User-Agent':'LicitaFlow'},body:JSON.stringify({name:c.descricao,value:c.valor_centavos/100,billingType:'UNDEFINED',chargeType:'DETACHED',dueDateLimitDays:3,externalReference:c.id,limit:1,endDate:c.vencimento})})
+    const r=await chamar(asaasBase(env)+'/paymentLinks',{method:'POST',headers:{access_token:env.ASAAS_API_KEY,'Content-Type':'application/json','User-Agent':'LicitaForce'},body:JSON.stringify({name:c.descricao,value:c.valor_centavos/100,billingType:'UNDEFINED',chargeType:'DETACHED',dueDateLimitDays:3,externalReference:c.id,limit:1,endDate:c.vencimento})})
     return {gateway_id:r.id,checkout_url:r.url}
   }
   if(c.gateway==='mercadopago') {
@@ -40,7 +40,7 @@ export async function consultarPagamento(c,env,retorno={}) {
     return r.payment_status==='paid' && r.amount_total===valor && r.currency==='brl' && r.client_reference_id===c.id
   }
   if(c.gateway==='asaas') {
-    const r=await chamar(asaasBase(env)+'/payments?limit=100&externalReference='+encodeURIComponent(c.id),{headers:{access_token:env.ASAAS_API_KEY,'User-Agent':'LicitaFlow'}})
+    const r=await chamar(asaasBase(env)+'/payments?limit=100&externalReference='+encodeURIComponent(c.id),{headers:{access_token:env.ASAAS_API_KEY,'User-Agent':'LicitaForce'}})
     return (r.data ?? []).some(p=>p.externalReference===c.id && p.paymentLink===c.gateway_id && ['RECEIVED','CONFIRMED'].includes(p.status) && Math.round(Number(p.value)*100)===valor)
   }
   if(c.gateway==='mercadopago') {

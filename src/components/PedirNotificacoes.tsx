@@ -68,12 +68,12 @@ export default function PedirNotificacoes() {
           <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary/15 text-primary"><BellRing className="h-5 w-5" /></span>
           <p className="text-sm text-muted-foreground">
             {estado === 'negado'
-              ? 'As notificações do LicitaFlow estão bloqueadas neste navegador. Toque no cadeado ao lado do endereço (ou em Configurações do site), permita as notificações e volte aqui.'
+              ? 'As notificações do LicitaForce estão bloqueadas neste navegador. Toque no cadeado ao lado do endereço (ou em Configurações do site), permita as notificações e volte aqui.'
               : estado === 'sem-suporte'
-                ? 'No iPhone, as notificações só funcionam com o LicitaFlow instalado: toque em Compartilhar → Adicionar à Tela de Início e abra o app por lá.'
+                ? 'No iPhone, as notificações só funcionam com o LicitaForce instalado: toque em Compartilhar → Adicionar à Tela de Início e abra o app por lá.'
                 : desativou
-                  ? 'Este aparelho deixou de receber os avisos do LicitaFlow. Ative de novo para receber disputas, prazos e comunicados na hora, mesmo com o app fechado.'
-                  : 'Receba disputas, prazos e comunicados do LicitaFlow na hora, no celular ou no computador, mesmo com o app fechado.'}
+                  ? 'Este aparelho deixou de receber os avisos do LicitaForce. Ative de novo para receber disputas, prazos e comunicados na hora, mesmo com o app fechado.'
+                  : 'Receba disputas, prazos e comunicados do LicitaForce na hora, no celular ou no computador, mesmo com o app fechado.'}
           </p>
         </div>
         <div className="flex flex-wrap justify-end gap-2">

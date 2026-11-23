@@ -21,7 +21,7 @@ export default function Ranking() {
     const { data, error } = await supabase.rpc('admin_ranking_clientes'); if (error) throw error; return data as Linha[]
   } })
   return <>
-    <CabecalhoPagina titulo="Melhores clientes" descricao="Ordenado por receita paga ao LicitaFlow e, em seguida, por uso (processos). A saúde indica risco de cancelamento." />
+    <CabecalhoPagina titulo="Melhores clientes" descricao="Ordenado por receita paga ao LicitaForce e, em seguida, por uso (processos). A saúde indica risco de cancelamento." />
     {q.isLoading && <Carregando />}
     {q.isError && <Aviso>{mensagemErro(q.error)} <button className="underline" onClick={() => q.refetch()}>Tentar novamente</button></Aviso>}
     {q.data && <Card className="overflow-x-auto"><table className="w-full min-w-[820px] whitespace-nowrap text-sm">

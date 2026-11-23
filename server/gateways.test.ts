@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { configuracao, criarCheckout, consultarPagamento } from './gateways.js'
-const c={id:'11111111-1111-1111-1111-111111111111',gateway:'stripe',valor_centavos:19700,descricao:'Acesso LicitaFlow',gateway_id:'cs_123',vencimento:'2026-12-01'}
+const c={id:'11111111-1111-1111-1111-111111111111',gateway:'stripe',valor_centavos:19700,descricao:'Acesso LicitaForce',gateway_id:'cs_123',vencimento:'2026-12-01'}
 const env={STRIPE_SECRET_KEY:'test-secret',BILLING_PUBLIC_URL:'https://exemplo.com',ASAAS_API_KEY:'test-asaas',MERCADOPAGO_ACCESS_TOKEN:'test-mp',INFINITEPAY_API_KEY:'test-infinite',INFINITEPAY_HANDLE:'loja'}
 afterEach(()=>vi.unstubAllGlobals())
 describe('gateways de pagamento',()=>{

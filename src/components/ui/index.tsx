@@ -237,7 +237,7 @@ export function Modal({ aberto, aoFechar, titulo, children, largo }: { aberto: b
   )
 }
 
-/** Ícone do LicitaFlow animado: o gráfico se desenha ao aparecer e, de tempos em tempos, uma luz percorre a
+/** Ícone do LicitaForce animado: o gráfico se desenha ao aparecer e, de tempos em tempos, uma luz percorre a
  * linha e o ponto pulsa (estilos .lf-icone em index.css; parado para quem pede menos movimento). */
 export function IconeAnimado({ className }: { className?: string }) {
   const id = useId().replace(/:/g, '')
@@ -267,7 +267,7 @@ export function Logo({ className, claro }: { className?: string; claro?: boolean
     <div className={cn('flex items-center gap-2 font-semibold tracking-tight', className)}>
       <IconeAnimado className="h-7 w-7" />
       <span className={cn('text-lg', claro && 'text-white')}>
-        Licita<span className="text-accent">Flow</span>
+        Licita<span className="text-accent">Force</span>
       </span>
     </div>
   )

@@ -1,5 +1,5 @@
 // Arquivos publicados de um edital no PNCP (edital, termo de referência, ETP, anexos, atas...).
-// O PNCP libera CORS para esses arquivos: o navegador baixa direto, sem passar pelo servidor do LicitaFlow.
+// O PNCP libera CORS para esses arquivos: o navegador baixa direto, sem passar pelo servidor do LicitaForce.
 
 export interface ArquivoEdital {
   url: string; titulo: string; tipo: string; sequencial: number; publicadoEm: string | null

@@ -34,7 +34,7 @@ export default function Entrar() {
 
   return (
     <AuthShell
-      titulo="Entrar no LicitaFlow"
+      titulo="Entrar no LicitaForce"
       subtitulo="Acesse sua central de licitações."
       rodape={
         <>

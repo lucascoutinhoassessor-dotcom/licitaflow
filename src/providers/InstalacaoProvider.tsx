@@ -112,10 +112,10 @@ export function InstalacaoProvider({ children }: { children: ReactNode }) {
 
   return <CtxInstalacao.Provider value={{ ocultar, instalando, ajuda, instalar }}>
     {children}
-    {mostrarAviso && <section ref={aviso} aria-label="Instalação do LicitaFlow" className="fixed inset-x-3 bottom-[calc(var(--barra-inferior,0px)+max(.75rem,env(safe-area-inset-bottom)))] z-30 mx-auto max-w-lg rounded-xl border border-slate-600 bg-slate-900 p-4 text-white shadow-2xl">
+    {mostrarAviso && <section ref={aviso} aria-label="Instalação do LicitaForce" className="fixed inset-x-3 bottom-[calc(var(--barra-inferior,0px)+max(.75rem,env(safe-area-inset-bottom)))] z-30 mx-auto max-w-lg rounded-xl border border-slate-600 bg-slate-900 p-4 text-white shadow-2xl">
       <div className="flex items-start gap-3">
         <img src="/icons/icone-192.png" alt="" className="h-10 w-10 shrink-0 rounded-lg"/>
-        <div className="min-w-0 flex-1"><h2 className="text-sm font-semibold">Use o LicitaFlow como aplicativo</h2><p className="mt-1 text-xs leading-relaxed text-slate-300">Instale e abra pelo ícone da tela inicial, sem a barra de endereço do navegador.</p></div>
+        <div className="min-w-0 flex-1"><h2 className="text-sm font-semibold">Use o LicitaForce como aplicativo</h2><p className="mt-1 text-xs leading-relaxed text-slate-300">Instale e abra pelo ícone da tela inicial, sem a barra de endereço do navegador.</p></div>
         <button aria-label="Fechar aviso de instalação" onClick={() => { setDescartado(true); setAjuda(false) }} className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"><X className="h-5 w-5"/></button>
       </div>
       <button onClick={instalar} disabled={instalando} className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-medium hover:bg-blue-500 disabled:opacity-50"><Download className="h-4 w-4"/>{instalando ? 'Aguarde…' : 'Instalar aplicativo'}</button>
@@ -127,7 +127,7 @@ export function InstalacaoProvider({ children }: { children: ReactNode }) {
           <div className="flex items-start gap-3">
             <img src={master ? '/icons/master-192.png' : '/icons/icone-192.png'} alt="" className="h-11 w-11 shrink-0 rounded-xl"/>
             <div className="min-w-0 flex-1">
-              <Dialog.Title className="font-semibold">Instalar {master ? 'LicitaFlow Master' : 'LicitaFlow'}</Dialog.Title>
+              <Dialog.Title className="font-semibold">Instalar {master ? 'LicitaForce Master' : 'LicitaForce'}</Dialog.Title>
               <Dialog.Description className="mt-1 text-sm text-slate-300">{master ? 'O app abre direto no painel master.' : 'O app abre direto no seu painel.'}</Dialog.Description>
             </div>
             <Dialog.Close aria-label="Fechar" className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"><X className="h-5 w-5"/></Dialog.Close>

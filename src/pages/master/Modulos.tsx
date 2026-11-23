@@ -64,7 +64,7 @@ export default function Modulos() {
   const orgsFiltradas = (orgs.data ?? []).filter((o) => !busca.trim() || `${o.nome} ${o.dono_email ?? ''}`.toLowerCase().includes(busca.trim().toLowerCase()))
 
   return <>
-    <CabecalhoPagina titulo="Funcionalidades" descricao="Escolha o que cada cliente vê no LicitaFlow. Libere um módulo, um botão ou um filtro para todos quando estiver pronto, ou teste antes com organizações escolhidas (inclusive a sua)." />
+    <CabecalhoPagina titulo="Funcionalidades" descricao="Escolha o que cada cliente vê no LicitaForce. Libere um módulo, um botão ou um filtro para todos quando estiver pronto, ou teste antes com organizações escolhidas (inclusive a sua)." />
     {q.isLoading && <Carregando />}
     {q.isError && <Aviso>{mensagemErro(q.error)} — aplique a migração de funcionalidades.</Aviso>}
     {q.data && <>

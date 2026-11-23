@@ -135,7 +135,7 @@ export default function AnaliseEmpresaDetalhe() {
           </Secao>
 
           <Secao icone={a.sancoes?.length ? <ShieldAlert className="h-4 w-4 text-rose-400" /> : <ShieldCheck className="h-4 w-4 text-emerald-400" />} titulo="Penalidades e sanções">
-            {!a.sancoesDisponiveis ? <p className="text-sm text-muted-foreground">A consulta de sanções ainda não foi ativada no LicitaFlow.</p>
+            {!a.sancoesDisponiveis ? <p className="text-sm text-muted-foreground">A consulta de sanções ainda não foi ativada no LicitaForce.</p>
               : a.sancoes === null ? <p className="text-sm text-muted-foreground">A consulta de sanções não respondeu agora. Tente novamente em instantes.</p>
               : a.sancoes.length === 0 ? <p className="text-sm font-medium text-emerald-600 dark:text-emerald-400">Nenhuma sanção registrada.</p>
               : <ul className="space-y-2">{a.sancoes.map((s, i) => <li key={i} className="rounded-xl border border-rose-500/40 p-3 text-sm"><p className="font-semibold">{s.cadastro} · {s.tipo ?? 'Sanção'}</p><p className="text-xs text-muted-foreground">{s.orgao} · {s.inicio ?? '—'} a {s.fim ?? 'sem data final'}</p></li>)}</ul>}

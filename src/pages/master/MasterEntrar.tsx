@@ -45,7 +45,7 @@ export default function MasterEntrar() {
           <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-amber-500/30 bg-amber-500/10">
             <ShieldCheck className="h-7 w-7 text-amber-400" />
           </div>
-          <h1 className="mt-5 text-xl font-semibold tracking-tight">LicitaFlow Console</h1>
+          <h1 className="mt-5 text-xl font-semibold tracking-tight">LicitaForce Console</h1>
           <p className="mt-1 text-sm text-zinc-400">Acesso restrito à administração da plataforma</p>
         </div>
         <form onSubmit={enviar} className="space-y-4 rounded-2xl border border-zinc-800 bg-zinc-900/80 p-6 backdrop-blur">

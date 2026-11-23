@@ -1,8 +1,8 @@
 {
   "id": "/master",
-  "name": "LicitaFlow Master",
+  "name": "LicitaForce Master",
   "short_name": "LF Master",
-  "description": "Painel master do LicitaFlow: clientes, receita e operação.",
+  "description": "Painel master do LicitaForce: clientes, receita e operação.",
   "lang": "pt-BR",
   "start_url": "/master?origem=app",
   "scope": "/master",
