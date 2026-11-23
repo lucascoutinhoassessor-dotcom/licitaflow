@@ -5,23 +5,37 @@ export interface StatusCatalogo {
  iniciado_em:string|null;ultima_coleta_em:string|null;ultima_carga_completa_em:string|null
  carga_inicial_concluida:boolean;editais_indexados:number;editais_com_itens:number
  paginas_coletadas:number;paginas_planejadas:number;pausado_ate:string|null;aviso:string|null;fonte?:'turso'
+ /** Histórico de encerrados: dia de publicação até onde já carregou; null = completo; 'pendente' = não começou. */
+ historico_ate?:string|null
 }
 export interface ResultadoIndice {
  data:CompraPNCP[];totalRegistros:number;totalPaginas:number
  orgaos:{cnpj:string;razaoSocial:string}[];catalogo:StatusCatalogo;detalhesPendentes:number
+ /** Inclui editais encerrados (histórico de 12 meses no Turso). */
+ historico?:boolean
+ /** O total passou do limite de contagem do histórico (mostra "mais de"). */
+ totalLimitado?:boolean
 }
+/** Data de hoje (AAAA-MM-DD) em Brasília. */
+const hojeSP=()=>new Date().toLocaleDateString('en-CA',{timeZone:'America/Sao_Paulo'})
+/** A busca inclui encerrados: abertura a partir de um dia passado, ou por data de publicação. */
+export function buscaHistorica(f:Pick<FiltrosOportunidades,'situacao'|'aberturaDe'>){return f.situacao==='publicacoes'||(!!f.aberturaDe&&f.aberturaDe<hojeSP())}
+const ERRO_HISTORICO='O histórico de editais encerrados está fora do ar agora. Tente de novo em alguns minutos ou pesquise a partir de hoje.'
 const valido=(d:unknown):d is ResultadoIndice=>!!d&&Array.isArray((d as ResultadoIndice).data)&&Number.isInteger((d as ResultadoIndice).totalRegistros)&&Number.isInteger((d as ResultadoIndice).totalPaginas)
 
 // Quando a base rápida responde "ainda carregando", o app fica alguns minutos só no Postgres (sem pagar duas idas).
 let tursoPausadoAte=0
-/** Base rápida (Turso): só para "por data de abertura". null quando não pode responder e o Postgres assume. */
+/** Base rápida (Turso): "por data de abertura" e, com o histórico, "por data de publicação". null quando não pode responder e o Postgres assume. */
 async function pesquisarTurso(f:FiltrosOportunidades,pagina:number,token:string,signal?:AbortSignal):Promise<ResultadoIndice|null>{
- if(f.situacao!=='abertas'||Date.now()<tursoPausadoAte)return null
+ // Encerrados só existem no Turso: tenta sempre e, se falhar, avisa (o Postgres devolveria só os abertos).
+ const historico=buscaHistorica(f)
+ if(!historico&&(f.situacao!=='abertas'||Date.now()<tursoPausadoAte))return null
  try{
   const r=await fetch('/api/oportunidades?acao=turso-buscar',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${token}`},body:JSON.stringify({filtros:f,pagina}),signal})
   const corpo=await r.json().catch(()=>null)
   if(r.ok&&valido(corpo))return corpo
   if(r.status===400&&corpo?.error)throw new Error(corpo.error)
+  if(historico&&f.situacao==='abertas')throw new Error(r.status===429&&corpo?.error?corpo.error:ERRO_HISTORICO)
   if(r.status===409&&corpo?.codigo!=='turso_itens')tursoPausadoAte=Date.now()+3*60_000
   // Turso fora (ex.: cota do plano estourada): 10 min só no Postgres, sem esperar a ida ao Turso em cada busca.
   if(r.status>=500)tursoPausadoAte=Date.now()+10*60_000
@@ -29,6 +43,7 @@ async function pesquisarTurso(f:FiltrosOportunidades,pagina:number,token:string,
  }catch(e){
   if(signal?.aborted)throw e
   if(e instanceof Error&&!(e instanceof TypeError))throw e
+  if(historico&&f.situacao==='abertas')throw new Error(ERRO_HISTORICO)
   tursoPausadoAte=Date.now()+10*60_000
   return null
  }

@@ -76,7 +76,9 @@ describe('coleta e busca no Turso', () => {
       edital(1, { objetoCompra: 'Aquisição de computadores e notebooks para a secretaria' }),
       edital(2, { objetoCompra: 'Prestação de serviços de limpeza predial', unidadeOrgao: { ufSigla: 'SP', municipioNome: 'Campinas' }, valorTotalEstimado: 50000 }),
       edital(3, { objetoCompra: 'Registro de preços para futura aquisição de material de consumo', srp: true }),
-      edital(4, { objetoCompra: 'Aquisição de cadeiras', dataEncerramentoProposta: pncpData(dias(-5)) }), // já encerrado
+      edital(4, { objetoCompra: 'Aquisição de cadeiras', dataEncerramentoProposta: pncpData(dias(-5)), situacaoCompraId: 4 }), // encerrado: vai para o histórico
+      edital(5, { objetoCompra: 'Dispensa para compra de água', modalidadeId: 8, dataEncerramentoProposta: pncpData(dias(-5)) }), // dispensa encerrada: fora do histórico
+      edital(6, { objetoCompra: 'Aquisição de mesas', dataEncerramentoProposta: pncpData(dias(-400)) }), // fora dos 12 meses
     ]
     const fetcher = vi.fn(async (url: string) => {
       if (url.includes('/contratacoes/proposta') && url.includes('codigoModalidadeContratacao=6&pagina=1')) return new Response(JSON.stringify({ data: editais, totalPaginas: 1 }))
@@ -90,7 +92,7 @@ describe('coleta e busca no Turso', () => {
 
   it('carga completa grava os editais, os itens e marca a carga como concluída', async () => {
     const { turso, feitos } = await preparar()
-    expect(feitos).toContainEqual(expect.objectContaining({ etapa: 'carga', modalidade: 6, gravados: 3 })) // o encerrado há 5 dias não entra
+    expect(feitos).toContainEqual(expect.objectContaining({ etapa: 'carga', modalidade: 6, gravados: 4 })) // o encerrado há 5 dias entra no histórico; a dispensa encerrada e o de 400 dias, não
     expect(feitos).toContainEqual(expect.objectContaining({ etapa: 'itens' }))
     const [e] = await turso.consultar('select count(*) n, sum(itens_completos) c from editais where encerramento >= ?', [new Date().toISOString()])
     expect(e).toEqual({ n: 3, c: 3 })
@@ -104,12 +106,12 @@ describe('coleta e busca no Turso', () => {
     // Simula a base antiga: linhas do FTS com rowid que não bate com o do edital.
     turso.db.exec("create table v as select controle, texto from editais_fts; delete from editais_fts; insert into editais_fts(rowid, controle, texto) select 1000 + rowid, controle, texto from v; delete from coleta_estado where chave = 'fts_rowid'")
     await turso.transacao(MIGRAR_FTS_ROWID as never)
-    expect(await turso.consultar('select count(*) n from editais_fts f join editais e on e.rowid = f.rowid and e.controle = f.controle')).toEqual([{ n: 3 }])
+    expect(await turso.consultar('select count(*) n from editais_fts f join editais e on e.rowid = f.rowid and e.controle = f.controle')).toEqual([{ n: 4 }])
     expect(await turso.consultar('select count(*) n from itens_fts f join editais e on e.rowid = f.rowid and e.controle = f.controle')).toEqual([{ n: 1 }])
     expect((await buscarTurso(turso as never, { busca: 'grampeador' })).data.map((c) => c.sequencialCompra)).toEqual([3])
     // Edital que mudou: troca a linha do FTS, sem duplicar.
     expect(await gravarEditais(turso as never, [edital(1, { objetoCompra: 'Aquisição de impressoras', dataAtualizacaoGlobal: pncpData(dias(0)) })])).toBe(1)
-    expect(await turso.consultar('select count(*) n from editais_fts')).toEqual([{ n: 3 }])
+    expect(await turso.consultar('select count(*) n from editais_fts')).toEqual([{ n: 4 }])
     expect((await buscarTurso(turso as never, { busca: 'impressora' })).totalRegistros).toBe(1)
     expect((await buscarTurso(turso as never, { busca: 'computador' })).totalRegistros).toBe(0)
     const plano = turso.db.prepare("explain query plan delete from editais_fts where rowid = (select rowid from editais where controle = 'x')").all() as { detail: string }[]
@@ -150,6 +152,51 @@ describe('coleta e busca no Turso', () => {
     expect((await buscarTurso(turso as never, { portais: ['comprasnet'] })).totalRegistros).toBe(0)
     const pag = await buscarTurso(turso as never, {}, 2, 2)
     expect(pag.data).toHaveLength(1); expect(pag.totalPaginas).toBe(2)
+    expect(todos.historico).toBe(false)
+  })
+
+  it('histórico: data passada traz os encerrados, sem limitar a contagem dos abertos', async () => {
+    const { turso } = await preparar()
+    const iso = (d: Date) => d.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
+    // A partir de hoje: só os abertos (o encerrado de hoje cedo não aparece).
+    expect((await buscarTurso(turso as never, { aberturaDe: iso(dias(0)), aberturaAte: iso(dias(30)), diasUteis: false })).totalRegistros).toBe(3)
+    const passado = await buscarTurso(turso as never, { aberturaDe: iso(dias(-10)), aberturaAte: iso(dias(30)), diasUteis: false })
+    expect(passado.historico).toBe(true)
+    expect(passado.data.map((c) => c.sequencialCompra)).toEqual([4, 1, 2, 3])
+    expect((await buscarTurso(turso as never, { aberturaDe: iso(dias(-10)), aberturaAte: iso(dias(-1)), diasUteis: false, busca: 'cadeira' })).data.map((c) => c.sequencialCompra)).toEqual([4])
+    // Por data de publicação: qualquer situação, mais recentes primeiro.
+    const pub = await buscarTurso(turso as never, { situacao: 'publicacoes', inicio: iso(dias(-3)), fim: iso(dias(0)) })
+    expect(pub.historico).toBe(true); expect(pub.totalRegistros).toBe(4)
+    expect(() => montarFiltros({ situacao: 'publicacoes', inicio: '', fim: '' })).toThrow('publicação')
+  })
+
+  it('limpeza: tira os itens do encerrado, mantém o edital no histórico e apaga dispensa encerrada', async () => {
+    const { turso } = await preparar()
+    // O edital 3 (com itens) encerra; uma dispensa encerrada entra por fora (ex.: base antiga).
+    turso.db.exec(`update editais set encerramento = '${dias(-3).toISOString()}' where sequencial = 3`)
+    turso.db.exec(`insert into editais(controle,cnpj,ano,sequencial,modalidade,portal,uf,orgao_cnpj,orgao_nome,encerramento,coletado_em,compra) values('12345678000199-1-000099/2026','12345678000199',2026,99,8,'pcp','MG','12345678000199','X','${dias(-3).toISOString()}','x','{}')`)
+    const feitos = await coletarRodada(turso as never, { fetcher: (async () => new Response(null, { status: 204 })) as never, prazo: Date.now() + 40_000, maxConsultas: 10, intervaloMs: 0 })
+    expect(feitos).toContainEqual(expect.objectContaining({ etapa: 'limpeza', editais: 1, itensDe: 1 }))
+    expect(await turso.consultar('select itens_completos from editais where sequencial = 3')).toEqual([{ itens_completos: 0 }])
+    expect(await turso.consultar('select count(*) n from itens')).toEqual([{ n: 0 }])
+    expect(await turso.consultar('select count(*) n from editais where sequencial = 99')).toEqual([{ n: 0 }])
+  })
+
+  it('carga do histórico anda do dia mais recente para o mais antigo, sem dispensa', async () => {
+    const { turso } = await preparar()
+    const urls: string[] = []
+    const fetcher = vi.fn(async (url: string) => {
+      urls.push(url)
+      if (url.includes('/contratacoes/publicacao') && url.includes('codigoModalidadeContratacao=6&')) return new Response(JSON.stringify({ data: [edital(7, { objetoCompra: 'Aquisição de toner', dataEncerramentoProposta: pncpData(dias(-20)), dataPublicacaoPncp: pncpData(dias(-30)) })], totalPaginas: 1 }))
+      return new Response(null, { status: 204 })
+    })
+    const feitos = await coletarRodada(turso as never, { fetcher: fetcher as never, prazo: Date.now() + 40_000, maxConsultas: 60, intervaloMs: 0 })
+    const hist = feitos.filter((f: { etapa: string }) => f.etapa === 'historico')
+    expect(hist).toHaveLength(3)
+    expect(hist[0]).toMatchObject({ modalidade: 6, gravados: 1 })
+    expect(urls.some((u) => u.includes('/publicacao') && /codigoModalidadeContratacao=(8|9)&/.test(u))).toBe(false)
+    expect((await turso.consultar("select valor from coleta_estado where chave = 'historico'"))[0].valor).toMatch(/^\d{8}:3:1$/)
+    expect(await turso.consultar('select count(*) n from editais where sequencial = 7')).toEqual([{ n: 1 }])
   })
 })
 
@@ -208,10 +255,11 @@ describe('economia de cota no Turso', () => {
     expect(await turso.consultar("select count(*) n from itens")).toEqual([{ n: 1 }]) // a busca por item continua funcionando
     expect((await buscarTurso(turso as never, { itemMinimo: '1000' })).totalRegistros).toBe(1)
     // A conferência acha a mesma lista: só marca como completa, sem apagar e regravar os itens.
-    const antes2 = escritas(turso)
-    await coletarRodada(turso as never, { fetcher: fetcher as never, maxConsultas: 60, intervaloMs: 0 })
+    const comandos: string[] = []
+    const espiao = { ...turso, pipeline: async (c: [string, unknown[]?][]) => { comandos.push(...c.map(([sql]) => sql)); return turso.pipeline(c) } }
+    await coletarRodada(espiao as never, { fetcher: fetcher as never, maxConsultas: 60, intervaloMs: 0 })
     expect(await turso.consultar("select itens_completos c from editais where sequencial = 3")).toEqual([{ c: 1 }])
-    expect(escritas(turso) - antes2).toBeLessThan(10)
+    expect(comandos.filter((c) => /(insert into|delete from) itens\b/.test(c))).toEqual([])
     // Conteúdo mudou: regrava a linha e o FTS.
     expect(await gravarEditais(turso as never, [edital(3, { objetoCompra: 'Aquisição de impressoras', dataAtualizacaoGlobal: pncpData(dias(1)) })])).toBe(1)
     expect((await buscarTurso(turso as never, { busca: 'impressora' })).totalRegistros).toBe(1)

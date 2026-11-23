@@ -102,6 +102,9 @@ export function criarHandler({ fetcher = fetch, env = process.env, validarSessao
         const r = await consulta
         // Enquanto a carga completa não terminou (ou os itens estão atrasados), quem responde é o Postgres.
         if (!r.catalogo.carga_inicial_concluida) return res.status(409).json({ error: 'A base rápida ainda está carregando.', codigo: 'turso_carregando' })
+        // Encerrados (data passada ou busca por publicação) só existem no Turso: o Postgres não teria como responder.
+        // Os itens dos encerrados não são guardados, então a cobertura de itens não vale aqui.
+        if (r.historico) { const { coberturaItens, comTermo, ...resposta } = r; return res.status(200).json(resposta) }
         if (r.detalhesPendentes > Math.max(20, r.totalRegistros * 0.1)) return res.status(409).json({ error: 'Itens ainda em coleta na base rápida.', codigo: 'turso_itens' })
         // Palavra-chave também procura nos itens: até os itens cobrirem 90% dos editais, o Postgres responde.
         if (r.comTermo && r.coberturaItens < 0.9) return res.status(409).json({ error: 'Itens ainda em coleta na base rápida.', codigo: 'turso_itens' })

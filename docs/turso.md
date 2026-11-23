@@ -36,10 +36,16 @@ Para desligar: `update licitaflow_turso.config set ativo = false where id;`
 1. **Atualizações do dia:** lê uma página por modalidade e deixa a última aberta, para pegar o que entrar depois.
 2. **Carga completa:** uma vez por dia, lê todos os editais com proposta aberta (cerca de 32 mil, ou 650 páginas)
    e continua de onde parou. Só grava o edital que é novo ou que mudou na fonte.
-3. **Itens:** coleta os itens dos editais que abrem em até 30 dias, os mais próximos primeiro, 4 por vez.
-4. **Limpeza:** apaga os editais encerrados há mais de 2 dias e as contagens vencidas do cache da busca.
-5. **Contagens guardadas:** a cobertura dos itens é contada a cada hora e o tamanho da base a cada 6 h. Os números
-   ficam em `coleta_estado`, e a busca e o cartão do master só leem o resultado.
+3. **Histórico:** depois da carga do dia, lê até 3 páginas por rodada de `/contratacoes/publicacao`, do dia de
+   ontem para trás, até 12 meses. O cursor fica em `coleta_estado.historico` (`AAAAMMDD:modalidade:página`), e
+   o fim fica em `historico_completo_em`. Dispensa (8) e inexigibilidade (9) ficam de fora, porque são ~65% do volume.
+   Cada página do PNCP leva de 7 a 15 s, então a carga de 12 meses (~20 mil páginas) leva cerca de uma semana.
+   É a etapa que mais escreve: para já no nível de economia de escrita.
+4. **Itens:** coleta os itens dos editais que abrem em até 30 dias, os mais próximos primeiro, 3 por vez.
+5. **Limpeza:** encerrados há mais de 2 dias perdem os itens, mas o edital fica no histórico. Saem de vez as dispensas
+   e inexigibilidades encerradas e tudo o que passou dos 12 meses. Também apaga as contagens vencidas do cache da busca.
+6. **Contagens guardadas:** a cobertura dos itens é contada a cada hora e o tamanho da base a cada 6 h (o total vem
+   de `max(rowid)`, aproximado). Os números ficam em `coleta_estado`, e a busca e o cartão do master só leem o resultado.
 
 Se o PNCP responder 429 (pedido para esperar), a coleta pausa por 5 minutos.
 
@@ -54,7 +60,12 @@ O app tenta o Turso primeiro e volta para o Postgres quando:
 - os filtros por item esbarram em mais de 10% de editais sem itens (resposta 409 `turso_itens`);
 - o Turso falha.
 
-O modo "por data de publicação" continua no Postgres.
+**Histórico (encerrados):** quando a abertura começa num dia passado, ou a busca é "por data de publicação", a
+resposta traz `historico: true` e inclui os encerrados. O Postgres não tem esses editais, então não há volta para
+ele: se o Turso falhar, o app mostra um erro. Nesses casos as contagens param em 1.000 (`totalLimitado`), para não
+ler o período inteiro a cada busca. Os índices `editais_modalidade_encerramento`, `editais_orgao_encerramento` e
+`editais_publicacao` são criados uma vez (marca `indices_historico`). Na busca, a modalidade vai como
+`+e.modalidade` para o SQLite não usar o índice da limpeza e ordenar em memória.
 
 ### Próximo passo
 
@@ -88,8 +99,9 @@ ciclo e o nível atual.
 ### O que foi feito para gastar menos
 
 - **Leituras da busca:**
-  - Os índices `editais_abertos`, `editais_uf_abertos` e `editais_orgao_abertos` cobrem todas as colunas dos
-    filtros. Contar, paginar e listar órgãos lê só o índice, sem abrir cada linha da tabela.
+  - O índice `editais_abertos` cobre todas as colunas dos filtros, a UF e o nome do órgão. Contar, paginar e
+    listar órgãos lê só o índice, sem abrir cada linha da tabela. É um índice largo só: com o histórico, criar cada
+    um custa uma escrita por edital.
   - A ordem do índice é a mesma da busca, então não há ordenação extra.
 - **Cache das contagens:**
   - O total e a lista de órgãos de cada combinação de filtros ficam guardados no próprio Turso (`cache_busca`).
@@ -102,10 +114,11 @@ ciclo e o nível atual.
     e o FTS.
   - Os itens não são mais apagados quando o edital muda. Eles são conferidos de novo e só regravados se a lista
     mudou de fato. Enquanto isso, `itens_completos = 2` e a busca segue usando os itens guardados.
-- **Fila de itens:** um índice parcial (`editais_fila_itens`) faz a fila ler só os editais que faltam.
+- **Fila de itens e limpeza:** índices parciais fazem a fila (`editais_fila_itens`) ler só os editais que faltam e a
+  limpeza do histórico (`editais_com_itens`) ler só os que ainda têm itens.
 
 As mudanças entram sozinhas na primeira rodada da coleta depois do deploy (chave `otimizacao` em
-`coleta_estado`). A migração cria os índices novos uma vez, o que lê e escreve cada edital uma vez.
+`coleta_estado`). A migração cria o índice largo uma vez: lê e escreve cada edital uma vez (com o histórico completo, ~600 mil escritas, cerca de 6% da cota grátis do mês).
 
 ### Se o Turso já bloqueou o banco
 
@@ -141,3 +154,8 @@ Confira os limites em turso.tech/pricing antes de cadastrar. Se o Turso mudar os
 
 Nos planos pagos, passar da cota não bloqueia o banco: o excedente é cobrado à parte. O freio continua usando a cota
 incluída no plano, para não gerar cobrança extra sem aviso. Para usar o excedente, aumente os dois limites.
+
+### Histórico e cota
+
+Com o histórico, a base vai de ~36 mil para ~600 mil editais (estimativa de 1,5 a 2 GB). Nada pode contar a base
+inteira: as contagens do histórico param em 1.000 e o total do cartão em Integrações vem de `max(rowid)`.
