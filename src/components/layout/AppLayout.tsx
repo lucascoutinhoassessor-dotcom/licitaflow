@@ -11,6 +11,7 @@ import { useAuth } from '@/providers/AuthProvider'
 import { useOrg } from '@/providers/OrgProvider'
 import { useInstalacao } from '@/hooks/useInstalacao'
 import PedirNotificacoes from '@/components/PedirNotificacoes'
+import AvisoAppAntigo from '@/components/AvisoAppAntigo'
 
 function alternarTema() {
   const escuro = document.documentElement.classList.toggle('dark')
@@ -243,6 +244,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
       </header>
 
       <main id="conteudo-principal" className="min-h-0 min-w-0 flex-1 overflow-y-auto pb-[calc(4rem+env(safe-area-inset-bottom))] lg:pb-0">
+        <AvisoAppAntigo />
         {(org?.plano === 'trial' || empresas.length > 1) && (
           <div className="border-b bg-card">
             <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-2 px-4 py-2 lg:px-8">

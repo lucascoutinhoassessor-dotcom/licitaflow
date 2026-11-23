@@ -219,7 +219,7 @@ export function colocacoesNoTexto(textoBruto) {
 }
 
 async function textoDoPdf(url) {
-  const r = await fetch(url, { headers: { 'User-Agent': 'licitaflow-atas' }, signal: AbortSignal.timeout(25000) })
+  const r = await fetch(url, { headers: { 'User-Agent': 'licitaforce-atas' }, signal: AbortSignal.timeout(25000) })
   if (!r.ok) return { erro: 'O arquivo da ata não pôde ser aberto.' }
   if (Number(r.headers.get('content-length')) > MAX_BYTES) return { erro: 'Arquivo grande demais para ler aqui.' }
   const bytes = new Uint8Array(await r.arrayBuffer())
@@ -246,7 +246,7 @@ async function textoDosBytes(bytes, maxPaginas = MAX_PAGINAS) {
 export async function lerAtas(controle) {
   const m = /^(\d{14})-1-0*(\d+)\/(\d{4})$/.exec(controle)
   if (!m) throw Object.assign(new Error('Número de controle inválido.'), { status: 400 })
-  const r = await fetch(`${PNCP}/${m[1]}/compras/${m[3]}/${m[2]}/arquivos`, { headers: { Accept: 'application/json', 'User-Agent': 'licitaflow-atas' }, signal: AbortSignal.timeout(15000) })
+  const r = await fetch(`${PNCP}/${m[1]}/compras/${m[3]}/${m[2]}/arquivos`, { headers: { Accept: 'application/json', 'User-Agent': 'licitaforce-atas' }, signal: AbortSignal.timeout(15000) })
   const arquivos = r.ok ? await r.json().catch(() => []) : []
   const candidatos = (Array.isArray(arquivos) ? arquivos : [])
     .filter((a) => a.statusAtivo !== false && a.url)

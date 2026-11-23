@@ -109,7 +109,7 @@ export async function abrirPdf(bytes, limiteCaracteres) {
 }
 
 async function baixar(url, fetcher) {
-  const r = await fetcher(url, { headers: { 'User-Agent': 'licitaflow-leitor' }, signal: AbortSignal.timeout(30000) })
+  const r = await fetcher(url, { headers: { 'User-Agent': 'licitaforce-leitor' }, signal: AbortSignal.timeout(30000) })
   if (!r.ok) return { erro: 'O arquivo não pôde ser aberto no PNCP.' }
   if (Number(r.headers.get('content-length')) > MAX_BYTES) return { erro: 'Arquivo acima de 20 MB.' }
   const bytes = new Uint8Array(await r.arrayBuffer())

@@ -146,7 +146,7 @@ export function criarHandler({ webpush = webpushPadrao, fetcher = fetch } = {}) 
       if (body.acao === 'testar') {
         const inscricoes = await chamar(`/rest/v1/push_inscricoes?select=id,endpoint,p256dh,auth,aparelho&user_id=eq.${eu.id}`)
         if (!inscricoes?.length) return res.status(200).json({ enviados: 0, falhas: 0, resultados: [], removidos: 0 })
-        const r = await disparar(inscricoes, { titulo: 'Teste de notificação', texto: 'Se você está vendo isto, o push chegou neste aparelho.', url: '/app/avisos', tag: `licitaflow-teste-${Date.now()}` })
+        const r = await disparar(inscricoes, { titulo: 'Teste de notificação', texto: 'Se você está vendo isto, o push chegou neste aparelho.', url: '/app/avisos', tag: `licitaforce-teste-${Date.now()}` })
         return res.status(200).json({ enviados: r.enviados, falhas: r.falhas, resultados: r.resultados, removidos: r.removidos })
       }
 

@@ -99,7 +99,7 @@ export async function verificarEdital({ controle, estado: antes }, { fetcher = f
   const m = CONTROLE.exec(controle)
   if (!m) return { erro: 'Número de controle inválido' }
   const [, cnpj, seq, ano] = m
-  const pedir = (url) => fetcher(url, { headers: { Accept: 'application/json', 'User-Agent': 'licitaflow-sentinela' }, signal: AbortSignal.timeout(20000) })
+  const pedir = (url) => fetcher(url, { headers: { Accept: 'application/json', 'User-Agent': 'licitaforce-sentinela' }, signal: AbortSignal.timeout(20000) })
   const r = await pedir(`${CONSULTA}/${cnpj}/compras/${ano}/${seq}`)
   if (r.status === 404) {
     // Confirma pela lista de arquivos antes de dizer que o edital saiu do PNCP.

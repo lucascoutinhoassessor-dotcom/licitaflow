@@ -72,7 +72,7 @@ export function resumirResultados(resultados) {
 
 async function paginaResultados(cnpj, janela, pagina) {
   const u = `${FONTE}?pagina=${pagina}&tamanhoPagina=500&niFornecedor=${cnpj}&dataResultadoPncpInicial=${janela.de}&dataResultadoPncpFinal=${janela.ate}`
-  const r = await fetch(u, { headers: { Accept: 'application/json', 'User-Agent': 'licitaflow-analise' }, signal: AbortSignal.timeout(25000) })
+  const r = await fetch(u, { headers: { Accept: 'application/json', 'User-Agent': 'licitaforce-analise' }, signal: AbortSignal.timeout(25000) })
   if (!r.ok) throw Object.assign(new Error('A consulta de resultados não respondeu. Tente novamente em instantes.'), { status: 502 })
   const j = await r.json()
   if (!Array.isArray(j.resultado)) throw Object.assign(new Error('A fonte de resultados respondeu em formato inesperado.'), { status: 502 })
@@ -98,7 +98,7 @@ async function buscarResultados(cnpj, de, ate) {
 
 const DADOS = 'https://dadosabertos.compras.gov.br'
 async function obterDados(caminho, params) {
-  const r = await fetch(`${DADOS}/${caminho}?${new URLSearchParams(params)}`, { headers: { Accept: 'application/json', 'User-Agent': 'licitaflow-analise' }, signal: AbortSignal.timeout(15000) })
+  const r = await fetch(`${DADOS}/${caminho}?${new URLSearchParams(params)}`, { headers: { Accept: 'application/json', 'User-Agent': 'licitaforce-analise' }, signal: AbortSignal.timeout(15000) })
   if (!r.ok) return []
   const j = await r.json().catch(() => null)
   return Array.isArray(j?.resultado) ? j.resultado : []

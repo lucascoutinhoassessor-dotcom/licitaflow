@@ -27,3 +27,14 @@ describe('enderecoCorreto', () => {
     expect(enderecoCorreto('licitaflow-prod-abc123.vercel.app', '/master')).toBeNull()
   })
 })
+
+describe('enderecoCorreto no app instalado pelo endereço antigo', () => {
+  it('fica no endereço antigo para não abrir a barra do navegador', () => {
+    expect(enderecoCorreto('licitaflow-prod.vercel.app', '/app/editais', '', true)).toBeNull()
+    expect(enderecoCorreto('licitaflow-master.vercel.app', '/master/usuarios', '', true)).toBeNull()
+  })
+  it('ainda cruza entre site e master', () => {
+    expect(enderecoCorreto('licitaflow-prod.vercel.app', '/master', '', true)).toBe('https://licitaforce-master.vercel.app/master')
+    expect(enderecoCorreto('licitaflow-master.vercel.app', '/app', '', true)).toBe('https://licitaforce-app.vercel.app/app')
+  })
+})

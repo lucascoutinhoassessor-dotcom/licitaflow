@@ -71,7 +71,7 @@ async function buscarCompras(tipo, codigo, filtros) {
     if (filtros.uf) p.set('estado', filtros.uf)
     if (filtros.de) p.set('dataCompraInicio', filtros.de)
     if (filtros.ate) p.set('dataCompraFim', filtros.ate)
-    const r = await fetch(`${BASE}/${caminho}?${p}`, { headers: { Accept: 'application/json', 'User-Agent': 'licitaflow-precos' }, signal: AbortSignal.timeout(25000) })
+    const r = await fetch(`${BASE}/${caminho}?${p}`, { headers: { Accept: 'application/json', 'User-Agent': 'licitaforce-precos' }, signal: AbortSignal.timeout(25000) })
     if (!r.ok) throw Object.assign(new Error('A consulta de preços não respondeu. Tente novamente em instantes.'), { status: 502 })
     const j = await r.json()
     if (!Array.isArray(j.resultado)) throw Object.assign(new Error('A consulta de preços respondeu em formato inesperado.'), { status: 502 })

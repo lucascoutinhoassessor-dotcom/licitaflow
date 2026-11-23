@@ -8,7 +8,7 @@ const BASE = 'https://dadosabertos.compras.gov.br'
 const MAX_MARCAS = 15 // consultas de marca por compra (uma por PDM/serviço distinto)
 
 async function obter(caminho, params) {
-  const r = await fetch(`${BASE}/${caminho}?${new URLSearchParams(params)}`, { headers: { Accept: 'application/json', 'User-Agent': 'licitaflow-compra' }, signal: AbortSignal.timeout(25000) })
+  const r = await fetch(`${BASE}/${caminho}?${new URLSearchParams(params)}`, { headers: { Accept: 'application/json', 'User-Agent': 'licitaforce-compra' }, signal: AbortSignal.timeout(25000) })
   if (r.status === 204) return []
   if (!r.ok) throw Object.assign(new Error('A consulta da compra não respondeu. Tente novamente em instantes.'), { status: 502 })
   const j = await r.json()

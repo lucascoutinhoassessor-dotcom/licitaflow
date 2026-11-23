@@ -3,7 +3,7 @@ import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation } from 'rea
 import { useAuth } from '@/providers/AuthProvider'
 import { OrgProvider, useOrg } from '@/providers/OrgProvider'
 import { supabaseNaoConfigurado } from '@/lib/supabase'
-import { enderecoCorreto } from '@/lib/pwa'
+import { emAppInstalado, enderecoCorreto } from '@/lib/pwa'
 import { useEhAdmin } from '@/hooks/useAdmin'
 import { Carregando } from '@/components/ui'
 import { AppLayout } from '@/components/layout/AppLayout'
@@ -113,7 +113,7 @@ function ExigeMaster() {
 function TrocaDeEndereco() {
   const { pathname, search, hash } = useLocation()
   useEffect(() => {
-    const destino = enderecoCorreto(window.location.hostname, pathname, search + hash)
+    const destino = enderecoCorreto(window.location.hostname, pathname, search + hash, emAppInstalado())
     if (destino) window.location.replace(destino)
   }, [pathname, search, hash])
   return null

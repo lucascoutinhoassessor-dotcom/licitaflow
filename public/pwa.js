@@ -10,21 +10,24 @@
   var HOSTS_MASTER = [MASTER, 'licitaflow-master.vercel.app'];
   var host = location.hostname, path = location.pathname, resto = location.search + location.hash;
   var rotaMaster = /^\/master(\/|$)/.test(path);
+  var instalado = navigator.standalone === true || ['standalone', 'fullscreen', 'minimal-ui', 'window-controls-overlay']
+    .some(function (m) { return window.matchMedia && window.matchMedia('(display-mode: ' + m + ')').matches; });
+  // App instalado pelo endereço antigo: trocar de endereço faria o Android mostrar a barra do navegador.
+  // Ele fica no endereço antigo e mostra o aviso para instalar o app novo (AvisoAppAntigo).
+  var ficar = instalado && host !== HOST_SITE && host !== MASTER;
   if (HOSTS_MASTER.indexOf(host) >= 0) {
-    if (path === '/') return location.replace((host === MASTER ? '' : 'https://' + MASTER) + '/master' + resto);
+    if (path === '/') return location.replace((host === MASTER || ficar ? '' : 'https://' + MASTER) + '/master' + resto);
     if (!rotaMaster) return location.replace(SITE + path + resto);
-    if (host !== MASTER) return location.replace('https://' + MASTER + path + resto);
+    if (host !== MASTER && !ficar) return location.replace('https://' + MASTER + path + resto);
   }
   if (HOSTS_SITE.indexOf(host) >= 0 && rotaMaster) return location.replace('https://' + MASTER + path + resto);
-  if (HOSTS_SITE.indexOf(host) >= 0 && host !== HOST_SITE) return location.replace(SITE + path + resto);
+  if (HOSTS_SITE.indexOf(host) >= 0 && host !== HOST_SITE && !ficar) return location.replace(SITE + path + resto);
 
   var master = rotaMaster;
   // A abertura animada de index.html usa as cores do master.
   if (master) document.documentElement.classList.add('lf-master');
   // A abertura animada só aparece no app instalado (aberto pela tela inicial). No navegador comum, landing,
   // login e painel abrem direto. Sem esta classe o CSS de index.html mantém a abertura escondida.
-  var instalado = navigator.standalone === true || ['standalone', 'fullscreen', 'minimal-ui', 'window-controls-overlay']
-    .some(function (m) { return window.matchMedia && window.matchMedia('(display-mode: ' + m + ')').matches; });
   if (instalado) document.documentElement.classList.add('lf-instalado');
   // O Chrome avisa que dá para instalar (só acontece quando o app ainda não está instalado). Guardamos o pedido
   // desde já para o botão "Instalar app" aparecer na hora e abrir a instalação direto (InstalacaoProvider).

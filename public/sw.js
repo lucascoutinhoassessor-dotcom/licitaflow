@@ -35,7 +35,7 @@ self.addEventListener('push', event => {
       icon: '/icons/icone-192.png',
       // Ícone pequeno da barra de status (Android): silhueta branca transparente, senão vira um quadrado branco.
       badge: '/icons/badge-96.png',
-      tag: d.tag || 'licitaflow-aviso',
+      tag: d.tag || 'licitaforce-aviso',
       renotify: true,
       vibrate: [200, 100, 200],
       timestamp: Date.now(),

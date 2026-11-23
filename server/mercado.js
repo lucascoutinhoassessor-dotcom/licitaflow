@@ -123,7 +123,7 @@ async function buscarCodigo({ tipo, codigo }, { uf, de, ate }, maxPaginas = MAX_
     if (uf) p.set('estado', uf)
     if (de) p.set('dataCompraInicio', de)
     if (ate) p.set('dataCompraFim', ate)
-    const r = await fetch(`${BASE}/${caminho}?${p}`, { headers: { Accept: 'application/json', 'User-Agent': 'licitaflow-mercado' }, signal: AbortSignal.timeout(25000) })
+    const r = await fetch(`${BASE}/${caminho}?${p}`, { headers: { Accept: 'application/json', 'User-Agent': 'licitaforce-mercado' }, signal: AbortSignal.timeout(25000) })
     if (!r.ok) throw Object.assign(new Error('A consulta de compras não respondeu. Tente novamente em instantes.'), { status: 502 })
     const j = await r.json()
     if (!Array.isArray(j.resultado)) throw Object.assign(new Error('A consulta de compras respondeu em formato inesperado.'), { status: 502 })

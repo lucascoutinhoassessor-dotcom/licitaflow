@@ -71,7 +71,7 @@ export default async function handler(req,res) {
       const porta=Number(body.porta || linha?.porta || 465)
       const senha=String(body.senha ?? '').replace(/\s+/g,'') // a senha de app do Google vem com espaços
       const nome=String(body.remetente_nome ?? '').trim().slice(0,80) || linha?.remetente_nome || 'LicitaForce'
-      if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(usuario) || usuario.length>254) return res.status(400).json({error:'Informe o e-mail que vai enviar (ex.: contato.licitaflow@gmail.com)'})
+      if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(usuario) || usuario.length>254) return res.status(400).json({error:'Informe o e-mail que vai enviar (ex.: contato.licitaforce@gmail.com)'})
       if(!/^[a-z0-9.-]{3,253}$/.test(host)) return res.status(400).json({error:'Servidor SMTP inválido'})
       if(![25,465,587,2525].includes(porta)) return res.status(400).json({error:'Porta deve ser 465 ou 587'})
       if(senha.length>500) return res.status(400).json({error:'Senha inválida'})

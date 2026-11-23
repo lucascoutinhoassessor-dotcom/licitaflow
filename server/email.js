@@ -30,7 +30,7 @@ export async function enviarEmail(cfg, { para, assunto, html, texto }, transport
     return await t.sendMail({
       from: { name: cfg.nome, address: cfg.endereco }, to: para, subject: assunto, html, text: texto,
       attachments: html.includes('cid:licitaflow-logo')
-        ? [{ filename: 'licitaflow.png', content: Buffer.from(LOGO_PNG_BASE64, 'base64'), cid: 'licitaflow-logo', contentDisposition: 'inline' }]
+        ? [{ filename: 'licitaforce.png', content: Buffer.from(LOGO_PNG_BASE64, 'base64'), cid: 'licitaflow-logo', contentDisposition: 'inline' }]
         : [],
     })
   } catch (e) {

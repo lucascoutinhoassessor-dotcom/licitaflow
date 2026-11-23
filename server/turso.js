@@ -12,7 +12,7 @@ const PNCP_ITENS = 'https://pncp.gov.br/api/pncp/v1/orgaos'
 export const MODALIDADES = [6, 8, 4, 12, 5, 7, 9, 1, 2, 3, 10, 11, 13]
 const VERSAO_ESQUEMA = '2'
 const LIMITE_CARGA = '20991231'
-const UA = { Accept: 'application/json', 'User-Agent': 'licitaflow-turso' }
+const UA = { Accept: 'application/json', 'User-Agent': 'licitaforce-turso' }
 
 export const ESQUEMA = [
   'drop table if exists editais_brutos',

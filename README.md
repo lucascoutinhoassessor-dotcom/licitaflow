@@ -1,4 +1,4 @@
-# LicitaFlow
+# LicitaForce
 
 Plataforma SaaS de gestão de licitações (pregões e dispensas eletrônicas) para fornecedores e assessorias.
 

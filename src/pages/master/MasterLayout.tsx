@@ -9,6 +9,7 @@ import { useAuth } from '@/providers/AuthProvider'
 import { MenuLateral } from '@/components/layout/MenuLateral'
 import { useInstalacao } from '@/hooks/useInstalacao'
 import { URL_SITE, masterSeparado, usarAppDoPainel } from '@/lib/pwa'
+import AvisoAppAntigo from '@/components/AvisoAppAntigo'
 
 const grupos: { titulo: string; abas: { rota: string; rotulo: string; icone: typeof Settings; end?: boolean }[] }[] = [
   { titulo: 'Painel', abas: [{ rota: '/master', rotulo: 'Visão geral', icone: LayoutDashboard, end: true }] },
@@ -106,6 +107,7 @@ export default function MasterLayout() {
         {!instalacao.ocultar && <button onClick={() => { void instalacao.instalar() }} aria-label="Instalar aplicativo" className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 text-sm font-medium text-amber-300 hover:bg-amber-500/20"><Download className="h-4 w-4"/><span className="hidden sm:inline">Instalar app</span></button>}
       </header>
       <main id="conteudo-principal" className="min-h-0 min-w-0 flex-1 overflow-y-auto">
+        <AvisoAppAntigo master />
         <div className="painel-conteudo mx-auto w-full min-w-0 max-w-7xl p-4 lg:p-8"><Outlet /></div>
       </main>
     </div>
