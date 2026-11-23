@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { jsonSchemaOutputFormat } from '@anthropic-ai/sdk/helpers/json-schema'
 import { excedeuLimite } from './protecao.js'
 import { rodadaSentinela } from './sentinela.js'
+import { avisarRadar } from './radar.js'
 // Agentes de IA (Claude API). Uma rota só para todos os agentes, por causa do limite de funções da Vercel.
 //
 // Leitor de editais (?agente=leitor):
@@ -290,8 +291,10 @@ export function criarHandler({ fetcher = fetch, cliente, webpush } = {}) {
     if (!base || !anon || !servico) return res.status(503).json({ error: 'Configuração Supabase ausente no servidor' })
     const q = req.query ?? {}
 
-    // Sentinela: rodada chamada pelo pg_cron (sem login; o token x-coleta é conferido pelo banco).
-    if (q.agente === 'sentinela' && q.acao === 'verificar') {
+    // Chamadas do pg_cron (sem login; o token x-coleta é conferido pelo banco):
+    // Sentinela (rodada de verificação) e Radar (push das sugestões novas).
+    const doAgendador = (q.agente === 'sentinela' && q.acao === 'verificar') || (q.agente === 'radar' && q.acao === 'avisar')
+    if (doAgendador) {
       const coleta = String(req.headers['x-coleta'] ?? '')
       if (!/^[0-9a-f]{32,128}$/.test(coleta)) return res.status(401).json({ error: 'Não autorizado' })
       const chamar = async (caminho, opcoes = {}) => {
@@ -302,9 +305,11 @@ export function criarHandler({ fetcher = fetch, cliente, webpush } = {}) {
       }
       const rpc = (nome, corpo) => chamar(`/rest/v1/rpc/${nome}`, { method: 'POST', body: JSON.stringify(corpo) })
       try {
-        return res.status(200).json(await rodadaSentinela({ token: coleta, rpc, chamar, fetcher, ...(webpush ? { webpush } : {}) }))
+        const extra = webpush ? { webpush } : {}
+        if (q.agente === 'radar') return res.status(200).json(await avisarRadar({ token: coleta, rpc, chamar, ...extra }))
+        return res.status(200).json(await rodadaSentinela({ token: coleta, rpc, chamar, fetcher, ...extra }))
       } catch (e) {
-        return res.status(e.status ?? 500).json({ error: e.status ? e.message : 'Falha na rodada da Sentinela' })
+        return res.status(e.status ?? 500).json({ error: e.status ? e.message : `Falha na rodada do agente ${q.agente}` })
       }
     }
 

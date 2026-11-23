@@ -44,6 +44,7 @@ const Juridico = lazy(() => import('@/pages/app/Juridico'))
 const Agentes = lazy(() => import('@/pages/app/Agentes'))
 const LeitorEdital = lazy(() => import('@/pages/app/LeitorEdital'))
 const Sentinela = lazy(() => import('@/pages/app/Sentinela'))
+const RadarAgente = lazy(() => import('@/pages/app/Radar'))
 const MasterEntrar = lazy(() => import('@/pages/master/MasterEntrar'))
 const MasterLayout = lazy(() => import('@/pages/master/MasterLayout'))
 const MasterVisaoGeral = lazy(() => import('@/pages/master/VisaoGeral'))
@@ -171,6 +172,7 @@ export default function App() {
             <Route path="agentes" element={<Agentes />} />
             <Route path="agentes/leitor/:cnpj/:ano/:seq" element={<LeitorEdital />} />
             <Route path="agentes/sentinela" element={<Sentinela />} />
+            <Route path="agentes/radar" element={<RadarAgente />} />
             <Route path="avisos" element={<Avisos />} />
             <Route path="relatorios" element={<RelatoriosCliente />} />
             <Route path="plano" element={<MeuPlano />} />
