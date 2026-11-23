@@ -1,23 +1,25 @@
-// Som do aviso com o app aberto: o áudio enviado pelo master em /master/som-aviso ou, sem ele, o padrão
-// (vinheta de três notas + voz dizendo "licitaforce!", public/sons/licitaforce.mp3). Ver src/lib/somAviso.ts.
+// Som do aviso com o app aberto. Cada aviso escolhe o som (src/lib/somAviso.ts → SONS_AVISO):
+//   principal   = o "Som do aviso" do console master (áudio enviado lá ou, sem ele, o padrão "licitaforce!")
+//   licitaforce = sempre a vinheta + voz padrão (public/sons/licitaforce.mp3)
+//   ping        = duas notas curtas geradas na hora
+//   silencio    = nada
 // Toca pelo Web Audio, então só soa se o navegador já liberou áudio (houve um toque/clique na página).
-// Se nada carregar, cai no "ping" de duas notas gerado na hora.
-import { baixarSomAviso } from './somAviso'
+// Se um arquivo não carregar, cai no "ping" de duas notas.
+import { baixarSomAviso, SOM_PADRAO, type SomAviso } from './somAviso'
 
 let ctx: AudioContext | null = null
-let voz: Promise<AudioBuffer | null> | null = null
-let carregadoEm = 0
+const cache = new Map<'principal' | 'licitaforce', { buffer: Promise<AudioBuffer | null>; em: number }>()
 
-function carregarVoz(c: AudioContext) {
-  // Recarrega a cada 10 min para pegar um som novo trocado pelo master sem precisar recarregar a página.
-  if (voz && Date.now() - carregadoEm > 600_000) voz = null
-  if (!voz) {
-    carregadoEm = Date.now()
-    voz = baixarSomAviso()
-      .then(({ dados }) => c.decodeAudioData(dados))
-      .catch(() => { voz = null; return null })
-  }
-  return voz
+function carregar(c: AudioContext, qual: 'principal' | 'licitaforce') {
+  const atual = cache.get(qual)
+  // O principal recarrega a cada 10 min para pegar um som novo trocado pelo master sem recarregar a página.
+  if (atual && (qual === 'licitaforce' || Date.now() - atual.em < 600_000)) return atual.buffer
+  const dados = qual === 'principal'
+    ? baixarSomAviso().then(r => r.dados)
+    : fetch(SOM_PADRAO).then(r => (r.ok ? r.arrayBuffer() : Promise.reject(new Error('sem áudio'))))
+  const buffer = dados.then(d => c.decodeAudioData(d)).catch(() => { cache.delete(qual); return null })
+  cache.set(qual, { buffer, em: Date.now() })
+  return buffer
 }
 
 function tocarNotas(c: AudioContext) {
@@ -36,14 +38,16 @@ function tocarNotas(c: AudioContext) {
   }
 }
 
-export async function tocarPing() {
+export async function tocarPing(som: SomAviso | string = 'principal') {
+  if (som === 'silencio') return
   try {
     const Ctor = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
     if (!Ctor) return
     ctx = ctx || new Ctor()
     if (ctx.state === 'suspended') await ctx.resume().catch(() => undefined)
     if (ctx.state !== 'running') return
-    const buffer = await carregarVoz(ctx)
+    if (som === 'ping') return tocarNotas(ctx)
+    const buffer = await carregar(ctx, som === 'licitaforce' ? 'licitaforce' : 'principal')
     if (!buffer) return tocarNotas(ctx)
     const fonte = ctx.createBufferSource()
     fonte.buffer = buffer

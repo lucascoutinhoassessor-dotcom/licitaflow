@@ -47,6 +47,6 @@ if (import.meta.env.PROD && 'serviceWorker' in navigator) {
 
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.addEventListener('message', e => {
-    if (e.data?.tipo === 'push-ping' && document.visibilityState === 'visible') void tocarPing()
+    if (e.data?.tipo === 'push-ping' && document.visibilityState === 'visible') void tocarPing(e.data.som)
   })
 }

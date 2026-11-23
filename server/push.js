@@ -57,7 +57,7 @@ export function criarHandler({ webpush = webpushPadrao, fetcher = fetch } = {}) 
     async function enviarAviso(id) {
       // Reserva o envio: só uma chamada consegue marcar push_enviado_em.
       const agora = new Date().toISOString()
-      const reservados = await chamar(`/rest/v1/plataforma_avisos?id=eq.${id}&ativo=is.true&enviar_push=is.true&push_enviado_em=is.null&publicar_em=lte.${agora}&select=id,titulo,texto,org_id,org_ids`,
+      const reservados = await chamar(`/rest/v1/plataforma_avisos?id=eq.${id}&ativo=is.true&enviar_push=is.true&push_enviado_em=is.null&publicar_em=lte.${agora}&select=id,titulo,texto,org_id,org_ids,som`,
         { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ push_enviado_em: agora }) })
       const aviso = reservados?.[0]
       if (!aviso) return null
@@ -73,7 +73,7 @@ export function criarHandler({ webpush = webpushPadrao, fetcher = fetch } = {}) 
         inscricoes = inscricoes.concat(await chamar(`/rest/v1/push_inscricoes?select=id,endpoint,p256dh,auth&user_id=in.(${lote})`))
       }
       if (!inscricoes.length) return { enviados: 0, falhas: 0 }
-      const r = await disparar(inscricoes, { id: aviso.id, titulo: aviso.titulo, texto: resumo(aviso.texto), url: '/app/avisos', tag: aviso.id })
+      const r = await disparar(inscricoes, { id: aviso.id, titulo: aviso.titulo, texto: resumo(aviso.texto), url: '/app/avisos', tag: aviso.id, som: aviso.som || 'principal' })
       return { enviados: r.enviados, falhas: r.falhas, ...(r.falhas ? { erros: r.erros.slice(0, 5) } : {}) }
     }
 

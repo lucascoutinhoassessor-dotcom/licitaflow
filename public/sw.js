@@ -41,9 +41,9 @@ self.addEventListener('push', event => {
       timestamp: Date.now(),
       data: { url: d.url || '/app/avisos' },
     }),
-    // Com o app aberto na tela, ele mesmo fala "licitaforce!" (src/lib/ping.ts, chamado em src/main.tsx).
+    // Com o app aberto na tela, ele mesmo toca o som escolhido no aviso (src/lib/ping.ts, chamado em src/main.tsx).
     self.clients.matchAll({ type: 'window', includeUncontrolled: true })
-      .then(lista => lista.forEach(c => c.postMessage({ tipo: 'push-ping' }))).catch(() => undefined),
+      .then(lista => lista.forEach(c => c.postMessage({ tipo: 'push-ping', som: d.som || 'principal' }))).catch(() => undefined),
   ]))
 })
 self.addEventListener('notificationclick', event => {

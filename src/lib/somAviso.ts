@@ -8,6 +8,15 @@ export const CAMINHO_SOM_PERSONALIZADO = 'sons/aviso'
 export const LIMITE_BYTES = 1024 * 1024
 export const LIMITE_SEGUNDOS = 6
 
+/** Sons que cada aviso pode escolher (coluna plataforma_avisos.som). */
+export const SONS_AVISO = [
+  { valor: 'principal', rotulo: 'Som principal', ajuda: 'O som configurado em Som do aviso (seu áudio, se enviou)' },
+  { valor: 'licitaforce', rotulo: 'Licitaforce!', ajuda: 'Sempre a vinheta + voz padrão' },
+  { valor: 'ping', rotulo: 'Plim simples', ajuda: 'Duas notas curtas' },
+  { valor: 'silencio', rotulo: 'Sem som', ajuda: 'A notificação aparece sem tocar nada no app' },
+] as const
+export type SomAviso = (typeof SONS_AVISO)[number]['valor']
+
 /** Endereço público do áudio enviado pelo master. `versao` evita pegar uma cópia antiga do CDN. */
 export function urlSomPersonalizado(versao: string | number = Math.floor(Date.now() / 300_000)) {
   return `${supabase.storage.from('site').getPublicUrl(CAMINHO_SOM_PERSONALIZADO).data.publicUrl}?v=${versao}`

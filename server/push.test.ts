@@ -20,7 +20,7 @@ function banco(opcoes: { admin?: boolean; vapid?: boolean; aviso?: boolean; orgI
     if (u === '/auth/v1/user') return ok({ id: 'u1' })
     if (u.startsWith('/rest/v1/rpc/is_platform_admin')) return ok(opcoes.admin ?? false)
     if (u.startsWith('/rest/v1/push_vapid') && method === 'GET') return ok(opcoes.vapid === false && !chamadas.some(c => c.url.startsWith('/rest/v1/push_vapid') && c.method === 'POST') ? [] : [{ publica: 'PUB', privada: 'PRIV' }])
-    if (u.startsWith('/rest/v1/plataforma_avisos') && method === 'PATCH') return ok(opcoes.aviso === false ? [] : [{ id: AVISO, titulo: 'Novo recurso', texto: 'Texto\n do aviso', org_id: null, org_ids: opcoes.orgIds ?? null }])
+    if (u.startsWith('/rest/v1/plataforma_avisos') && method === 'PATCH') return ok(opcoes.aviso === false ? [] : [{ id: AVISO, titulo: 'Novo recurso', texto: 'Texto\n do aviso', org_id: null, org_ids: opcoes.orgIds ?? null, som: 'ping' }])
     if (u.startsWith('/rest/v1/plataforma_avisos') && method === 'GET') return ok([{ id: AVISO }])
     if (u.startsWith('/rest/v1/memberships')) return ok([{ user_id: 'u1' }, { user_id: 'u2' }, { user_id: 'u1' }])
     if (u.startsWith('/rest/v1/push_inscricoes') && method === 'GET') return ok([
@@ -88,7 +88,7 @@ describe('push', () => {
     expect(r.body).toEqual({ enviados: 1, falhas: 1, erros: [{ status: 410, motivo: 'gone' }] })
     expect(wp.sendNotification).toHaveBeenCalledTimes(2)
     const [, payload, opts] = wp.sendNotification.mock.calls[0] as unknown as [unknown, string, Record<string, unknown>]
-    expect(JSON.parse(payload)).toMatchObject({ id: AVISO, titulo: 'Novo recurso', texto: 'Texto do aviso', url: '/app/avisos' })
+    expect(JSON.parse(payload)).toMatchObject({ id: AVISO, titulo: 'Novo recurso', texto: 'Texto do aviso', url: '/app/avisos', som: 'ping' })
     expect(opts).toMatchObject({ urgency: 'high' })
     expect(chamadas.find(c => c.url.includes('user_id=in.('))?.url).toContain('user_id=in.(u1,u2)')
     expect(chamadas.some(c => c.method === 'DELETE' && c.url.includes('id=in.(b)'))).toBe(true)
