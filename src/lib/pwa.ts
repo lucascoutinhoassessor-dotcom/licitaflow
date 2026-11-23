@@ -4,12 +4,12 @@
  * public/pwa.js repete esta regra antes do React carregar; aqui ela vale para navegações internas.
  */
 export const HOST_SITE = 'licitaforce-app.vercel.app'
-export const HOST_MASTER = 'licitaflow-master.vercel.app'
+export const HOST_MASTER = 'licitaforce-master.vercel.app'
 export const URL_SITE = `https://${HOST_SITE}`
 /** Endereços de produção do app do usuário. Os antigos (marca LicitaFlow) levam ao novo. Prévias e localhost não redirecionam. */
 const HOSTS_SITE = [HOST_SITE, 'licitaflow-prod.vercel.app']
 /** Endereços do painel master. Os que não forem HOST_MASTER levam a ele. */
-const HOSTS_MASTER = [HOST_MASTER, 'licitaforce-master.vercel.app', 'licitaflow-master.vercel.app']
+const HOSTS_MASTER = [HOST_MASTER, 'licitaflow-master.vercel.app']
 
 const ehRotaMaster = (path: string) => /^\/master(\/|$)/.test(path)
 

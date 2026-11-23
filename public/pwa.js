@@ -3,11 +3,11 @@
 // Mesma regra de src/lib/pwa.ts (que cobre as navegações internas). Arquivo próprio por causa da CSP.
 (function () {
   var HOST_SITE = 'licitaforce-app.vercel.app';
-  var MASTER = 'licitaflow-master.vercel.app';
+  var MASTER = 'licitaforce-master.vercel.app';
   var SITE = 'https://' + HOST_SITE;
   // Endereços antigos (marca LicitaFlow) continuam no ar, mas as páginas levam aos novos.
   var HOSTS_SITE = [HOST_SITE, 'licitaflow-prod.vercel.app'];
-  var HOSTS_MASTER = [MASTER, 'licitaforce-master.vercel.app', 'licitaflow-master.vercel.app'];
+  var HOSTS_MASTER = [MASTER, 'licitaflow-master.vercel.app'];
   var host = location.hostname, path = location.pathname, resto = location.search + location.hash;
   var rotaMaster = /^\/master(\/|$)/.test(path);
   if (HOSTS_MASTER.indexOf(host) >= 0) {
