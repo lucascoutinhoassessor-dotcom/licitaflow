@@ -4,7 +4,7 @@ import { useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useModulos } from '@/hooks/useModulos'
 import { rotaLeitor } from '@/lib/leitor'
-import { ArrowLeft, Check, ExternalLink, FileSearch, FileSignature, FileText, MessageSquarePlus, Pencil, Plus, Trash2 } from 'lucide-react'
+import { ArrowLeft, Calculator, Check, ExternalLink, FileSearch, FileSignature, FileText, MessageSquarePlus, Pencil, Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Abas, Badge, Button, Campo, Card, Carregando, Input, Modal, Select, Textarea, Vazio } from '@/components/ui'
 import { BadgeEtapa, BadgePrazo, BadgeValidade } from '@/components/Situacoes'
@@ -134,6 +134,8 @@ function ItemForm({ processoId, item, aoSalvar }: { processoId: string; item?: P
 function Itens({ processoId, podeEditar }: { processoId: string; podeEditar: boolean }) {
   const q = useLista<ProcessoItem>('processo_itens', { porEmpresa: false, chave: [processoId], filtro: (x) => x.eq('processo_id', processoId), ordem: ['numero_item', true] })
   const { excluir } = useSalvar('processo_itens')
+  const { estado: estadoModulo } = useModulos()
+  const cotadorLiberado = estadoModulo('/app/agentes') === 'liberado'
   const [editando, setEditando] = useState<ProcessoItem | 'novo' | null>(null)
   const itens = q.data ?? []
 
@@ -158,7 +160,12 @@ function Itens({ processoId, podeEditar }: { processoId: string; podeEditar: boo
         </div>
       )}
       {podeEditar && (
-        <div className="mb-3 flex justify-end">
+        <div className="mb-3 flex flex-wrap justify-end gap-2">
+          {cotadorLiberado && (
+            <Link to={`/app/agentes/cotador/${processoId}`}>
+              <Button tamanho="sm" variante="contorno"><Calculator className="h-4 w-4" /> Cotar com o Cotador</Button>
+            </Link>
+          )}
           <Button tamanho="sm" onClick={() => setEditando('novo')}>
             <Plus className="h-4 w-4" /> Adicionar item
           </Button>

@@ -7,7 +7,6 @@ import { controleDe, rotaLeitor } from '@/lib/leitor'
 import type { Processo } from '@/types/db'
 
 const PROXIMOS = [
-  { icone: Calculator, nome: 'Cotador', texto: 'Monta a planilha de preços com o histórico de compras e os preços de referência.' },
   { icone: Gavel, nome: 'Jurídico', texto: 'Redige impugnações, esclarecimentos e recursos a partir do edital e da sessão.' },
   { icone: Wallet, nome: 'Termômetro de Pagamento', texto: 'Mostra se o órgão costuma pagar em dia, pelos dados públicos de execução.' },
 ]
@@ -76,6 +75,19 @@ export default function Agentes() {
               Você decide o que vai para o funil.
             </p>
             <p className="mt-2 text-sm font-semibold text-primary">Ver oportunidades e ajustar o perfil →</p>
+          </div>
+        </Card>
+      </Link>
+
+      <Link to="/app/agentes/cotador" className="mb-6 block">
+        <Card className="flex items-start gap-3 p-5 transition-colors hover:bg-muted/40 sm:p-6">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary/10"><Calculator className="h-6 w-6 text-primary" /></div>
+          <div className="min-w-0 flex-1">
+            <h2 className="flex flex-wrap items-center gap-2 text-lg font-semibold">Cotador <Badge cor="azul">Beta</Badge></h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Importa os itens do edital, pesquisa o preço de mercado de cada um, calcula o seu preço-limite, sugere o preço e baixa a planilha da proposta.
+            </p>
+            <p className="mt-2 text-sm font-semibold text-primary">Cotar um processo →</p>
           </div>
         </Card>
       </Link>

@@ -13,6 +13,7 @@ export const AGENTES_IA: AgenteIA[] = [
   { id: 'leitor-editais', nome: 'Leitor de editais', unidade: 'leituras', tipo: 'mensal' },
   { id: 'sentinela', nome: 'Sentinela', unidade: 'processos vigiados', tipo: 'simultaneo' },
   { id: 'radar', nome: 'Radar', unidade: 'empresas monitoradas', tipo: 'simultaneo' },
+  { id: 'cotador', nome: 'Cotador', unidade: 'processos cotados', tipo: 'mensal' },
 ]
 export const nomeAgente = (id: string) => AGENTES_IA.find((a) => a.id === id)?.nome ?? id
 export const agente = (id: string) => AGENTES_IA.find((a) => a.id === id)

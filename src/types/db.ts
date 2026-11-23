@@ -133,6 +133,13 @@ export interface ProcessoItem {
   fornecedor_nome: string | null
   resultado: 'ganho' | 'perdido' | 'fracassado' | 'deserto' | 'cancelado' | null
   colocacao: number | null
+  /** Cotador: item do catálogo do governo, preço de mercado e preço proposto (migration 20261123000090). */
+  catalogo_tipo?: 'M' | 'S' | null
+  catalogo_codigo?: number | null
+  catalogo_nome?: string | null
+  mercado?: import('@/lib/cotador').MercadoItem | null
+  preco_proposto_unit?: number | null
+  origem?: 'manual' | 'edital'
 }
 
 export interface ProcessoEvento {
