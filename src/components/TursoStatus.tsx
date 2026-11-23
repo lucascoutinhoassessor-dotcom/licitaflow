@@ -9,7 +9,7 @@ interface Cota {
   plano: string; nomePlano: string; ciclo: string; cicloFim: string; lidas: number; escritas: number; limiteLeituras: number; limiteEscritas: number
   usoLeituras: number; usoEscritas: number; projecaoLeituras: number; projecaoEscritas: number; nivel: Nivel
 }
-interface Situacao { configurado: boolean; coletaAgendada: boolean; editais?: number; abertos?: number; comItens?: number; contadoEm?: string | null; ultimaColeta?: string | null; cargaCompletaEm?: string | null; pausadoAte?: string | null; cota?: Cota }
+interface Situacao { configurado: boolean; coletaAgendada: boolean; editais?: number; abertos?: number; comItens?: number; contadoEm?: string | null; ultimaColeta?: string | null; cargaCompletaEm?: string | null; pausadoAte?: string | null; cota?: Cota; bloqueado?: boolean; bloqueadoAte?: string | null; erro?: string }
 
 const NIVEL: Record<Nivel, { cor: 'verde' | 'amarelo' | 'vermelho'; texto: string; explica: string }> = {
   normal: { cor: 'verde', texto: 'Cota folgada', explica: 'Tudo funcionando normalmente.' },
@@ -46,11 +46,16 @@ export default function TursoStatus() {
     <Card className="mb-6 space-y-3 p-5">
       <div className="flex flex-wrap items-center gap-2">
         <h2 className="flex min-w-0 flex-1 items-center gap-2 font-semibold"><Database className="h-4 w-4 text-sky-400" />Base rápida de dados brutos (Turso)</h2>
-        {s && <Badge cor={s.configurado && s.coletaAgendada ? 'verde' : 'amarelo'}>{!s.configurado ? 'Não conectada' : s.coletaAgendada ? 'Coletando' : 'Conectada, coleta parada'}</Badge>}
+        {s && <Badge cor={s.bloqueado ? 'vermelho' : s.configurado && s.coletaAgendada ? 'verde' : 'amarelo'}>{s.bloqueado ? 'Bloqueada pelo Turso' : !s.configurado ? 'Não conectada' : s.coletaAgendada ? 'Coletando' : 'Conectada, coleta parada'}</Badge>}
       </div>
       <p className="text-sm text-muted-foreground">O coletor grava aqui o edital bruto assim que ele muda no PNCP, sem pesar no banco do Supabase. O Supabase cuida do login e dispara a coleta a cada minuto; os painéis leem o Turso.</p>
+      {s?.bloqueado && <div className="space-y-1 rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm">
+        <p className="font-medium text-destructive">O Turso bloqueou o banco porque a cota do mês estourou.</p>
+        <p className="text-muted-foreground">A busca do app está respondendo pelo Supabase e a coleta tenta de novo a cada 15 min, sem insistir a cada minuto. Para liberar já, contrate um plano pago no Turso e cadastre <code>TURSO_PLANO</code> na Vercel; senão, o banco volta sozinho quando o ciclo virar.</p>
+        {s.erro && <p className="break-words text-xs text-muted-foreground">{s.erro}</p>}
+      </div>}
       {q.isError && <p className="text-sm text-destructive">{(q.error as Error).message}</p>}
-      {s?.configurado && <ul className="grid gap-1 text-sm sm:grid-cols-2">
+      {s?.configurado && !s.bloqueado && <ul className="grid gap-1 text-sm sm:grid-cols-2">
         <li><span className="text-muted-foreground">Editais guardados:</span> <b>{(s.editais ?? 0).toLocaleString('pt-BR')}</b></li>
         <li><span className="text-muted-foreground">Com proposta aberta:</span> <b>{(s.abertos ?? 0).toLocaleString('pt-BR')}</b></li>
         <li><span className="text-muted-foreground">Com itens coletados:</span> <b>{(s.comItens ?? 0).toLocaleString('pt-BR')}</b></li>

@@ -114,6 +114,23 @@ export function linhas(resultado) {
 
 // Consumo ainda não somado no banco, por banco (a instância da Vercel atende vários pedidos seguidos).
 const PENDENTE = new Map()
+// Banco bloqueado pelo Turso (cota do mês estourada): até quando esta instância nem tenta.
+const BLOQUEIO = new Map()
+const ESPERA_BLOQUEIO_MS = 15 * 60_000
+
+/** O Turso recusa com o código BLOCKED quando o mês passa da cota de linhas lidas/escritas (ou do espaço). */
+export const ehBloqueio = (erro) => /blocked/i.test(String(erro?.code ?? '')) || /blocked|limit exceeded|quota|forbidden/i.test(String(erro?.message ?? erro?.error ?? ''))
+
+/** Erro de banco bloqueado: o app manda a busca para o Postgres e a coleta espera, sem martelar o Turso. */
+export class BloqueioTurso extends Error {
+  constructor(mensagem, ate) { super(mensagem); this.status = 503; this.bloqueado = true; this.ate = ate }
+}
+
+/** Até quando o banco está marcado como bloqueado nesta instância (ou null). */
+export function bloqueadoAte(env = process.env) {
+  const base = urlHttp(env.TURSO_DATABASE_URL), ate = base ? BLOQUEIO.get(base) : null
+  return ate && ate > Date.now() ? new Date(ate).toISOString() : null
+}
 
 /** Linhas lidas/escritas que o Turso informa em cada resposta do pipeline (execute e batch). */
 export function consumoDaResposta(j) {
@@ -138,7 +155,16 @@ export function clienteTurso(env = process.env, fetcher = fetch) {
    * O consumo medido vai junto do próximo pedido (sem ida extra ao banco): no máximo uma vez por minuto,
    * ou já quando acumula bastante, ou quando a coleta pede (fim da rodada).
    */
+  const marcarBloqueio = (erro) => {
+    const ate = Date.now() + ESPERA_BLOQUEIO_MS
+    BLOQUEIO.set(base, ate)
+    return new BloqueioTurso(`Turso bloqueou o banco: ${String(erro?.message ?? 'cota do mês estourada').slice(0, 160)}`, new Date(ate).toISOString())
+  }
+  /** Erro de uma resposta: vira BloqueioTurso se o Turso disse que o banco está bloqueado. */
+  const falha = (erro) => ehBloqueio(erro) ? marcarBloqueio(erro) : Object.assign(new Error(`Turso: ${erro?.message ?? 'erro'}`), { status: 502 })
   async function enviar(requests, ms = 25000, descarregar = false) {
+    const bloq = BLOQUEIO.get(base)
+    if (bloq && bloq > Date.now()) throw new BloqueioTurso('Turso bloqueou o banco (cota do mês)', new Date(bloq).toISOString())
     const somar = []
     const lidas = pend.lidas, escritas = pend.escritas
     if ((lidas || escritas) && (descarregar || lidas >= 100_000 || escritas >= 2_000 || Date.now() - pend.em >= 60_000)) {
@@ -153,7 +179,13 @@ export function clienteTurso(env = process.env, fetcher = fetch) {
       r = await fetcher(`${base}/v2/pipeline`, { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ requests: [...requests, ...somar, { type: 'close' }] }), signal: AbortSignal.timeout(ms) })
       j = await r.json().catch(() => null)
     } catch (e) { devolver(); throw e }
-    if (!r.ok || !j) { devolver(); throw Object.assign(new Error(`Turso respondeu ${r.status}`), { status: 502 }) }
+    if (!r.ok || !j) {
+      devolver()
+      const e = j?.error ?? j
+      if (ehBloqueio(e)) throw marcarBloqueio(e)
+      throw Object.assign(new Error(`Turso respondeu ${r.status}`), { status: 502 })
+    }
+    BLOQUEIO.delete(base)
     if (somar.length && !j.results?.slice(requests.length, requests.length + somar.length).every((x) => x?.type === 'ok')) devolver()
     const c = consumoDaResposta(j)
     pend.lidas += c.lidas; pend.escritas += c.escritas
@@ -168,16 +200,16 @@ export function clienteTurso(env = process.env, fetcher = fetch) {
       { condition: { type: 'not', cond: { type: 'ok', step: n + 1 } }, stmt: { sql: 'rollback' } }]
     const j = await enviar([{ type: 'batch', batch: { steps } }], 55000)
     const res = j.results?.[0]
-    if (res?.type === 'error') throw Object.assign(new Error(`Turso: ${res.error?.message ?? 'erro'}`), { status: 502 })
+    if (res?.type === 'error') throw falha(res.error)
     const b = res?.response?.result
     const erro = b?.step_errors?.find(Boolean)
-    if (erro) throw Object.assign(new Error(`Turso: ${erro.message ?? 'erro'}`), { status: 502 })
+    if (erro) throw falha(erro)
     if (!b?.step_results?.[n + 1]) throw Object.assign(new Error('Turso: transação não confirmada'), { status: 502 })
   }
   async function pipeline(comandos, { descarregar = false } = {}) {
     const j = await enviar(comandos.map(([sql, args = []]) => ({ type: 'execute', stmt: { sql, args: args.map(valor) } })), 25000, descarregar)
     const erro = j.results?.slice(0, comandos.length).find((x) => x.type === 'error')
-    if (erro) throw Object.assign(new Error(`Turso: ${erro.error?.message ?? 'erro'}`), { status: 502 })
+    if (erro) throw falha(erro.error)
     return j.results.slice(0, comandos.length)
   }
   return {
@@ -348,6 +380,7 @@ export async function coletarRodada(turso, { prazo = Date.now() + 40_000, fetche
   async function etapa(nome, fn) {
     if (pausar) return
     try { await fn() } catch (e) {
+      if (e.bloqueado) throw e // banco bloqueado pelo Turso: encerra a rodada (o endereço responde "bloqueado")
       if (e.pausa) { pausar = true; feitos.push({ etapa: nome, pausado: true }) }
       else if (!e.fim) feitos.push({ etapa: nome, erro: String(e.message ?? e).slice(0, 120) })
     }
@@ -401,7 +434,7 @@ export async function coletarRodada(turso, { prazo = Date.now() + 40_000, fetche
       if (!fila.length) break
       for (let k = 0; k < fila.length && tempoAte(0.9) && pncp.restantes() > 0; k += 3) {
         const lote = fila.slice(k, k + 3)
-        const res = await Promise.all(lote.map(async (e) => ({ e, ok: await coletarItens(turso, e, pncp).catch((err) => { if (err.pausa || err.fim) throw err; return false }) })))
+        const res = await Promise.all(lote.map(async (e) => ({ e, ok: await coletarItens(turso, e, pncp).catch((err) => { if (err.pausa || err.fim || err.bloqueado) throw err; return false }) })))
         total += res.length
         const ruins = res.filter((r) => !r.ok)
         falhas += ruins.length

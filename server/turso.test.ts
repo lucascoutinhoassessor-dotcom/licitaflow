@@ -313,3 +313,32 @@ describe('medição e níveis da cota', () => {
     expect(r.json).toHaveBeenCalledWith(expect.objectContaining({ codigo: 'turso_cota' }))
   })
 })
+
+describe('banco bloqueado pelo Turso', () => {
+  it('reconhece o BLOCKED, para de tentar por 15 min e o app volta para o Postgres', async () => {
+    const { BloqueioTurso, bloqueadoAte } = await import('./turso.js')
+    const env = { SUPABASE_URL: 'https://s', SUPABASE_ANON_KEY: 'a', SUPABASE_SERVICE_ROLE_KEY: 'k', TURSO_DATABASE_URL: 'libsql://bloqueado-x.turso.io', TURSO_AUTH_TOKEN: 't' }
+    let chamadasTurso = 0
+    const fetcher = vi.fn(async (url: string) => {
+      if (url.includes('/v2/pipeline')) {
+        chamadasTurso++
+        return new Response(JSON.stringify({ results: [{ type: 'error', error: { message: 'Operation was blocked: SQL read operations are forbidden (reads limit exceeded)', code: 'BLOCKED' } }] }))
+      }
+      return new Response('true') // token da coleta confere
+    })
+    const t = clienteTurso(env, fetcher as never)!
+    await expect(t.consultar('select 1')).rejects.toBeInstanceOf(BloqueioTurso)
+    expect(bloqueadoAte(env)).not.toBeNull()
+    await expect(t.consultar('select 1')).rejects.toBeInstanceOf(BloqueioTurso)
+    expect(chamadasTurso).toBe(1) // a segunda nem saiu
+    const h = criarHandler({ env, fetcher: fetcher as unknown as typeof fetch, validarSessao: async () => 'u1' })
+    const resp = () => ({ setHeader: vi.fn(), status: vi.fn().mockReturnThis(), json: vi.fn() })
+    const busca = resp(); await h({ method: 'POST', query: { acao: 'turso-buscar' }, headers: { authorization: 'Bearer t' }, body: { filtros: { uf: 'AC' }, pagina: 1 } }, busca)
+    expect(busca.status).toHaveBeenCalledWith(409)
+    expect(busca.json).toHaveBeenCalledWith(expect.objectContaining({ codigo: 'turso_cota' }))
+    const coleta = resp(); await h({ method: 'POST', query: { acao: 'turso-coletar' }, headers: { 'x-coleta': 'a'.repeat(64) } }, coleta)
+    expect(coleta.status).toHaveBeenCalledWith(200)
+    expect(coleta.json).toHaveBeenCalledWith(expect.objectContaining({ bloqueado: true }))
+    expect(chamadasTurso).toBe(1)
+  })
+})

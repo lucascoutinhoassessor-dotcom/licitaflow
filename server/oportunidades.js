@@ -8,7 +8,7 @@
 //   GET  ?acao=turso-logs&tipo=&horas=&usuario=&busca=&antes= (master)         → logs de uso dos clientes
 import { emCache, usuarioLogado, excedeuLimite } from './protecao.js'
 import { consultarLogs, registrarLogs } from './logs-uso.js'
-import { buscarTurso, clienteTurso, coletarRodada, CotaTurso, FiltroInvalido, itensTurso, nivelConhecido, situacaoTurso } from './turso.js'
+import { BloqueioTurso, buscarTurso, clienteTurso, coletarRodada, CotaTurso, FiltroInvalido, itensTurso, nivelConhecido, situacaoTurso } from './turso.js'
 import { peloMenos } from './turso-cota.js'
 
 async function rpcServico(fetcher, base, chave, nome, corpo) {
@@ -78,8 +78,13 @@ export function criarHandler({ fetcher = fetch, env = process.env, validarSessao
         if (!(await ehMaster())) return res.status(403).json({ error: 'Acesso restrito ao master' })
         const coletaAgendada = env.SUPABASE_SERVICE_ROLE_KEY ? (await rpcServico(fetcher, base, env.SUPABASE_SERVICE_ROLE_KEY, 'turso_coleta_ativa', {}).catch(() => false)) === true : false
         if (!turso) return res.status(200).json({ configurado: false, coletaAgendada })
-        // Só lê o que a coleta já contou; ?recontar=1 conta agora (lê a base inteira: use com moderação).
-        return res.status(200).json({ configurado: true, coletaAgendada, ...(await situacaoTurso(turso, { recontar: req.query?.recontar === '1' })) })
+        try {
+          // Só lê o que a coleta já contou; ?recontar=1 conta agora (lê a base inteira: use com moderação).
+          return res.status(200).json({ configurado: true, coletaAgendada, ...(await situacaoTurso(turso, { recontar: req.query?.recontar === '1' })) })
+        } catch (e) {
+          if (e instanceof BloqueioTurso) return res.status(200).json({ configurado: true, coletaAgendada, bloqueado: true, bloqueadoAte: e.ate, erro: e.message })
+          throw e
+        }
       }
       if (acao === 'turso-buscar') {
         if (req.method !== 'POST') return res.status(405).json({ error: 'Método não permitido' })
@@ -119,6 +124,12 @@ export function criarHandler({ fetcher = fetch, env = process.env, validarSessao
       return res.status(400).json({ error: 'Ação inválida' })
     } catch (e) {
       if (e instanceof FiltroInvalido) return res.status(400).json({ error: e.message })
+      // Banco bloqueado pelo Turso (cota estourada): cada endereço responde de um jeito que o app já sabe tratar.
+      if (e instanceof BloqueioTurso) {
+        if (acao === 'turso-coletar') return res.status(200).json({ bloqueado: true, ate: e.ate })
+        if (acao === 'turso-logs-registrar') return res.status(202).json({ gravados: 0, bloqueado: true })
+        return res.status(409).json({ error: 'A base rápida está bloqueada pelo Turso (cota do mês).', codigo: 'turso_cota', bloqueadoAte: e.ate })
+      }
       // O app volta para o Postgres em qualquer 409 que não seja de itens (src/lib/buscaIndice.ts).
       if (e instanceof CotaTurso) return res.status(409).json({ error: 'A base rápida está economizando a cota do mês.', codigo: 'turso_cota' })
       return res.status(e.status ?? 500).json({ error: e.status ? e.message : 'Não foi possível concluir agora.' })

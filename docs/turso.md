@@ -107,6 +107,17 @@ ciclo e o nível atual.
 As mudanças entram sozinhas na primeira rodada da coleta depois do deploy (chave `otimizacao` em
 `coleta_estado`). A migração cria os índices novos uma vez, o que lê e escreve cada edital uma vez.
 
+### Se o Turso já bloqueou o banco
+
+Quando a cota estoura, o Turso recusa tudo com o código `BLOCKED`. O app reconhece esse código e:
+
+- a busca responde 409 `turso_cota`, e o app usa o Supabase;
+- a coleta, os itens e os logs param de chamar o Turso por 15 min a cada vez, em vez de tentar a cada minuto;
+- o cartão do master mostra **Bloqueada pelo Turso**.
+
+Para liberar, contrate um plano pago (veja abaixo) ou espere o ciclo virar. O medidor do app só começa a contar a
+partir do deploy. No primeiro ciclo, ele não sabe o que foi gasto antes: confira em Turso → **Usage**.
+
 ### Trocar de plano
 
 Ao comprar um plano pago no Turso:
