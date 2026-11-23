@@ -32,8 +32,8 @@ function ItemDoMenu({ item }: { item: ItemNav }) {
   const Icone = item.icone
   return (
     <Menu.Item asChild>
-      <Link to={item.rota} className={itemMenu}>
-        <Icone className="h-4 w-4 shrink-0 text-sidebar-muted" />
+      <Link to={item.rota} className={cn(itemMenu, 'lf-menu-item')}>
+        <span className="lf-menu-icone lf-menu-icone-p"><Icone className="h-4 w-4" /></span>
         <span className="truncate">{item.rotulo}</span>
         {item.fase && <EmBreve />}
       </Link>
@@ -138,14 +138,14 @@ function Gaveta({ titulo, aberto, aoMudar, itens, extra }: { titulo: string; abe
             <Dialog.Title className="text-base font-semibold text-white">{titulo}</Dialog.Title>
             <Dialog.Close className={botaoIcone} aria-label="Fechar"><X className="h-5 w-5" /></Dialog.Close>
           </div>
-          <nav aria-label={titulo} className="space-y-1">
+          <nav aria-label={titulo} className="lf-gaveta space-y-1">
             {itens.map((i) => {
               const Icone = i.icone
               const ativo = rotaAtiva(i.rota, pathname)
               return (
                 <Link key={i.rota} to={i.rota} onClick={() => aoMudar(false)} aria-current={ativo ? 'page' : undefined}
-                  className={cn('flex min-h-12 items-center gap-3 rounded-xl px-3 text-[15px]', ativo ? 'bg-white/10 font-medium text-white' : 'text-sidebar-foreground/90 active:bg-white/10')}>
-                  <Icone className="h-5 w-5 shrink-0 text-sidebar-muted" />
+                  className={cn('lf-menu-item flex min-h-12 items-center gap-3 rounded-xl px-3 text-[15px]', ativo ? 'bg-white/10 font-medium text-white' : 'text-sidebar-foreground/90 active:bg-white/10')}>
+                  <span className={cn('lf-menu-icone', ativo && 'lf-menu-icone-ativo')}><Icone className="h-[18px] w-[18px]" /></span>
                   <span className="truncate">{i.rotulo}</span>
                   {i.fase && <EmBreve />}
                 </Link>

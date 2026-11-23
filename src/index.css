@@ -254,3 +254,69 @@
 }
 @keyframes lf-destaque-anel { 0% { opacity: .9; transform: scale(1); } 100% { opacity: 0; transform: scale(1.45); } }
 @media (prefers-reduced-motion: reduce) { .lf-icone-destaque, .lf-icone-destaque::before { animation: none; } }
+
+/* Ícones dos menus (gavetas do celular e menus suspensos do computador): quadradinho em degradê com uma cor por
+   item, entrada em cascata quando a gaveta abre, brilho que passa de tempos em tempos e reação ao toque. */
+.lf-menu-item { --c1: #38bdf8; --c2: #2563eb; --cs: 56, 189, 248; }
+.lf-menu-item:nth-child(6n+2) { --c1: #34d399; --c2: #059669; --cs: 52, 211, 153; }
+.lf-menu-item:nth-child(6n+3) { --c1: #fbbf24; --c2: #d97706; --cs: 251, 191, 36; }
+.lf-menu-item:nth-child(6n+4) { --c1: #a78bfa; --c2: #7c3aed; --cs: 167, 139, 250; }
+.lf-menu-item:nth-child(6n+5) { --c1: #fb7185; --c2: #e11d48; --cs: 251, 113, 133; }
+.lf-menu-item:nth-child(6n+6) { --c1: #22d3ee; --c2: #0891b2; --cs: 34, 211, 238; }
+.lf-menu-icone {
+  position: relative; display: inline-flex; height: 34px; width: 34px; flex-shrink: 0; align-items: center; justify-content: center;
+  overflow: hidden; border-radius: 10px; color: #fff;
+  background: linear-gradient(145deg, var(--c1), var(--c2));
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .14), 0 6px 16px -8px rgba(var(--cs), .9);
+  transition: transform .25s cubic-bezier(.34, 1.56, .64, 1), box-shadow .25s ease;
+}
+.lf-menu-icone-p { height: 26px; width: 26px; border-radius: 8px; }
+.lf-menu-icone::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(115deg, transparent 30%, rgba(255, 255, 255, .45) 50%, transparent 70%);
+  transform: translateX(-130%); animation: lf-menu-brilho 5s ease-in-out infinite;
+}
+.lf-menu-item:nth-child(2n) .lf-menu-icone::after { animation-delay: .35s; }
+.lf-menu-item:nth-child(3n) .lf-menu-icone::after { animation-delay: .7s; }
+.lf-menu-icone svg { position: relative; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .25)); }
+.lf-menu-item:hover .lf-menu-icone, .lf-menu-item:focus-visible .lf-menu-icone { transform: scale(1.1) rotate(-6deg); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .2), 0 8px 20px -6px rgba(var(--cs), 1); }
+.lf-menu-item:active .lf-menu-icone { transform: scale(.9); }
+.lf-menu-icone-ativo { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .25), 0 0 0 3px rgba(var(--cs), .25), 0 8px 20px -6px rgba(var(--cs), 1); }
+
+/* Gaveta do celular: cada item entra subindo, um depois do outro, e o ícone dá um pulinho. */
+.lf-gaveta > .lf-menu-item { animation: lf-gaveta-entra .38s cubic-bezier(.2, .8, .3, 1) both; }
+.lf-gaveta > .lf-menu-item .lf-menu-icone { animation: lf-menu-pulo .5s cubic-bezier(.34, 1.56, .64, 1) both; }
+.lf-gaveta > .lf-menu-item:nth-child(1), .lf-gaveta > .lf-menu-item:nth-child(1) .lf-menu-icone { animation-delay: .03s; }
+.lf-gaveta > .lf-menu-item:nth-child(2), .lf-gaveta > .lf-menu-item:nth-child(2) .lf-menu-icone { animation-delay: .07s; }
+.lf-gaveta > .lf-menu-item:nth-child(3), .lf-gaveta > .lf-menu-item:nth-child(3) .lf-menu-icone { animation-delay: .11s; }
+.lf-gaveta > .lf-menu-item:nth-child(4), .lf-gaveta > .lf-menu-item:nth-child(4) .lf-menu-icone { animation-delay: .15s; }
+.lf-gaveta > .lf-menu-item:nth-child(5), .lf-gaveta > .lf-menu-item:nth-child(5) .lf-menu-icone { animation-delay: .19s; }
+.lf-gaveta > .lf-menu-item:nth-child(6), .lf-gaveta > .lf-menu-item:nth-child(6) .lf-menu-icone { animation-delay: .23s; }
+.lf-gaveta > .lf-menu-item:nth-child(7), .lf-gaveta > .lf-menu-item:nth-child(7) .lf-menu-icone { animation-delay: .27s; }
+.lf-gaveta > .lf-menu-item:nth-child(8), .lf-gaveta > .lf-menu-item:nth-child(8) .lf-menu-icone { animation-delay: .31s; }
+.lf-gaveta > .lf-menu-item:nth-child(n+9), .lf-gaveta > .lf-menu-item:nth-child(n+9) .lf-menu-icone { animation-delay: .35s; }
+
+/* Cartões do painel: o ícone aparece com um pulinho, um brilho passa de tempos em tempos e ele balança ao passar
+   o mouse; com alerta, o ícone pulsa. */
+.lf-kpi-icone { position: relative; overflow: hidden; animation: lf-menu-pulo .55s cubic-bezier(.34, 1.56, .64, 1) both; transition: transform .25s cubic-bezier(.34, 1.56, .64, 1); }
+.lf-kpi-icone::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(115deg, transparent 30%, rgba(255, 255, 255, .35) 50%, transparent 70%);
+  transform: translateX(-130%); animation: lf-menu-brilho 6s ease-in-out 1s infinite;
+}
+.lf-kpi-icone svg { position: relative; }
+a:nth-child(2) > * .lf-kpi-icone, a:nth-child(2) > * .lf-kpi-icone::after { animation-delay: .08s, 1.4s; }
+a:nth-child(3) > * .lf-kpi-icone, a:nth-child(3) > * .lf-kpi-icone::after { animation-delay: .16s, 1.8s; }
+a:nth-child(4) > * .lf-kpi-icone, a:nth-child(4) > * .lf-kpi-icone::after { animation-delay: .24s, 2.2s; }
+.group:hover .lf-kpi-icone { transform: scale(1.08) rotate(-6deg); }
+.group:hover .lf-kpi-icone svg { animation: lf-icone-balanca .5s ease-in-out; }
+.lf-kpi-alerta { animation: lf-menu-pulo .55s cubic-bezier(.34, 1.56, .64, 1) both, lf-kpi-alerta 2s ease-in-out .6s infinite; }
+
+@keyframes lf-menu-brilho { 0%, 70% { transform: translateX(-130%); } 100% { transform: translateX(130%); } }
+@keyframes lf-gaveta-entra { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+@keyframes lf-menu-pulo { from { opacity: 0; transform: scale(.5); } to { opacity: 1; transform: none; } }
+@keyframes lf-icone-balanca { 0%, 100% { transform: rotate(0); } 30% { transform: rotate(-12deg); } 65% { transform: rotate(9deg); } }
+@keyframes lf-kpi-alerta { 0%, 100% { box-shadow: 0 0 0 0 rgba(244, 63, 94, 0); } 50% { box-shadow: 0 0 0 5px rgba(244, 63, 94, .28); } }
+@media (prefers-reduced-motion: reduce) {
+  .lf-menu-icone, .lf-menu-icone::after, .lf-gaveta > .lf-menu-item, .lf-kpi-icone, .lf-kpi-icone::after, .lf-kpi-icone svg { animation: none !important; transition: none; }
+}

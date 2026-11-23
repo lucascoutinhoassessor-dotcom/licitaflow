@@ -83,7 +83,7 @@ export default function Painel() {
           <Link key={k.rotulo} to={k.link}>
             <Card className="group h-full p-4 transition hover:-translate-y-0.5 hover:border-primary/50 sm:p-5">
               <div className="flex items-start justify-between">
-                <span className={cn('flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br ring-1', k.cor)}>
+                <span className={cn('lf-kpi-icone flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br ring-1', k.cor, k.alerta && 'lf-kpi-alerta')}>
                   <k.icone className="h-5 w-5" />
                 </span>
                 <span className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-muted-foreground transition group-hover:text-foreground">
