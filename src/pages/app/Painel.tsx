@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import ResumoEditaisHoje from '@/components/ResumoEditaisHoje'
 import { ArrowRight, ArrowUpRight, Briefcase, CalendarClock, CheckCircle2, Circle, FileCheck2, Gavel, Radar, Search } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
@@ -98,6 +99,7 @@ export default function Painel() {
         ))}
       </div>
 
+      <ResumoEditaisHoje />
       <div className="mt-6 grid gap-6 lg:grid-cols-3">
         <Card className="p-6 lg:col-span-2">
           <div className="flex items-center justify-between">

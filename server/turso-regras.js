@@ -63,9 +63,9 @@ export function diaUtil(iso) {
   return dia >= 1 && dia <= 5 && !FERIADOS.has(md) ? 1 : 0
 }
 
-/** Texto pesquisável do edital (objeto, complemento, órgão, CNPJ, controle e número), como o tsvector "busca". */
+/** Palavras-chave descrevem o que se contrata; órgão tem filtro próprio. */
 export function textoEdital(c) {
-  return [c.objetoCompra, c.informacaoComplementar, c.orgaoEntidade?.razaoSocial, c.orgaoEntidade?.cnpj, c.numeroControlePNCP, c.numeroCompra].filter(Boolean).join(' ').slice(0, 20000)
+  return [c.objetoCompra, c.informacaoComplementar].filter(Boolean).join(' ').slice(0, 20000)
 }
 
 /** Edital do jeito que a tela usa (o mesmo "compra" que o Postgres guarda). */
@@ -100,4 +100,21 @@ function parteFts(texto) {
 export function consultaFts(texto) {
   const partes = String(texto ?? '').split(';').map(parteFts).filter(Boolean).slice(0, 10)
   return partes.length ? partes.map((p) => `(${p})`).join(' OR ') : null
+}
+
+/** Confere as mesmas alternativas e prefixos numa descrição, após recortar pelo edital. */
+export function filtroDescricao(texto) {
+  let coluna = "lower(coalesce(i.descricao, ''))"
+  for (const letra of 'áàâãäéèêëíìîïóòôõöúùûüç') {
+    coluna = `replace(replace(${coluna}, '${letra}', '${normalizar(letra)}'), '${letra.toUpperCase()}', '${normalizar(letra)}')`
+  }
+  for (const separador of ['-', '/', '.', ',', ';', ':', '(', ')', '[', ']', '"', "'", '_', '+', '\n', '\r', '\t']) {
+    coluna = `replace(${coluna}, '${separador.replaceAll("'", "''")}', ' ')`
+  }
+  const args = []
+  const partes = (consultaFts(texto) ?? '').split(' OR ').filter(Boolean).map(parte => {
+    const palavras = [...parte.matchAll(/"([a-z0-9]+)"/g)].map(m => m[1])
+    return '(' + palavras.map(p => { args.push(`% ${p}%`); return `(' ' || ${coluna}) like ?` }).join(' and ') + ')'
+  })
+  return { sql: partes.length ? '(' + partes.join(' or ') + ')' : '0', args }
 }

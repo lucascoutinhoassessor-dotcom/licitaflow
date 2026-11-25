@@ -1,4 +1,5 @@
 import { InstalarApp } from '@/components/InstalarApp'
+import ResumoEditaisHoje from '@/components/ResumoEditaisHoje'
 import { useEffect, useState, type CSSProperties, type MouseEvent, type ReactNode } from 'react'
 import { useCatalogoPlanos } from '@/hooks/useCatalogoPlanos'
 import { useQuery } from '@tanstack/react-query'
@@ -557,6 +558,7 @@ export function PaginaLanding({ conteudo: c, previa, secaoAtiva }: { conteudo: C
         {c.secoes.filter((s) => s.visivel).map((s) => (
           <div key={s.uid} data-secao={s.uid} className={cn(previa && secaoAtiva === s.uid && 'outline outline-2 outline-offset-[-2px] outline-amber-400/70')}>
             <RenderSecao s={s} dias={dias} previa={previa} />
+            {!previa&&s.tipo==='hero'&&<div className="mx-auto max-w-6xl px-4"><ResumoEditaisHoje /></div>}
           </div>
         ))}
       </main>
