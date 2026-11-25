@@ -31,6 +31,14 @@ Chaves secretas (Claude, Resend, WhatsApp, Stripe, service role) **nunca** vão 
 
 As migrations ficam em `supabase/migrations/` e devem ser aplicadas em ordem.
 
+## Prévia de compartilhamento
+
+O `index.html` contém os metadados Open Graph e Twitter de forma estática, para que os leitores de links consigam obter título, descrição e capa sem executar JavaScript. A imagem pública fica em `public/social/licitaforce-v1.png` (1200 × 630), e `/social/` está excluído do redirecionamento para o HTML na Vercel.
+
+Para recriar a capa no Windows: `pwsh -File scripts/gerar-capa-social.ps1`. Ao trocar a arte, atualize a versão no nome do arquivo, no gerador e nas URLs dos metadados para renovar o cache da imagem. Se o domínio público mudar, atualize também as URLs absolutas no HTML e o endereço exibido na capa.
+
+As alterações precisam ser publicadas para aparecerem nos links compartilhados. Aplicativos de mensagens podem manter uma prévia antiga em cache; a exibição final depende do aplicativo que recebe o link.
+
 ## Testes
 
 ```bash
