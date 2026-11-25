@@ -10,8 +10,8 @@ import { textoLimite, type LimiteIA } from '@/lib/agentesIA'
 import { haQuanto } from '@/lib/agentesProcesso'
 import { cn } from '@/lib/utils'
 import { Abas, Aviso, Badge, Card, Carregando, Vazio } from '@/components/ui'
+import { AcompanhamentoSentinela, type Vigiado } from '@/components/AcompanhamentoSentinela'
 
-interface Vigiado { processo_id: string; objeto: string; numero: string | null; controle: string; verificado_em: string | null; situacao: string | null; encerramento: string | null; alterado_em: string | null }
 interface Resumo { liberado: boolean; limite: LimiteIA; vigiados: Vigiado[]; fora_do_limite: number; sem_controle: number; desligados?: number }
 interface Detalhe { contexto?: string; antes?: string | null; depois?: string | null; orientacao?: string; categoria?: string; documento?: string; publicado_em?: string; url?: string; de?: string; para?: string }
 interface Evento { id: number; controle: string; tipo: string; nivel: 'alto' | 'medio' | 'baixo'; titulo: string; detalhe: Detalhe; created_at: string }
@@ -25,8 +25,6 @@ const ICONE: Record<string, LucideIcon> = {
   situacao: AlertTriangle, encerramento: CalendarClock, abertura: CalendarClock, documento_novo: FileText,
   documento_retirado: FileMinus, resultado: Trophy, valor: CircleDollarSign, retirado: Ban,
 }
-/** "2026-12-05T09:00:00" (PNCP, horário de Brasília) → "05/12/2026 09:00". */
-const dataPncp = (s: string | null) => { const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(s ?? ''); return m ? `${m[3]}/${m[2]}/${m[1]} ${m[4]}:${m[5]}` : null }
 const diaDe = (iso: string) => { const d = new Date(iso); const hoje = new Date(); const ontem = new Date(Date.now() - 864e5)
   if (d.toDateString() === hoje.toDateString()) return 'Hoje'
   if (d.toDateString() === ontem.toDateString()) return 'Ontem'
@@ -106,7 +104,7 @@ export default function Sentinela() {
   const semana = (eventos.data ?? []).filter((e) => Date.now() - Date.parse(e.created_at) < 7 * 864e5)
   const atencaoSemana = semana.filter((e) => e.nivel === 'alto').length
   const ultimaVerificacao = r.vigiados.map((v) => v.verificado_em).filter(Boolean).sort().pop() ?? null
-  const verificados = r.vigiados.filter((v) => v.verificado_em).length
+  const verificados = r.vigiados.filter((v) => v.verificado_em && !v.falhas && !v.resultados_erro && !v.historico_erro && (!v.proxima_em || Date.parse(v.proxima_em) >= Date.now() - 30 * 60e3)).length
 
   return (
     <>
@@ -116,15 +114,14 @@ export default function Sentinela() {
           <div>
             <h1 className="flex items-center gap-2 text-xl font-semibold"><ScanEye className="h-6 w-6 text-primary" />Sentinela</h1>
             <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-              Acompanha no PNCP os editais dos seus processos em andamento e avisa quando o órgão altera a situação da compra ou as datas,
-              publica errata, resposta a esclarecimento, decisão de impugnação, ata ou resultado. Cada aviso diz o que mudou e o que fazer.
+              Acompanha as publicações do PNCP, avisa o que mudou e confere os resultados pelo CNPJ da empresa de cada processo.
             </p>
           </div>
           <Badge cor="azul">Seu plano: {textoLimite(r.limite.limite, 'simultaneo')}</Badge>
         </div>
         <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
           <div className="rounded-lg border p-3"><p className="text-xs text-muted-foreground">Processos vigiados</p><p className="mt-1 text-2xl font-semibold">{r.vigiados.length}</p></div>
-          <div className="rounded-lg border p-3"><p className="text-xs text-muted-foreground">Já verificados no PNCP</p><p className="mt-1 text-2xl font-semibold">{verificados}<span className="text-sm font-normal text-muted-foreground"> / {r.vigiados.length}</span></p></div>
+          <div className="rounded-lg border p-3"><p className="text-xs text-muted-foreground">Verificações em dia</p><p className="mt-1 text-2xl font-semibold">{verificados}<span className="text-sm font-normal text-muted-foreground"> / {r.vigiados.length}</span></p></div>
           <div className="rounded-lg border p-3"><p className="text-xs text-muted-foreground">Avisos de atenção (7 dias)</p><p className={cn('mt-1 text-2xl font-semibold', atencaoSemana > 0 && 'text-red-600 dark:text-red-400')}>{atencaoSemana}</p></div>
           <div className="rounded-lg border p-3"><p className="text-xs text-muted-foreground">Última verificação</p><p className="mt-1 text-lg font-semibold">{ultimaVerificacao ? haQuanto(ultimaVerificacao) : '—'}</p></div>
         </div>
@@ -141,10 +138,10 @@ export default function Sentinela() {
         <h2 className="text-lg font-semibold">Mudanças nos editais</h2>
         <Abas abas={[{ id: 'todos', rotulo: 'Todas', contagem: eventos.data?.length ?? 0 }, { id: 'alto', rotulo: 'Só atenção', contagem: (eventos.data ?? []).filter((e) => e.nivel === 'alto').length }]} atual={filtro} aoTrocar={(id) => setFiltro(id === 'alto' ? 'alto' : 'todos')} />
       </div>
-      {eventos.isLoading ? <Carregando /> : !lista.length ? (
+      {eventos.isError ? <Aviso>Não foi possível carregar as mudanças. Tente novamente em instantes.</Aviso> : eventos.isLoading ? <Carregando /> : !lista.length ? (
         <Card className="mb-6 flex items-start gap-3 p-5 text-sm text-muted-foreground">
           <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" />
-          <p>{filtro === 'alto' ? 'Nenhum aviso de atenção.' : 'Nenhuma mudança encontrada até agora.'} A primeira verificação de cada edital só registra como ele está; dali em diante, toda alteração publicada pelo órgão aparece aqui.</p>
+          <p>{filtro === 'alto' ? 'Nenhum aviso de atenção carregado.' : 'Nenhuma mudança registrada nas consultas concluídas.'} Confira abaixo a situação, o CNPJ e os próximos passos de cada acompanhamento.</p>
         </Card>
       ) : (
         <div className="mb-6 space-y-4">
@@ -161,27 +158,10 @@ export default function Sentinela() {
       {!r.vigiados.length ? (
         <Vazio titulo="Nenhum processo vigiado" texto="Adicione editais do PNCP aos seus processos (pela tela de Oportunidades) e a Sentinela passa a acompanhá-los." />
       ) : (
-        <Card className="overflow-x-auto">
-          <table className="w-full min-w-[640px] text-sm">
-            <thead className="border-b text-left text-xs uppercase text-muted-foreground">
-              <tr><th className="p-3">Processo</th><th className="p-3">Situação no PNCP</th><th className="p-3">Prazo final das propostas</th><th className="p-3">Verificado</th><th className="p-3">Última mudança</th></tr>
-            </thead>
-            <tbody className="divide-y">
-              {r.vigiados.map((v) => {
-                const suspensa = /suspens|revoga|anula/i.test(v.situacao ?? '')
-                return (
-                  <tr key={v.processo_id} className="hover:bg-muted/40">
-                    <td className="max-w-[18rem] p-3"><Link to={`/app/processos/${v.processo_id}`} className="block truncate font-medium text-primary hover:underline">{v.numero ? `${v.numero} · ` : ''}{v.objeto}</Link></td>
-                    <td className="p-3">{v.situacao ? <Badge cor={suspensa ? 'vermelho' : 'verde'}>{v.situacao}</Badge> : <span className="text-xs text-muted-foreground">Na fila</span>}</td>
-                    <td className="p-3 tabular-nums">{dataPncp(v.encerramento) ?? '—'}</td>
-                    <td className="p-3 text-xs text-muted-foreground" title={v.verificado_em ? formatarDataHora(v.verificado_em) : undefined}>{v.verificado_em ? haQuanto(v.verificado_em) : 'aguardando'}</td>
-                    <td className="p-3 text-xs text-muted-foreground">{v.alterado_em ? formatarDataHora(v.alterado_em) : 'nenhuma'}</td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </Card>
+        <div className="space-y-3">{r.vigiados.map(v => <Card key={v.processo_id} className="p-4 sm:p-5">
+          <Link to={`/app/processos/${v.processo_id}`} className="mb-3 block line-clamp-2 font-medium text-primary hover:underline">{v.numero ? `${v.numero} · ` : ''}{v.objeto}</Link>
+          <AcompanhamentoSentinela v={v} />
+        </Card>)}</div>
       )}
     </>
   )

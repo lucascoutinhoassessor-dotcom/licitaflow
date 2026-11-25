@@ -94,7 +94,7 @@ describe('frequência das verificações', () => {
 
 describe('leitura de um edital no PNCP', () => {
   it('sem mudança na compra, não baixa a lista de arquivos de novo', async () => {
-    const antes = fotoDoPncp(compra(), [arq(1, 'Edital.pdf', 'Edital')], AGORA)
+    const antes = { ...fotoDoPncp(compra(), [arq(1, 'Edital.pdf', 'Edital')], AGORA), historico_em: AGORA.toISOString(), historico: [] }
     const fetcher = vi.fn(async () => json(compra()))
     const r = await verificarEdital({ controle: CONTROLE, estado: antes }, { fetcher: fetcher as unknown as typeof fetch, agora: AGORA })
     expect(r).toEqual({ estado: antes, eventos: [] })
@@ -116,6 +116,70 @@ describe('leitura de um edital no PNCP', () => {
     expect(r.erro).toBeTruthy()
     r = await verificarEdital({ controle: CONTROLE, estado: antes }, { fetcher: (async () => new Response('', { status: 503 })) as unknown as typeof fetch, agora: AGORA })
     expect(r.erro).toBeTruthy()
+  })
+})
+
+describe('resultados dos itens e CNPJ público do fornecedor', () => {
+  const resultado = (x: Record<string, unknown> = {}) => ({ sequencialResultado: 1, niFornecedor: '12.345.678/0001-90', nomeRazaoSocialFornecedor: 'Empresa A', situacaoCompraItemResultadoId: 1, situacaoCompraItemResultadoNome: 'Informado', valorTotalHomologado: 100, ...x })
+  const consultar = async (itens: unknown[], dados: unknown = [resultado()], antes: unknown = null) => {
+    const fetcher = vi.fn(async (url: string) => url.includes('/historico?') ? json([]) : url.includes('/itens?') ? json(itens) : url.endsWith('/resultados') ? json(dados) : url.endsWith('/arquivos') ? json([]) : json(compra({ existeResultado: true })))
+    const r = await verificarEdital({ controle: CONTROLE, estado: antes }, { fetcher, agora: AGORA })
+    return { r, fetcher }
+  }
+  it('lê o resultado e normaliza o CNPJ, sem precisar transmitir dados privados do cliente ao PNCP', async () => {
+    const { r } = await consultar([{ numeroItem: 1, temResultado: true }])
+    expect(r.estado.resultados).toMatchObject([{ item: 1, cnpj: '12345678000190', situacao_id: 1 }])
+    expect(r.estado.resultados_parcial).toBe(false)
+    expect(r.estado.resultados_consultados_em).toBe(AGORA.toISOString())
+  })
+  it('não trata uma resposta inválida como ausência de resultados', async () => {
+    const { r } = await consultar([{ numeroItem: 1, temResultado: true }], {})
+    expect(r.estado.resultados_erro).toContain('inválido')
+    expect(r.estado.resultados_parcial).toBe(true)
+    expect(r.estado.resultados_consultados_em).toBeNull()
+  })
+  it('retoma os itens restantes na rodada seguinte', async () => {
+    const itens = Array.from({ length: 12 }, (_, i) => ({ numeroItem: i + 1, temResultado: true }))
+    const primeira = await consultar(itens)
+    expect(primeira.r.estado.resultados_offset).toBe(10)
+    expect(primeira.r.estado.resultados_parcial).toBe(true)
+    const segunda = await consultar(itens, [resultado()], primeira.r.estado)
+    expect(segunda.r.estado.resultados).toHaveLength(12)
+    expect(segunda.r.estado.resultados_parcial).toBe(false)
+    expect(segunda.fetcher.mock.calls.filter(([u]) => u.endsWith('/resultados'))).toHaveLength(2)
+  })
+  it('não repete o alerta quando o banco reordena as chaves do JSON e avisa cancelamento', async () => {
+    const { r } = await consultar([{ numeroItem: 1, temResultado: true }])
+    const antes = { ...r.estado, resultados: r.estado.resultados.map((x: Record<string, unknown>) => Object.fromEntries(Object.entries(x).reverse())) }
+    expect(compararFotos(antes, r.estado)).toEqual([])
+    const depois = { ...r.estado, resultados: [{ ...r.estado.resultados[0], situacao_id: 2, situacao: 'Cancelado' }] }
+    expect(compararFotos(antes, depois)).toMatchObject([{ tipo: 'resultado_item', nivel: 'alto' }])
+  })
+  it('preserva resultados anteriores quando o PNCP falha', async () => {
+    const { r: primeira } = await consultar([{ numeroItem: 1, temResultado: true }])
+    const { r } = await consultar([{ numeroItem: 1, temResultado: true }], null, { ...primeira.estado, resultados_parcial: true, resultados_pagina: 1 })
+    expect(r.estado.resultados).toEqual(primeira.estado.resultados)
+    expect(r.estado.resultados_erro).toBeTruthy()
+  })
+  it('consulta publicações anteriores ao início do monitoramento, sem inventar fases da disputa', async () => {
+    const fetcher = vi.fn(async (url: string) => url.includes('/historico?') ? json([
+      { logManutencaoDataInclusao: '2026-11-10T10:00:00', tipoLogManutencaoNome: 'Inclusão', categoriaLogManutencaoNome: 'Contratação' },
+      { logManutencaoDataInclusao: '2026-11-11T10:00:00', tipoLogManutencaoNome: 'Retificação', categoriaLogManutencaoNome: 'Documento de Contratação', documentoTitulo: 'Errata_01.pdf' },
+    ]) : url.endsWith('/arquivos') ? json([]) : json(compra()))
+    const r = await verificarEdital({ controle: CONTROLE, estado: null }, { fetcher, agora: AGORA })
+    expect(r.estado.historico).toMatchObject([{ operacao: 'Retificação', documento: 'Errata 01' }, { operacao: 'Inclusão' }])
+    expect(r.estado.historico_parcial).toBe(false)
+    expect(r.eventos).toEqual([])
+  })
+  it('percorre a próxima página do histórico sem perder publicações já consultadas', async () => {
+    const publicacoes = Array.from({ length: 100 }, (_, i) => ({ logManutencaoDataInclusao: '2026-11-10T10:00:00', tipoLogManutencaoNome: 'Inclusão', categoriaLogManutencaoNome: 'Documento', documentoTitulo: `Anexo_${i}.pdf` }))
+    const fetcher = vi.fn(async (url: string) => url.includes('/historico?') ? json(url.includes('pagina=1&') ? publicacoes : []) : url.endsWith('/arquivos') ? json([]) : json(compra()))
+    const primeira = await verificarEdital({ controle: CONTROLE, estado: null }, { fetcher, agora: AGORA })
+    expect(primeira.estado.historico_parcial).toBe(true)
+    const segunda = await verificarEdital({ controle: CONTROLE, estado: primeira.estado }, { fetcher, agora: AGORA })
+    expect(segunda.estado.historico).toHaveLength(100)
+    expect(segunda.estado.historico_parcial).toBe(false)
+    expect(fetcher.mock.calls.some(([u]) => u.includes('/historico?pagina=2&'))).toBe(true)
   })
 })
 

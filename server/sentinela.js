@@ -157,6 +157,18 @@ export function compararFotos(antes, depois) {
       detalhe: { depois: hom },
       orientacao: 'Confira o vencedor e a colocação de cada item. Se for recorrer, a intenção de recurso precisa ser manifestada no sistema logo após o julgamento (Lei 14.133, art. 165).' })
   }
+  if (Array.isArray(depois.resultados)) {
+    const chave = x => `${x.item}:${x.sequencial ?? x.cnpj}`
+    const conteudo = x => x && JSON.stringify([x.cnpj, x.fornecedor, x.situacao_id, x.situacao, x.valor, x.data, x.classificacao, x.reserva])
+    const anteriores = new Map((antes.resultados ?? []).map(x => [chave(x), x]))
+    for (const resultado of depois.resultados) {
+      if (conteudo(anteriores.get(chave(resultado))) === conteudo(resultado)) continue
+      add({ tipo: 'resultado_item', nivel: Number(resultado.situacao_id) === 2 ? 'alto' : 'medio',
+        titulo: `Resultado do item ${resultado.item}: ${resultado.fornecedor ?? resultado.cnpj} · ${resultado.situacao ?? 'publicado'}`,
+        orientacao: 'Confira o resultado publicado e o CNPJ da empresa vinculada ao processo. A publicação no PNCP não informa todos os lances ou a classificação da disputa em tempo real.',
+        detalhe: { ...resultado } })
+    }
+  }
   if (antes.valor_estimado != null && depois.valor_estimado != null && Number(antes.valor_estimado) !== Number(depois.valor_estimado)) {
     const de = Number(antes.valor_estimado), para = Number(depois.valor_estimado)
     const pct = de > 0 ? Math.round(((para - de) / de) * 1000) / 10 : null
@@ -221,11 +233,80 @@ export async function verificarEdital({ controle, estado: antes }, { fetcher = f
   if (!compra?.numeroControlePNCP) return { erro: 'Resposta inesperada do PNCP' }
   const atualizacao = compra.dataAtualizacaoGlobal ?? compra.dataAtualizacao ?? null
   const recente = antes?.completo_em && agora.getTime() - Date.parse(antes.completo_em) < COMPLETO_A_CADA_MS
-  if (antes && !antes.retirado && antes.atualizacao === atualizacao && recente) return { estado: antes, eventos: [] }
+  if (antes && !antes.retirado && antes.atualizacao === atualizacao && recente && antes.historico_em && !antes.historico_parcial && !antes.historico_erro && !antes.resultados_parcial && !antes.resultados_erro && (!compra.existeResultado || antes.resultados_consultados_em)) return { estado: antes, eventos: [] }
   const a = await pedir(`${PNCP}/${cnpj}/compras/${ano}/${seq}/arquivos`)
   if (!a.ok) return { erro: `Arquivos: PNCP respondeu ${a.status}` }
-  const estado = fotoDoPncp(compra, await a.json().catch(() => []), agora)
+  const arquivos = await a.json().catch(() => null)
+  if (!Array.isArray(arquivos)) return { erro: 'Lista de arquivos inválida no PNCP' }
+  const estado = fotoDoPncp(compra, arquivos, agora)
+  Object.assign(estado, await consultarHistorico(`${PNCP}/${cnpj}/compras/${ano}/${seq}`, antes, pedir, agora))
+  if (compra.existeResultado) {
+    // Retoma em lotes pequenos: compras grandes não podem exceder o tempo da rodada.
+    Object.assign(estado, await consultarResultados(`${PNCP}/${cnpj}/compras/${ano}/${seq}`, antes, pedir, agora))
+  }
   return { estado, eventos: compararFotos(antes, estado) }
+}
+
+async function consultarHistorico(base, antes, pedir, agora) {
+  const pagina = antes?.historico_parcial ? (antes.historico_pagina ?? 1) : 1
+  try {
+    const r = await pedir(`${base}/historico?pagina=${pagina}&tamanhoPagina=100`)
+    if (!r.ok) throw new Error(`Histórico: PNCP respondeu ${r.status}`)
+    const lista = await r.json()
+    if (!Array.isArray(lista) || lista.some(x => !x.logManutencaoDataInclusao || !x.tipoLogManutencaoNome)) throw new Error('Histórico inválido no PNCP')
+    const novos = lista.map(x => ({ data: x.logManutencaoDataInclusao, operacao: x.tipoLogManutencaoNome,
+      categoria: x.categoriaLogManutencaoNome, item: x.itemNumero ?? x.itemResultadoNumero ?? null,
+      documento: x.documentoTitulo ? nomeDocumento(x.documentoTitulo) : null,
+      justificativa: String(x.justificativa ?? '').slice(0, 500) }))
+    const porChave = new Map([...(antes?.historico ?? []), ...novos].map(x => [JSON.stringify([x.data, x.operacao, x.categoria, x.item, x.documento, x.justificativa]), x]))
+    return { historico: [...porChave.values()].sort((a, b) => String(b.data).localeCompare(String(a.data))).slice(0, 200),
+      historico_parcial: lista.length === 100, historico_pagina: pagina + 1, historico_erro: null, historico_em: agora.toISOString() }
+  } catch (e) {
+    return { historico: antes?.historico ?? [], historico_parcial: true, historico_pagina: pagina,
+      historico_erro: e instanceof Error ? e.message : 'Falha ao consultar o histórico no PNCP', historico_em: antes?.historico_em ?? null }
+  }
+}
+
+/** Resultados são públicos e compartilhados; o CNPJ privado do cliente é cruzado apenas no resumo da organização. */
+async function consultarResultados(base, antes, pedir, agora) {
+  const pagina = antes?.resultados_parcial ? (antes.resultados_pagina ?? 1) : 1
+  const inicio = antes?.resultados_parcial ? (antes.resultados_offset ?? 0) : 0
+  const anteriores = antes?.resultados ?? []
+  try {
+    const r = await pedir(`${base}/itens?pagina=${pagina}&tamanhoPagina=100`)
+    if (!r.ok) throw new Error(`Itens: PNCP respondeu ${r.status}`)
+    const itens = await r.json()
+    if (!Array.isArray(itens) || itens.some(i => !Number.isInteger(i.numeroItem))) throw new Error('Lista de itens inválida no PNCP')
+    const lote = itens.slice(inicio, inicio + 10)
+    const novos = await emLotes(lote, 5, async (item) => {
+      if (!item.temResultado) return []
+      const resposta = await pedir(`${base}/itens/${item.numeroItem}/resultados`)
+      if (!resposta.ok) throw new Error(`Resultados do item ${item.numeroItem}: PNCP respondeu ${resposta.status}`)
+      const lista = await resposta.json()
+      if (!Array.isArray(lista) || lista.some(x => !x.niFornecedor || x.situacaoCompraItemResultadoId == null)) throw new Error(`Resultado inválido do item ${item.numeroItem}`)
+      return lista.map(x => ({ item: item.numeroItem, sequencial: x.sequencialResultado,
+        cnpj: String(x.niFornecedor).replace(/[^a-z0-9]/gi, '').toUpperCase(), fornecedor: x.nomeRazaoSocialFornecedor,
+        situacao_id: x.situacaoCompraItemResultadoId, situacao: x.situacaoCompraItemResultadoNome,
+        valor: x.valorTotalHomologado, data: x.dataResultado, classificacao: x.ordemClassificacaoSrp ?? null,
+        reserva: x.reservaRemanescenteId ?? null }))
+    })
+    const consultados = new Set(lote.map(x => x.numeroItem))
+    // No início de um ciclo mantém os demais itens até serem novamente conferidos.
+    let resultados = [...anteriores.filter(x => !consultados.has(x.item)), ...novos.flat()]
+    const fimPagina = inicio + lote.length >= itens.length
+    const parcial = !fimPagina || itens.length === 100
+    const vistos = [...new Set([...(pagina === 1 && inicio === 0 ? [] : (antes?.resultados_itens_vistos ?? [])), ...itens.map(x => x.numeroItem)])]
+    if (!parcial) resultados = resultados.filter(x => vistos.includes(x.item))
+    return { resultados, resultados_parcial: parcial, resultados_pagina: fimPagina ? pagina + 1 : pagina,
+      resultados_itens_vistos: vistos,
+      resultados_offset: fimPagina ? 0 : inicio + lote.length, resultados_erro: null,
+      resultados_consultados_em: agora.toISOString() }
+  } catch (e) {
+    return { resultados: anteriores, resultados_parcial: true, resultados_pagina: pagina, resultados_offset: inicio,
+      resultados_itens_vistos: antes?.resultados_itens_vistos ?? [],
+      resultados_consultados_em: antes?.resultados_consultados_em ?? null,
+      resultados_erro: e instanceof Error ? e.message : 'Falha ao consultar resultados no PNCP' }
+  }
 }
 
 async function emLotes(lista, n, fn) {
@@ -245,10 +326,10 @@ export async function rodadaSentinela({ token, rpc, chamar, fetcher = fetch, web
     if (Date.now() - inicio > prazoMs) return { controle: e.controle, erro: 'Sem tempo nesta rodada', proxima_em: new Date(Date.now() + 10 * 60e3).toISOString() }
     try {
       const r = await verificarEdital(e, { fetcher, agora: agora() })
-      if (r.erro) return { controle: e.controle, erro: r.erro, proxima_em: proximaVerificacao(null, agora(), 1) }
-      return { controle: e.controle, estado: r.estado, eventos: r.eventos, proxima_em: proximaVerificacao(r.estado, agora()) }
+      if (r.erro) return { controle: e.controle, erro: r.erro, proxima_em: proximaVerificacao(null, agora(), (e.falhas ?? 0) + 1) }
+      return { controle: e.controle, estado: r.estado, eventos: r.eventos, proxima_em: r.estado.resultados_parcial || r.estado.historico_parcial ? new Date(agora().getTime() + 30 * 60e3).toISOString() : proximaVerificacao(r.estado, agora()) }
     } catch {
-      return { controle: e.controle, erro: 'Falha ao consultar o PNCP', proxima_em: proximaVerificacao(null, agora(), 1) }
+      return { controle: e.controle, erro: 'Falha ao consultar o PNCP', proxima_em: proximaVerificacao(null, agora(), (e.falhas ?? 0) + 1) }
     }
   })
   const avisos = itens.length ? ((await rpc('sentinela_gravar', { p_token: token, p_itens: itens })) ?? []) : []

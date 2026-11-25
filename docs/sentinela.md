@@ -17,6 +17,20 @@ A Sentinela vigia no PNCP os editais dos processos em andamento e avisa quando a
 
 A primeira leitura de cada edital só guarda como ele está, sem gerar aviso.
 
+Ela agora registra o início do acompanhamento no histórico de cada processo, mesmo sem mudanças. O painel mostra a empresa e o CNPJ vinculados, a situação publicada, os documentos consultados, falhas e a próxima consulta. Uma falha ou atraso do agendador não aparece como monitoramento ativo.
+
+O painel também consulta o histórico oficial da contratação, incluindo publicações anteriores ao início do monitoramento, com data, operação, documento ou item e justificativa informada. A leitura percorre 100 registros por rodada e guarda as 200 publicações mais recentes consultadas; a interface apresenta as últimas cinco e identifica consulta parcial ou falha. Essas publicações antigas não geram push retroativo.
+
+## Resultados por CNPJ
+
+Quando a compra informa `existeResultado`, o servidor consulta os itens paginados e seus resultados públicos, incluindo cancelamentos e cadastro de reserva. O resumo cruza `niFornecedor` com o CNPJ da **empresa vinculada ao processo**, dentro da organização autorizada. Ele não usa a empresa atualmente selecionada no filtro e não envia o cadastro privado do cliente ao PNCP.
+
+Cada rodada confere até 10 itens, com 5 consultas simultâneas, e continua do ponto salvo após 30 minutos. A tela identifica leituras parciais e falhas; resultados anteriores são preservados durante uma falha. Publicações e alterações de resultado entram nos avisos e no histórico. A primeira fotografia continua sem gerar alerta de mudança.
+
+A ausência do CNPJ nos resultados não confirma derrota, desclassificação ou inabilitação. As etapas do Kanban continuam sob controle da equipe. O PNCP não fornece todos os lances, mensagens e acontecimentos da sessão em tempo real; acompanhe também o portal da disputa.
+
+Referência dos endpoints e campos: [Manual de Integração do PNCP](https://pncp.gov.br/manual/pt-br/latest/singlehtml/), consultas de itens e de resultados do item.
+
 Os níveis alto e médio vão por push para os membros da organização: um push por processo, que abre o processo ao ser tocado. Os três níveis entram no histórico do processo e na tela **Agentes de IA → Sentinela**.
 
 ## Como os avisos são escritos
@@ -80,6 +94,7 @@ Os níveis alto e médio vão por push para os membros da organização: um push
 ## Implantação
 
 1. Aplicar `supabase/migrations/20261121000050_sentinela.sql`. Ela cria o agendamento no pg_cron.
+   Para o acompanhamento por CNPJ, aplicar também as migrações posteriores, incluindo `20261125000005_sentinela_acompanhamento.sql`, antes de publicar a interface atualizada.
 2. Publicar o código.
 3. O módulo **agentes** precisa estar em "teste" ou "liberado" para a organização.
 4. Para receber push, o usuário toca em "Ativar notificações" na tela de Avisos.
