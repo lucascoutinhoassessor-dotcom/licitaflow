@@ -15,6 +15,7 @@ import { AcessoNegadoMaster } from '@/pages/master/AcessoNegado'
 const Landing = lazy(() => import('@/pages/landing/Landing'))
 const Entrar = lazy(() => import('@/pages/auth/Entrar'))
 const Cadastro = lazy(() => import('@/pages/auth/Cadastro'))
+const Checkout = lazy(() => import('@/pages/Checkout'))
 const RecuperarSenha = lazy(() => import('@/pages/auth/RecuperarSenha'))
 const RedefinirSenha = lazy(() => import('@/pages/auth/RedefinirSenha'))
 const ConfirmarEmail = lazy(() => import('@/pages/auth/ConfirmarEmail'))
@@ -140,6 +141,8 @@ export default function App() {
       <Suspense fallback={<Carregando telaCheia />}>
         <Routes>
           <Route path="/" element={<Landing />} />
+          <Route path="/checkout" element={<Checkout />} />
+          <Route path="/obrigado" element={<Checkout obrigado />} />
           <Route path="/entrar" element={<SoVisitante><Entrar /></SoVisitante>} />
           <Route path="/cadastro" element={<SoVisitante><Cadastro /></SoVisitante>} />
           <Route path="/recuperar-senha" element={<SoVisitante><RecuperarSenha /></SoVisitante>} />

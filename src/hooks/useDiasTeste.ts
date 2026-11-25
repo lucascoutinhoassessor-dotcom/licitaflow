@@ -11,7 +11,7 @@ export function useDiasTeste() {
     queryFn: async () => {
       const { data, error } = await supabase.rpc('dias_teste_gratis')
       if (error) throw error
-      return typeof data === 'number' && data > 0 ? data : DIAS_TESTE
+      return typeof data === 'number' && data >= 0 ? data : DIAS_TESTE
     },
   })
   return q.data ?? DIAS_TESTE

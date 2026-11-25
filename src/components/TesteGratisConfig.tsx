@@ -21,7 +21,7 @@ export function TesteGratisConfig() {
 
   async function salvar() {
     const n = Number(dias)
-    if (!Number.isInteger(n) || n < 1 || n > 90) return toast.error('Informe de 1 a 90 dias.')
+    if (!Number.isInteger(n) || n < 0 || n > 90) return toast.error('Informe de 0 a 90 dias. Zero desativa o teste grátis.')
     if (ajustar && !confirm(`Recalcular todos os testes em andamento para ${n} dias a partir da data de cadastro de cada conta? Quem ficar com o teste vencido será bloqueado na próxima rotina${bloquear ? '' : ' (bloqueio desligado)'}.`)) return
     setOcupado(true)
     try {
@@ -36,14 +36,14 @@ export function TesteGratisConfig() {
   return <Card className="mb-5 space-y-4 p-5">
     <div className="flex flex-wrap items-center gap-2">
       <Gift className="h-5 w-5 text-primary" /><h2 className="flex-1 font-semibold">Teste grátis</h2>
-      {q.data && <Badge cor="azul">{q.data.dias} dias</Badge>}
+      {q.data && <Badge cor="azul">{q.data.dias === 0 ? 'Desativado' : `${q.data.dias} dias`}</Badge>}
     </div>
     {q.isError && <Aviso>{mensagemErro(q.error)} — aplique a migração do teste grátis.</Aviso>}
     {q.data && <>
       <p className="text-sm text-muted-foreground">{q.data.em_teste} conta(s) em teste agora · {q.data.bloqueadas} bloqueada(s) por teste vencido.</p>
       <div className="grid gap-4 sm:grid-cols-[180px_1fr] sm:items-end">
-        <Campo rotulo="Duração (dias)" htmlFor="teste-dias"><Input id="teste-dias" type="number" min={1} max={90} value={dias} onChange={e => setDias(e.target.value)} /></Campo>
-        <p className="pb-2 text-sm text-muted-foreground">Vale para novos cadastros e aparece na landing page e no cadastro ("{dias || '—'} dias grátis").</p>
+        <Campo rotulo="Duração (dias)" htmlFor="teste-dias"><Input id="teste-dias" type="number" min={0} max={90} value={dias} onChange={e => setDias(e.target.value)} /></Campo>
+        <p className="pb-2 text-sm text-muted-foreground">Use 0 para desativar o teste grátis: novos clientes seguem para a escolha do plano e checkout. Testes atuais mantêm o prazo, salvo se marcar o recálculo abaixo.</p>
       </div>
       <label className="flex items-start gap-2 text-sm"><input className="mt-1" type="checkbox" checked={bloquear} onChange={e => setBloquear(e.target.checked)} />
         <span>Bloquear o acesso quando o teste vencer sem plano contratado. <span className="text-muted-foreground">O cliente vê a tela para contratar e volta na hora ao pagar. Estender o teste na ficha do cliente também libera.</span></span></label>

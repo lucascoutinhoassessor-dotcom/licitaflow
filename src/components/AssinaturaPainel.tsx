@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { mensagemErro } from '@/lib/supabase'
@@ -8,7 +9,8 @@ import { carregarAssinatura, pagamentoAPI, FORMAS, STATUS_ASSINATURA, STATUS_FAT
 import { Aviso, Badge, Button, Campo, Card, Carregando, Input, Modal, Select } from '@/components/ui'
 
 /** Assinatura recorrente (Asaas) da organização: contratar, trocar de plano, cancelar e faturas. */
-export function AssinaturaPainel({ org, master = false }: { org: string; master?: boolean }) {
+export function AssinaturaPainel({ org, master = false, planoInicial }: { org: string; master?: boolean; planoInicial?: string }) {
+  const navigate = useNavigate()
   const qc = useQueryClient()
   const catalogo = useCatalogoPlanos()
   const q = useQuery({ queryKey: ['assinatura', org], queryFn: () => carregarAssinatura(org) })
@@ -25,7 +27,7 @@ export function AssinaturaPainel({ org, master = false }: { org: string; master?
   const economia = plano && plano.mensal_centavos * 12 > plano.anual_centavos ? plano.mensal_centavos * 12 - plano.anual_centavos : 0
 
   function abrir(tipo: 'assinar' | 'trocar', a?: Assinatura | null) {
-    setF({ plano: a?.plano_id ?? planos[0]?.id ?? '', ciclo: a?.ciclo ?? 'mensal', forma: a?.forma ?? 'UNDEFINED', documento: '', cupom: '' })
+    setF({ plano: a?.plano_id ?? planoInicial ?? planos[0]?.id ?? '', ciclo: a?.ciclo ?? 'mensal', forma: a?.forma ?? 'PIX', documento: '', cupom: '' })
     setModal(tipo)
   }
   async function enviar(e: FormEvent) {
@@ -36,7 +38,8 @@ export function AssinaturaPainel({ org, master = false }: { org: string; master?
         if (![11, 14].includes(doc.length)) throw new Error('Informe o CPF ou CNPJ de quem paga.')
         const r = await pagamentoAPI({ acao: 'assinar', org, plano: f.plano, ciclo: f.ciclo, forma: f.forma, documento: doc, cupom: f.cupom.trim() || undefined })
         toast.success(f.cupom.trim() && r.valor_centavos ? `Assinatura criada com o cupom: ${formatarMoeda(r.valor_centavos / 100)} por cobrança.` : 'Assinatura criada no Asaas.')
-        if (r.url) window.open(r.url, '_blank', 'noopener,noreferrer')
+        if (master && r.url) window.open(r.url, '_blank', 'noopener,noreferrer')
+        if (!master) navigate(`/checkout?org=${org}`)
       } else {
         await pagamentoAPI({ acao: 'trocar_plano', id: q.data?.assinatura?.id, plano: f.plano, ciclo: f.ciclo })
         toast.success('Plano alterado. As próximas cobranças já vêm com o novo valor.')
@@ -70,6 +73,7 @@ export function AssinaturaPainel({ org, master = false }: { org: string; master?
     </div>
     {!a && <>
       <p className="text-sm text-muted-foreground">{master ? 'Este cliente ainda não tem assinatura recorrente.' : 'Contrate um plano com cobrança recorrente por Pix, boleto ou cartão. O acesso é liberado assim que o pagamento é confirmado.'}</p>
+      {!master && <div className="grid gap-3 sm:grid-cols-2">{planos.map(p => <div key={p.id} className="space-y-2 rounded-lg border p-4"><h3 className="font-semibold">{p.nome}</h3><p>{formatarMoeda(p.mensal_centavos / 100)}/mês</p><p className="text-xs text-muted-foreground">{p.limite_empresas ?? 'Ilimitadas'} empresa(s) · {p.limite_usuarios ?? 'Ilimitados'} usuário(s)</p><Button variante="contorno" onClick={() => { abrir('assinar'); setF(v => ({ ...v, plano: p.id })) }}>Escolher {p.nome}</Button></div>)}</div>}
       <Button onClick={() => abrir('assinar')} disabled={!planos.length}>{master ? 'Criar assinatura para o cliente' : 'Contratar plano'}</Button>
     </>}
     {a && <>
@@ -82,6 +86,7 @@ export function AssinaturaPainel({ org, master = false }: { org: string; master?
       {a.status === 'atrasada' && <Aviso>Há fatura vencida. {master ? 'A conta é suspensa automaticamente quando passa da tolerância configurada.' : 'Pague para evitar a suspensão do acesso.'}</Aviso>}
       {a.erro && master && <Aviso>Último erro no gateway: {a.erro}</Aviso>}
       <div className="flex flex-wrap gap-2">
+        {!master && (a.status === 'pendente' || a.status === 'atrasada') && <Link to={`/checkout?org=${org}`} className="inline-flex h-9 items-center rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground">Ir para checkout LicitaForce</Link>}
         {emAberto && <a href={emAberto.link!} target="_blank" rel="noopener noreferrer" className="inline-flex h-9 items-center rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-primary/90">Pagar fatura em aberto</a>}
         {!emAberto && a.link_pagamento && a.status === 'pendente' && <a href={a.link_pagamento} target="_blank" rel="noopener noreferrer" className="inline-flex h-9 items-center rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-primary/90">Pagar 1ª fatura</a>}
         {a.gateway_assinatura_id && <Button tamanho="sm" variante="contorno" disabled={!!ocupado} onClick={() => abrir('trocar', a)}>Trocar plano</Button>}

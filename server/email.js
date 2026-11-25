@@ -76,11 +76,11 @@ export function emailAcessoLiberado(d) {
   const ate = data(d.pago_ate)
   const html = layout('Seu acesso ao LicitaForce está liberado', `<p>${esc(ola(d.nome))}</p>
 <p>O pagamento da empresa <b>${esc(d.organizacao)}</b> foi confirmado e o plano <b>${esc(d.plano)}</b> (${esc(d.ciclo)}) já está liberado${ate ? `, com acesso pago até <b>${ate}</b>` : ''}.</p>
-<p><b>Seus dados de acesso:</b><br>Endereço: <a href="${login}" style="color:${COR}">${esc(login)}</a><br>E-mail: <b>${esc(d.email)}</b><br>Senha: a definida no cadastro.</p>
+<p><b>Seus dados de acesso:</b><br>Endereço: <a href="${login}" style="color:${COR}">${esc(login)}</a><br>E-mail: <b>${esc(d.email)}</b><br>Senha: ${d.senha ? `<b>${esc(d.senha)}</b>` : 'a definida no cadastro'}.</p>
 ${botao(login, 'Entrar no LicitaForce')}
 ${nota(`Esqueceu a senha? <a href="${URL_SITE}/recuperar-senha" style="color:${COR}">Crie uma nova aqui</a>. O recibo e as próximas faturas chegam pelo Asaas, nosso parceiro de pagamentos.`)}
 <p>Dica: no celular, abra o LicitaForce e toque em “Instalar o app” para usar como aplicativo e receber avisos.</p>`)
-  const texto = `${ola(d.nome)}\n\nO pagamento da empresa ${d.organizacao} foi confirmado e o plano ${d.plano} já está liberado${ate ? ` (pago até ${ate})` : ''}.\n\nEndereço: ${login}\nE-mail: ${d.email}\nSenha: a definida no cadastro.\n\nEsqueceu a senha? ${URL_SITE}/recuperar-senha`
+  const texto = `${ola(d.nome)}\n\nO pagamento da empresa ${d.organizacao} foi confirmado e o plano ${d.plano} já está liberado${ate ? ` (pago até ${ate})` : ''}.\n\nEndereço: ${login}\nE-mail: ${d.email}\nSenha: ${d.senha || 'a definida no cadastro'}.\n\nEsqueceu a senha? ${URL_SITE}/recuperar-senha`
   return { assunto: 'Seu acesso ao LicitaForce está liberado', html, texto }
 }
 

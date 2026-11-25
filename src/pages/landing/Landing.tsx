@@ -426,7 +426,7 @@ function Precos({ s, dias, previa }: { s: SecaoSite; dias: number; previa?: bool
                 ))}
               </ul>
               {s.botao.texto && (
-                <Destino link={s.botao.link || '/cadastro'} previa={previa} className={cn('mt-8 rounded-full px-5 py-3 text-center text-sm font-semibold transition', p.destaque ? 'bg-white text-slate-950 hover:bg-slate-200' : 'border border-white/15 text-white hover:bg-white/5')}>
+                <Destino link={dias === 0 ? `/checkout?plano=${encodeURIComponent(p.id)}` : s.botao.link || '/cadastro'} previa={previa} className={cn('mt-8 rounded-full px-5 py-3 text-center text-sm font-semibold transition', p.destaque ? 'bg-white text-slate-950 hover:bg-slate-200' : 'border border-white/15 text-white hover:bg-white/5')}>
                   {comDias(s.botao.texto, dias)}
                 </Destino>
               )}

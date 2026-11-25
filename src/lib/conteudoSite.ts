@@ -294,4 +294,6 @@ export function validarConteudo(c: ConteudoSite): string | null {
 }
 
 /** Troca {dias} pelo prazo do teste grátis. */
-export const comDias = (t: string, dias: number) => t.replace(/\{dias\}/g, String(dias))
+export const comDias = (t: string, dias: number) => dias === 0
+  ? t.replace(/(?:\{dias\}|\d+) dias gr[áa]tis/gi, 'Contrate seu plano').replace(/teste gr[áa]tis/gi, 'assinatura').replace(/sem cart[ãa]o(?: de cr[ée]dito)?\.?/gi, 'Acesso após a confirmação do pagamento.').replace(/\{dias\}/g, '0')
+  : t.replace(/\{dias\}/g, String(dias))

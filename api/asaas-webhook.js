@@ -1,25 +1,10 @@
 // Webhook do Asaas. Configure em Asaas → Integrações → Webhooks com a URL e o token exibidos no master.
 // Idempotente: cada evento é gravado uma vez (id do evento); reenvios do Asaas são ignorados com 200.
 import {decifrar,mesmoToken} from '../server/asaas.js'
-import {emailAcessoLiberado,enviarEmail,montarSmtp} from '../server/email.js'
+import {enviarAcessoPago} from '../server/acesso-pago.js'
 
 // Primeiro pagamento confirmado da assinatura: e-mail de acesso liberado (uma vez). Nunca derruba o webhook.
-async function boasVindas(sv,pagamento,env) {
-  let d=null
-  try {
-    d=await sv('/rest/v1/rpc/reservar_boas_vindas',{method:'POST',body:JSON.stringify({p_pagamento:pagamento})})
-    if(!d?.email) return ''
-    const [linha]=await sv('/rest/v1/plataforma_email?select=*&id=eq.smtp')
-    const cfg=montarSmtp(linha,env)
-    if(!cfg?.ativo) throw new Error('SMTP incompleto')
-    await enviarEmail(cfg,{para:d.email,...emailAcessoLiberado(d)})
-    return '; e-mail enviado'
-  } catch {
-    // Libera a marcação para que o próximo aviso do Asaas (ou a sincronização) tente de novo.
-    if(d?.assinatura) await sv('/rest/v1/assinaturas?id=eq.'+d.assinatura,{method:'PATCH',body:JSON.stringify({boas_vindas_em:null})}).catch(()=>{})
-    return d?.email?'; e-mail falhou':''
-  }
-}
+const boasVindas = enviarAcessoPago
 
 export default async function handler(req,res) {
   res.setHeader('Cache-Control','no-store')
@@ -42,7 +27,11 @@ export default async function handler(req,res) {
     if(!evento) return res.status(400).json({error:'Evento ausente'})
     const id=String(body.id ?? `${evento}:${body.payment?.id ?? body.subscription?.id ?? ''}:${body.dateCreated ?? ''}`).slice(0,200)
     const gravado=await sv('/rest/v1/gateway_eventos?on_conflict=id',{method:'POST',headers:{Prefer:'resolution=ignore-duplicates,return=representation'},body:JSON.stringify({id,evento,payload:body})})
-    if(!gravado?.length) return res.json({recebido:true,duplicado:true})
+    if(!gravado?.length) {
+      // Reenvios também recuperam uma eventual falha no SMTP após a liberação.
+      if(['PAYMENT_CONFIRMED','PAYMENT_RECEIVED'].includes(evento) && body.payment) await boasVindas(sv,body.payment,env)
+      return res.json({recebido:true,duplicado:true})
+    }
     let resultado='ignorado'
     try {
       if(evento.startsWith('PAYMENT_') && body.payment) {

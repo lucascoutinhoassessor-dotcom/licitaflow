@@ -48,17 +48,12 @@ export function OrgProvider({ children }: { children: ReactNode }) {
   const orgsQ = useQuery({
     queryKey: ['organizacoes', user?.id],
     enabled: !!user,
-    refetchOnWindowFocus: true,
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: 'always',
     queryFn: async ({ signal }) => {
-      const { data, error } = await consultarComLimite(sinal => supabase
-        .from('memberships')
-        .select('papel, organizations(*)')
-        .eq('user_id', user!.id)
-        .order('created_at').abortSignal(sinal), signal)
+      const { data, error } = await consultarComLimite(sinal => supabase.rpc('minhas_organizacoes').abortSignal(sinal), signal)
       if (error) throw error
-      return (data ?? [])
-        .filter((m: any) => m.organizations)
-        .map((m: any) => ({ ...m.organizations, papel: m.papel })) as OrganizacaoComPapel[]
+      return (data ?? []) as OrganizacaoComPapel[]
     },
   })
 

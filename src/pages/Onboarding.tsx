@@ -23,6 +23,7 @@ export default function Onboarding() {
   if (carregando || carregandoAdmin) return <Carregando telaCheia />
   // Conta de administração sem organização própria: o lugar dela é o console
   if (ehAdmin && !org) return <Navigate to="/master" replace />
+  if (org?.suspensa) return <Navigate to="/app" replace />
   if (org && empresas.length > 0) return <Navigate to="/app" replace />
 
   const etapa = org ? 2 : 1

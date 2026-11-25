@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import { MailCheck } from 'lucide-react'
 import { supabase, mensagemErro } from '@/lib/supabase'
 import { contaEmailAPI } from '@/lib/contaEmail'
@@ -19,6 +19,7 @@ export default function Cadastro() {
   const [params] = useSearchParams()
   const voltar = params.get('voltar')
   const destino = voltar && voltar.startsWith('/') && !voltar.startsWith('//') ? voltar : '/onboarding'
+  if (dias === 0) return <Navigate to="/checkout" replace />
 
   async function enviar(e: FormEvent) {
     e.preventDefault()
