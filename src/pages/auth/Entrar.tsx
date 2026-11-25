@@ -4,6 +4,7 @@ import { supabase, mensagemErro } from '@/lib/supabase'
 import { Aviso, Button, Campo, Input, InputSenha } from '@/components/ui'
 import { AuthShell } from './AuthShell'
 import { masterSeparado } from '@/lib/pwa'
+import { consultarComLimite } from '@/lib/conexao'
 
 export default function Entrar() {
   const [email, setEmail] = useState('')
@@ -19,17 +20,19 @@ export default function Entrar() {
     e.preventDefault()
     setErro('')
     setEnviando(true)
-    const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password: senha })
-    if (error) {
+    try {
+      const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password: senha })
+      if (error) return setErro(mensagemErro(error))
+      // Em produção o master tem endereço e login próprios; aqui a conta entra no app do usuário.
+      if (masterSeparado()) return navigate(destino, { replace: true })
+      // Conta de administração da plataforma vai direto para o console master.
+      const { data: admin } = await consultarComLimite(signal => supabase.rpc('is_platform_admin').abortSignal(signal))
+      navigate(admin === true && !voltar ? '/master' : destino, { replace: true })
+    } catch (e) {
+      setErro(mensagemErro(e))
+    } finally {
       setEnviando(false)
-      return setErro(mensagemErro(error))
     }
-    // Em produção o master tem endereço e login próprios; aqui a conta entra no app do usuário.
-    if (masterSeparado()) { setEnviando(false); return navigate(destino, { replace: true }) }
-    // Conta de administração da plataforma vai direto para o console master
-    const { data: admin } = await supabase.rpc('is_platform_admin')
-    setEnviando(false)
-    navigate(admin === true && !voltar ? '/master' : destino, { replace: true })
   }
 
   return (

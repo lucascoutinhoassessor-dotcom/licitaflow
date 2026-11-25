@@ -1,7 +1,7 @@
 // Tela offline (só ela é armazenada; APIs, sessões e documentos não são cacheados) e notificações push.
-const CACHE = 'licitaflow-offline-v3'
+const CACHE = 'licitaflow-offline-v4'
 self.addEventListener('install', event => {
-  event.waitUntil(caches.open(CACHE).then(cache => cache.add('/offline.html')))
+  event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(['/offline.html', '/offline.js'])))
   self.skipWaiting()
 })
 self.addEventListener('activate', event => {
@@ -11,8 +11,24 @@ self.addEventListener('activate', event => {
   ]))
 })
 self.addEventListener('fetch', event => {
+  const url = new URL(event.request.url)
+  if (url.origin === self.location.origin && url.pathname === '/offline.js') {
+    event.respondWith(caches.open(CACHE).then(async cache => (await cache.match('/offline.js')) || fetch(event.request)))
+    return
+  }
   if (event.request.mode === 'navigate' && new URL(event.request.url).origin === self.location.origin) {
-    event.respondWith(fetch(event.request).catch(() => caches.match('/offline.html')))
+    event.respondWith((async () => {
+      const controller = new AbortController()
+      const limite = setTimeout(() => controller.abort(), 12000)
+      try {
+        const resposta = await fetch(event.request, { signal: controller.signal, cache: 'no-cache' })
+        if (resposta.status >= 500) throw new Error('Serviço indisponível')
+        return resposta
+      } catch {
+        const cache = await caches.open(CACHE)
+        return (await cache.match('/offline.html')) || new Response('Sem conexão. Tente novamente.', { status: 503, headers: { 'Content-Type': 'text/plain; charset=utf-8' } })
+      } finally { clearTimeout(limite) }
+    })())
   }
 })
 

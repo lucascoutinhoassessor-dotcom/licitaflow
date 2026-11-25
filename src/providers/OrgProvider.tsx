@@ -3,6 +3,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from './AuthProvider'
 import type { Empresa, OrganizacaoComPapel, Papel } from '@/types/db'
+import { consultarComLimite } from '@/lib/conexao'
+import { FalhaAcesso } from '@/components/FalhaAcesso'
 
 interface OrgCtx {
   carregando: boolean
@@ -46,12 +48,13 @@ export function OrgProvider({ children }: { children: ReactNode }) {
   const orgsQ = useQuery({
     queryKey: ['organizacoes', user?.id],
     enabled: !!user,
-    queryFn: async () => {
-      const { data, error } = await supabase
+    refetchOnWindowFocus: true,
+    queryFn: async ({ signal }) => {
+      const { data, error } = await consultarComLimite(sinal => supabase
         .from('memberships')
         .select('papel, organizations(*)')
         .eq('user_id', user!.id)
-        .order('created_at')
+        .order('created_at').abortSignal(sinal), signal)
       if (error) throw error
       return (data ?? [])
         .filter((m: any) => m.organizations)
@@ -64,9 +67,10 @@ export function OrgProvider({ children }: { children: ReactNode }) {
 
   const empresasQ = useQuery({
     queryKey: ['empresas', org?.id],
-    enabled: !!org,
-    queryFn: async () => {
-      const { data, error } = await supabase.from('empresas').select('*').eq('org_id', org!.id).order('razao_social')
+    enabled: !!org && !org.suspensa,
+    refetchOnWindowFocus: true,
+    queryFn: async ({ signal }) => {
+      const { data, error } = await consultarComLimite(sinal => supabase.from('empresas').select('*').eq('org_id', org!.id).order('razao_social').abortSignal(sinal), signal)
       if (error) throw error
       return data as Empresa[]
     },
@@ -102,7 +106,7 @@ export function OrgProvider({ children }: { children: ReactNode }) {
   const papel = org?.papel ?? null
   const valor = useMemo<OrgCtx>(
     () => ({
-      carregando: orgsQ.isLoading || (!!org && empresasQ.isLoading),
+      carregando: orgsQ.isPending || (!!org && !org.suspensa && empresasQ.isPending),
       organizacoes,
       org,
       papel,
@@ -114,8 +118,14 @@ export function OrgProvider({ children }: { children: ReactNode }) {
       trocarEmpresa,
       recarregar,
     }),
-    [orgsQ.isLoading, empresasQ.isLoading, organizacoes, org, papel, empresas, empresa, trocarOrg, trocarEmpresa, recarregar],
+    [orgsQ.isPending, empresasQ.isPending, organizacoes, org, papel, empresas, empresa, trocarOrg, trocarEmpresa, recarregar],
   )
+
+  // Falha ou consulta pausada pela rede não significa que o cadastro está vazio.
+  if ((orgsQ.data === undefined && (orgsQ.isError || orgsQ.fetchStatus === 'paused')) ||
+      (!!org && !org.suspensa && empresasQ.data === undefined && (empresasQ.isError || empresasQ.fetchStatus === 'paused'))) {
+    return <FalhaAcesso aoTentar={recarregar} />
+  }
 
   return <Ctx.Provider value={valor}>{children}</Ctx.Provider>
 }

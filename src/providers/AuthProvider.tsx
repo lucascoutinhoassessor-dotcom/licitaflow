@@ -2,7 +2,8 @@ import { createContext, useContext, useEffect, useRef, useState, type ReactNode 
 import { useQueryClient } from '@tanstack/react-query'
 import type { Session, User } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
-import { sessaoSalva } from '@/lib/sessao'
+import { iniciarSessao } from '@/lib/iniciarSessao'
+import { FalhaAcesso } from '@/components/FalhaAcesso'
 
 interface AuthCtx {
   session: Session | null
@@ -21,12 +22,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [carregando, setCarregando] = useState(true)
   const [recuperandoSenha, setRecuperandoSenha] = useState(false)
+  const [erro, setErro] = useState(false)
+  const [tentativa, setTentativa] = useState(0)
 
   useEffect(() => {
-    let ativo = true
-    let eventoRecebido = false
-    const aplicar = (s: Session | null) => {
-      if (!ativo) return
+    setErro(false)
+    setCarregando(true)
+    return iniciarSessao(supabase.auth, (s, evento) => {
       const id = s?.user.id ?? null
       if (ultimoUsuario.current !== id) {
         qc.clear()
@@ -38,19 +40,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       setSession(s)
       setCarregando(false)
-    }
-    const { data } = supabase.auth.onAuthStateChange((evento, s) => {
-      eventoRecebido = true
-      aplicar(s)
+      setErro(false)
       if (evento === 'PASSWORD_RECOVERY') setRecuperandoSenha(true)
       if (evento === 'USER_UPDATED' || evento === 'SIGNED_OUT') setRecuperandoSenha(false)
-    })
-    supabase.auth.getSession().then(({ data }) => { if (!eventoRecebido) aplicar(data.session) }).catch(() => { if (!eventoRecebido) aplicar(null) })
-    // Se o servidor de login demorar (renovação de sessão lenta), não deixa a tela presa em "Carregando":
-    // segue com a sessão salva neste aparelho; o evento do Supabase atualiza tudo quando chegar.
-    const limite = setTimeout(() => { if (ativo && !eventoRecebido) aplicar(sessaoSalva()) }, 6000)
-    return () => { ativo = false; clearTimeout(limite); data.subscription.unsubscribe() }
-  }, [qc])
+    }, () => { setErro(true); setCarregando(false) })
+  }, [qc, tentativa])
 
   const sair = async () => {
     await supabase.auth.signOut()
@@ -61,6 +55,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       /* armazenamento indisponível */
     }
   }
+
+  if (erro) return <FalhaAcesso aoTentar={() => setTentativa(n => n + 1)} />
 
   return (
     <Ctx.Provider value={{ session, user: session?.user ?? null, carregando, recuperandoSenha, sair }}>
