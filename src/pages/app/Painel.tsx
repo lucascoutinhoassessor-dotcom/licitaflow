@@ -1,3 +1,4 @@
+import QuadroInformativo from '@/components/QuadroInformativo'
 import { Link } from 'react-router-dom'
 import { ArrowRight, ArrowUpRight, Briefcase, CalendarClock, CheckCircle2, Circle, FileCheck2, Gavel, Radar, Search } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
@@ -77,6 +78,8 @@ export default function Painel() {
           </Link>
         </div>
       </section>
+
+      <QuadroInformativo compacto />
 
       <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         {kpis.map((k) => (

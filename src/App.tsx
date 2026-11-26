@@ -74,6 +74,10 @@ const MasterModulos = lazy(() => import('@/pages/master/Modulos'))
 const MasterConsumoIA = lazy(() => import('@/pages/master/ConsumoIA'))
 const MasterCupons = lazy(() => import('@/pages/master/Cupons'))
 const MasterLogs = lazy(() => import('@/pages/master/Logs'))
+const QuadroInformativo = lazy(() => import('@/components/QuadroInformativo'))
+const MasterQuadro = lazy(() => import('@/pages/master/Quadro'))
+const MasterSugestoes = lazy(() => import('@/pages/master/Sugestoes'))
+const SugestoesCliente = lazy(() => import('@/pages/relacionamento/SugestoesCliente'))
 const MasterSomAviso = lazy(() => import('@/pages/master/SomAviso'))
 const NaoEncontrada = lazy(() => import('@/pages/NaoEncontrada'))
 
@@ -183,6 +187,8 @@ export default function App() {
             <Route path="agentes/cotador/:processoId" element={<Cotador />} />
             <Route path="agentes/termometro" element={<TermometroPagamento />} />
             <Route path="avisos" element={<Avisos />} />
+            <Route path="quadro" element={<QuadroInformativo />} />
+            <Route path="sugestoes" element={<SugestoesCliente />} />
             <Route path="relatorios" element={<RelatoriosCliente />} />
             <Route path="plano" element={<MeuPlano />} />
             <Route path=":modulo" element={<EmBreve />} />
@@ -198,6 +204,8 @@ export default function App() {
             <Route path="auditoria" element={<MasterAuditoria />} />
             <Route path="suporte" element={<Suporte master />} />
             <Route path="avisos" element={<Avisos master />} />
+            <Route path="quadro" element={<MasterQuadro />} />
+            <Route path="sugestoes" element={<MasterSugestoes />} />
             <Route path="relatorios" element={<RelatoriosMaster />} />
             <Route path="planos" element={<Planos />} />
             <Route path="financeiro" element={<MasterFinanceiro />} />
