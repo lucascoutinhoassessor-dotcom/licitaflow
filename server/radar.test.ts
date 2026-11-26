@@ -68,7 +68,7 @@ describe('e-mail do Radar', () => {
     expect(e.html).toContain('Adicionar'.toLowerCase())
     expect(e.texto).toContain('/app/agentes/radar?org=o1&empresa=e1&sugestao=7')
     expect(e.html).toContain('Avaliar oportunidade')
-    expect(e.html).toContain('https://licitaflow.com.br/app/agentes/radar?')
+    expect(e.html).toContain('https://licitaforce.com.br/app/agentes/radar?')
     expect(e.html).not.toContain('licitaforce-app.vercel.app')
   })
   it('envia sem push configurado e confirma somente o destinatário enviado', async () => {

@@ -2,7 +2,7 @@
 BEGIN;
 
 -- O domínio antigo da Vercel foi desativado; os avisos seguem para a produção atual.
-update licitaflow_radar.config set url = 'https://licitaflow.com.br/api/agentes?agente=radar&acao=avisar'
+update licitaflow_radar.config set url = 'https://licitaforce.com.br/api/agentes?agente=radar&acao=avisar'
 where url = 'https://licitaforce-app.vercel.app/api/agentes?agente=radar&acao=avisar';
 
 alter table public.radar_sugestoes add column email_enfileirado_em timestamptz;

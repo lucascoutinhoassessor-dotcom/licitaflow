@@ -112,7 +112,7 @@ ${nota(`Esqueceu a senha depois? <a href="${URL_SITE}/recuperar-senha" style="co
 
 /** Resumo das oportunidades novas, com acesso ao Radar para decidir a participação. */
 export function emailRadar({ nome, empresa, org_id, empresa_id, oportunidades }) {
-  const site = 'https://licitaflow.com.br'
+  const site = 'https://licitaforce.com.br'
   const urlRadar = `${site}/app/agentes/radar?org=${encodeURIComponent(org_id)}&empresa=${encodeURIComponent(empresa_id)}`
   const quantidade = oportunidades.length
   const titulo = `${quantidade} ${quantidade === 1 ? 'oportunidade nova' : 'oportunidades novas'} para ${empresa}`
