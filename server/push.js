@@ -7,6 +7,7 @@
 // POST {acao:'agendados'}  → (pg_cron, sem login) manda os pushes agendados que já venceram
 // As chaves VAPID são geradas no primeiro uso e guardadas em push_vapid (só a chave de serviço lê).
 import webpushPadrao from 'web-push'
+import { enviarResumoAgentes } from './pushAgentes.js'
 import { entregarNotificacoes, enviarWhatsapp, telefoneWhatsapp } from './notificacoes.js'
 import { cifrar, decifrar } from './asaas.js'
 
@@ -114,6 +115,15 @@ export function criarHandler({ webpush = webpushPadrao, fetcher = fetch } = {}) 
       if (req.method === 'GET') return res.status(200).json({ chave: (await chaves()).publica })
       if (req.method !== 'POST') return res.status(405).json({ error: 'Método não permitido' })
       const corpo = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : req.body ?? {}
+      if (corpo.acao === 'resumo-agentes') {
+        const coleta = String(req.headers['x-coleta'] ?? '')
+        if (!/^[0-9a-f]{32,128}$/.test(coleta)) return res.status(401).json({ error: 'Não autorizado' })
+        try {
+          return res.status(200).json(await enviarResumoAgentes({ token: coleta, chamar, webpush }))
+        } catch (e) {
+          return res.status(/token/i.test(e.message) ? 401 : 502).json({ error: 'Não foi possível enviar o resumo dos agentes' })
+        }
+      }
       // Service worker de um endereço antigo largando a própria inscrição (public/sw.js). Sem login: o endpoint
       // é uma URL secreta do serviço de push, e quem a conhece só consegue apagar aquela inscrição.
       if (corpo.acao === 'cancelar-antigo') {
