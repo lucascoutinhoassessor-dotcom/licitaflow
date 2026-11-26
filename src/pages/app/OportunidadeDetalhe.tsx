@@ -8,6 +8,7 @@ import { toast } from 'sonner'
 import { Badge, Button, Card, Carregando, Vazio } from '@/components/ui'
 import { SeletorEmpresa, useEmpresaPadrao } from '@/components/Situacoes'
 import ItensAcordeao from '@/components/ItensAcordeao'
+import PotenciaisItem from '@/components/PotenciaisItem'
 import IconePortal from '@/components/IconePortal'
 import CodigoComprasnet from '@/components/CodigoComprasnet'
 import EmpresasDisputa from '@/components/EmpresasDisputa'
@@ -146,7 +147,10 @@ export default function OportunidadeDetalhe() {
         {encerrada && idCompra && <DisputaComprasGov idCompra={idCompra} itens={(itens.data ?? []).map((i) => i.numeroItem)} className="mb-4" />}
         {itens.isLoading ? <Carregando texto="Carregando itens…" /> : itens.isError ? (
           <Card className="p-5 text-sm">Não foi possível carregar os itens agora. <button className="font-semibold text-primary underline" onClick={() => itens.refetch()}>Tentar novamente</button></Card>
-        ) : <ItensAcordeao itens={itens.data ?? []} tipoEdital={compra.materialOuServico} extra={encerrada ? (i) => <ConcorrentesEdital item={i} todos={itens.data ?? []} colocacoes={resultados.data} atas={atasJuntas} comDisputa={!!idCompra} /> : undefined} />}
+        ) : <ItensAcordeao itens={itens.data ?? []} tipoEdital={compra.materialOuServico} extra={(i) => <>
+          <PotenciaisItem item={i} tipoEdital={compra.materialOuServico} />
+          {encerrada && <ConcorrentesEdital item={i} todos={itens.data ?? []} colocacoes={resultados.data} atas={atasJuntas} comDisputa={!!idCompra} />}
+        </>} />}
       </section>
     </>
   )
