@@ -1,3 +1,4 @@
+import { CheckoutPagamento } from '@/components/CheckoutPagamento'
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
@@ -52,7 +53,7 @@ function Pagamento({ org, obrigado }: { org: string; obrigado: boolean }) {
   const { recarregar } = useOrg()
   const navigate = useNavigate()
   const q = useQuery({ queryKey: ['checkout-cliente', org], queryFn: () => pagamentoAPI({ acao: 'checkout_cliente', org }),
-    refetchInterval: query => query.state.data?.pago && query.state.data?.email_enviado ? false : 10_000, retry: 1 })
+    refetchInterval: query => query.state.data?.pago && query.state.data?.email_enviado ? false : 30_000, retry: 1 })
   const d = q.data
   useEffect(() => {
     if (!d?.pago) return
@@ -78,12 +79,7 @@ function Pagamento({ org, obrigado }: { org: string; obrigado: boolean }) {
     </> : <>
       <h1 className="text-2xl font-semibold">Checkout LicitaForce</h1>
       <p>Plano {d?.plano} · <strong>{formatarMoeda((d?.valor_centavos || 0) / 100)}</strong> por {d?.ciclo === 'anual' ? 'ano' : 'mês'}.</p>
-      {d?.pix?.encodedImage && <img className="mx-auto h-56 w-56" alt="QR Code Pix para pagamento do plano" src={`data:image/png;base64,${d.pix.encodedImage}`} />}
-      {d?.pix?.payload && <div className="space-y-2"><p className="font-medium">Pix copia e cola</p><textarea aria-label="Código Pix" className="w-full rounded-md border bg-background p-2 text-xs" readOnly value={d.pix.payload} /><Button onClick={() => copiar(d.pix.payload)}>Copiar código Pix</Button></div>}
-      {d?.boleto?.identificationField && <div className="space-y-2"><p className="break-all text-sm">{d.boleto.identificationField}</p><Button variante="contorno" onClick={() => copiar(d.boleto.identificationField)}>Copiar linha digitável</Button></div>}
-      {d?.boleto_url?.startsWith('https://') && <a className="block text-primary underline" href={d.boleto_url} target="_blank" rel="noopener noreferrer">Abrir boleto</a>}
-      {d?.url?.startsWith('https://') && <a className="block rounded-md bg-primary px-4 py-3 text-center font-medium text-primary-foreground" href={d.url}>Pagar com cartão ou outras opções</a>}
-      {!d?.pix && !d?.url && <Aviso>A cobrança está sendo preparada. Aguarde a atualização ou clique em verificar pagamento.</Aviso>}
+      {d?.assinatura_id && <CheckoutPagamento assinatura={d.assinatura_id} embutido aoFechar={() => {}} />}
       <p className="flex items-center gap-2 text-xs text-muted-foreground"><ShieldCheck className="h-4 w-4" />Pagamento processado pelo Asaas. A liberação é automática após a confirmação.</p>
       <Button variante="contorno" className="w-full" carregando={q.isFetching} onClick={() => q.refetch()}>Verificar pagamento</Button>
       <Link to={`/obrigado?org=${org}`} className="block text-center text-sm text-primary underline">Já paguei, acompanhar confirmação</Link>

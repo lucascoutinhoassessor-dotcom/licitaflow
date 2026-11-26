@@ -1,5 +1,6 @@
+import { CheckoutPagamento } from '@/components/CheckoutPagamento'
 import { useState, type FormEvent } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { mensagemErro } from '@/lib/supabase'
@@ -15,10 +16,12 @@ export function AssinaturaPainel({ org, master = false, planoInicial }: { org: s
   const catalogo = useCatalogoPlanos()
   const q = useQuery({ queryKey: ['assinatura', org], queryFn: () => carregarAssinatura(org) })
   const [modal, setModal] = useState<'assinar' | 'trocar' | null>(null)
+  const [checkout, setCheckout] = useState<{id:string; fatura?:string}|null>(null)
   const [ocupado, setOcupado] = useState('')
   const [f, setF] = useState({ plano: '', ciclo: 'mensal', forma: 'UNDEFINED', documento: '', cupom: '' })
   const recarregar = () => Promise.all([
     qc.invalidateQueries({ queryKey: ['assinatura', org] }), qc.invalidateQueries({ queryKey: ['admin-assinaturas'] }),
+    qc.invalidateQueries({ queryKey: ['organizacoes'] }), qc.invalidateQueries({ queryKey: ['empresas'] }),
     qc.invalidateQueries({ queryKey: ['admin-financeiro'] }), qc.invalidateQueries({ queryKey: ['plano-cliente'] }),
   ])
   const planos = (catalogo.data ?? []).filter(p => !['trial', 'cancelado'].includes(p.id) && p.mensal_centavos >= 100 && (p.ativo || master))
@@ -38,7 +41,7 @@ export function AssinaturaPainel({ org, master = false, planoInicial }: { org: s
         if (![11, 14].includes(doc.length)) throw new Error('Informe o CPF ou CNPJ de quem paga.')
         const r = await pagamentoAPI({ acao: 'assinar', org, plano: f.plano, ciclo: f.ciclo, forma: f.forma, documento: doc, cupom: f.cupom.trim() || undefined })
         toast.success(f.cupom.trim() && r.valor_centavos ? `Assinatura criada com o cupom: ${formatarMoeda(r.valor_centavos / 100)} por cobrança.` : 'Assinatura criada no Asaas.')
-        if (master && r.url) window.open(r.url, '_blank', 'noopener,noreferrer')
+        if (master) setCheckout({id:r.id})
         if (!master) navigate(`/checkout?org=${org}`)
       } else {
         await pagamentoAPI({ acao: 'trocar_plano', id: q.data?.assinatura?.id, plano: f.plano, ciclo: f.ciclo })
@@ -63,7 +66,7 @@ export function AssinaturaPainel({ org, master = false, planoInicial }: { org: s
   if (q.isError) return <Aviso>Não foi possível carregar a assinatura. Confira se a migração de assinaturas foi aplicada. <button className="underline" onClick={() => q.refetch()}>Tentar novamente</button></Aviso>
   const { assinatura: a, faturas } = q.data!
   const st = a && STATUS_ASSINATURA[a.status]
-  const emAberto = faturas.find(x => ['pendente', 'atrasada'].includes(x.status) && x.link)
+  const emAberto = faturas.filter(x => x.assinatura_id === a?.id && ['pendente', 'atrasada'].includes(x.status)).sort((x,y) => String(x.vencimento).localeCompare(String(y.vencimento)))[0]
   const nomePlano = (id: string) => catalogo.data?.find(p => p.id === id)?.nome ?? id
 
   return <Card className="space-y-4 p-5">
@@ -86,9 +89,7 @@ export function AssinaturaPainel({ org, master = false, planoInicial }: { org: s
       {a.status === 'atrasada' && <Aviso>Há fatura vencida. {master ? 'A conta é suspensa automaticamente quando passa da tolerância configurada.' : 'Pague para evitar a suspensão do acesso.'}</Aviso>}
       {a.erro && master && <Aviso>Último erro no gateway: {a.erro}</Aviso>}
       <div className="flex flex-wrap gap-2">
-        {!master && (a.status === 'pendente' || a.status === 'atrasada') && <Link to={`/checkout?org=${org}`} className="inline-flex h-9 items-center rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground">Ir para checkout LicitaForce</Link>}
-        {emAberto && <a href={emAberto.link!} target="_blank" rel="noopener noreferrer" className="inline-flex h-9 items-center rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-primary/90">Pagar fatura em aberto</a>}
-        {!emAberto && a.link_pagamento && a.status === 'pendente' && <a href={a.link_pagamento} target="_blank" rel="noopener noreferrer" className="inline-flex h-9 items-center rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-primary/90">Pagar 1ª fatura</a>}
+        {(emAberto || a.status === 'pendente') && <Button tamanho="sm" onClick={() => setCheckout({id:a.id,fatura:emAberto?.id})}>Pagar no checkout</Button>}
         {a.gateway_assinatura_id && <Button tamanho="sm" variante="contorno" disabled={!!ocupado} onClick={() => abrir('trocar', a)}>Trocar plano</Button>}
         {master && a.gateway_assinatura_id && <Button tamanho="sm" variante="contorno" carregando={ocupado === 'sincronizar'} disabled={!!ocupado} onClick={() => acao('sincronizar')}>Sincronizar com Asaas</Button>}
         <Button tamanho="sm" variante="contorno" carregando={ocupado === 'cancelar_assinatura'} disabled={!!ocupado} onClick={() => acao('cancelar_assinatura')}>Cancelar assinatura</Button>
@@ -100,10 +101,11 @@ export function AssinaturaPainel({ org, master = false, planoInicial }: { org: s
         <td className="py-2">{formatarData(x.vencimento)}</td><td>{formatarMoeda(x.valor_centavos / 100)}</td>
         <td><Badge cor={STATUS_FATURA[x.status].cor}>{STATUS_FATURA[x.status].rotulo}</Badge></td>
         <td>{x.pago_em ? formatarData(x.pago_em) : '—'}</td>
-        <td className="text-right">{x.link && <a className="text-primary hover:underline" href={x.link} target="_blank" rel="noopener noreferrer">{x.status === 'paga' ? 'Comprovante' : 'Abrir'}</a>}</td>
+        <td className="text-right">{['pendente','atrasada'].includes(x.status) && x.assinatura_id === a?.id ? <button className="text-primary hover:underline" onClick={() => setCheckout({id:a!.id,fatura:x.id})}>Pagar</button> : x.status === 'paga' && x.link ? <a className="text-primary hover:underline" href={x.link} target="_blank" rel="noopener noreferrer">Comprovante</a> : null}</td>
       </tr>)}</tbody>
     </table></div>}
 
+    {checkout && <CheckoutPagamento assinatura={checkout.id} fatura={checkout.fatura} aoFechar={() => setCheckout(null)} />}
     <Modal aberto={!!modal} aoFechar={() => { if (!ocupado) setModal(null) }} titulo={modal === 'trocar' ? 'Trocar plano' : 'Contratar plano'}>
       <form className="space-y-4" onSubmit={enviar}>
         <Campo rotulo="Plano" htmlFor="as-plano"><Select id="as-plano" required value={f.plano} onChange={e => setF({ ...f, plano: e.target.value })}>

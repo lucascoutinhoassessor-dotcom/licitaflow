@@ -294,6 +294,12 @@ export function validarConteudo(c: ConteudoSite): string | null {
 }
 
 /** Troca {dias} pelo prazo do teste grátis. */
-export const comDias = (t: string, dias: number) => dias === 0
-  ? t.replace(/(?:\{dias\}|\d+) dias gr[áa]tis/gi, 'Contrate seu plano').replace(/teste gr[áa]tis/gi, 'assinatura').replace(/sem cart[ãa]o(?: de cr[ée]dito)?\.?/gi, 'Acesso após a confirmação do pagamento.').replace(/\{dias\}/g, '0')
-  : t.replace(/\{dias\}/g, String(dias))
+export const comDias = (t: string, dias: number) => {
+  if (dias <= 0) {
+    if (/^(testar|começar .*dias gr[aá]tis|criar minha conta gr[aá]tis)/i.test(t)) return 'Criar minha conta'
+    if (/preciso de cartão.*testar/i.test(t)) return 'Como começo a usar?'
+    if (/\{dias\}|sem (informar )?cartão( de crédito)?/i.test(t)) return 'Escolha um plano e conclua o pagamento no checkout do LicitaForce.'
+    if (/teste gr[aá]tis/i.test(t)) return t.replace(/teste gr[aá]tis/gi, 'contratação de plano')
+  }
+  return t.replace(/\{dias\}/g, String(dias))
+}

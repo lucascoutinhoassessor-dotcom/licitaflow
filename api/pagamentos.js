@@ -1,12 +1,15 @@
+import {ABERTOS,PAGOS,dadosCartao,apresentarPagamento} from '../server/checkout.js'
 import {configuracao,criarCheckout,consultarPagamento} from '../server/gateways.js'
 import {asaas,cifrar,corpoAssinatura,ErroAsaas,hojeSP,montarConfig} from '../server/asaas.js'
 import {emailCupomAcesso,emailTeste,enviarEmail,montarSmtp} from '../server/email.js'
 import {enviarAcessoPago} from '../server/acesso-pago.js'
 import {URL_SITE} from '../server/email.js'
 
+export const config={maxDuration:120}
+
 const UUID=/^[0-9a-f-]{36}$/i
 // Ações que dono/administrador da organização pode pedir; o restante é exclusivo do master.
-const ACOES_CLIENTE=['assinar','trocar_plano','cancelar_assinatura','conferir_cupom','resgatar_cupom','checkout_cliente']
+const ACOES_CLIENTE=['assinar','trocar_plano','cancelar_assinatura','conferir_cupom','resgatar_cupom','checkout_cliente','checkout_assinatura','pagar_cartao']
 
 export default async function handler(req,res) {
   res.setHeader('Cache-Control','no-store')
@@ -120,6 +123,65 @@ export default async function handler(req,res) {
       return res.json({...r,emailEnviado})
     }
 
+    // Checkout da organização: autorização antes de acessar o gateway ou cobrar.
+    if(['checkout_assinatura','pagar_cartao'].includes(body.acao)) {
+      if(!UUID.test(body.id ?? '') || (body.fatura && !UUID.test(body.fatura))) return res.status(400).json({error:'Assinatura ou fatura inválida'})
+      const [a]=await sv('/rest/v1/assinaturas?select=*&id=eq.'+body.id)
+      if(!a) return res.status(404).json({error:'Assinatura não encontrada'})
+      if(!admin && (await rpc('pode_gerir_cobranca',{p_org:a.org_id}))!==true) return res.status(403).json({error:'Somente o dono ou administrador pode acessar o checkout'})
+      if(a.status==='cancelada') return res.status(409).json({error:'Assinatura cancelada'})
+      if(!a.gateway_assinatura_id) return res.status(409).json({error:'Assinatura em processamento. Aguarde e atualize.'})
+      const {cfg}=await carregarAsaas()
+      let pagamento
+      if(body.fatura) {
+        const [f]=await sv('/rest/v1/assinatura_faturas?select=*&id=eq.'+body.fatura+'&assinatura_id=eq.'+a.id)
+        if(!f) return res.status(404).json({error:'Fatura não encontrada nesta assinatura'})
+        pagamento=await asaas(cfg,'/payments/'+encodeURIComponent(f.gateway_pagamento_id))
+      } else {
+        const lista=await asaas(cfg,'/subscriptions/'+encodeURIComponent(a.gateway_assinatura_id)+'/payments?limit=100')
+        const ordenada=(lista.data ?? []).sort((x,y)=>String(x.dueDate).localeCompare(String(y.dueDate)))
+        pagamento=ordenada.find(p=>ABERTOS.includes(p.status)) ?? ordenada.filter(p=>PAGOS.includes(p.status)).at(-1)
+      }
+      if(!pagamento) return res.status(409).json({error:'A primeira fatura ainda está sendo emitida. Atualize em instantes.'})
+      if(pagamento.subscription!==a.gateway_assinatura_id) return res.status(409).json({error:'Fatura não pertence à assinatura'})
+      await rpc('processar_pagamento_asaas',{p_evento:'SYNC',p_pagamento:pagamento},true)
+      if(PAGOS.includes(pagamento.status)) await enviarAcessoPago(sv,pagamento,env).catch(()=>{})
+      // Após timeout, só libera nova tentativa depois de consultar o gateway e aguardar a requisição anterior encerrar.
+      if(body.acao==='checkout_assinatura' && pagamento.status==='PENDING') {
+        const limite=new Date(Date.now()-120000).toISOString()
+        await patchSv('/rest/v1/assinatura_faturas?gateway_pagamento_id=eq.'+encodeURIComponent(pagamento.id)+'&pagamento_iniciado_em=lt.'+encodeURIComponent(limite),{pagamento_iniciado_em:null})
+      }
+      let avisoRecorrencia=null
+      if(body.acao==='pagar_cartao' && !PAGOS.includes(pagamento.status)) {
+        if(!cfg?.ativo) return res.status(503).json({error:'Pagamentos estão desativados pela plataforma'})
+        if(!ABERTOS.includes(pagamento.status) || !['UNDEFINED','CREDIT_CARD'].includes(pagamento.billingType)) return res.status(409).json({error:'Esta fatura não aceita pagamento por cartão'})
+        const cartao=dadosCartao(body,req)
+        const [f]=await patchSv('/rest/v1/assinatura_faturas?gateway_pagamento_id=eq.'+encodeURIComponent(pagamento.id)+'&pagamento_iniciado_em=is.null',{pagamento_iniciado_em:new Date().toISOString()})
+        if(!f) return res.status(409).json({error:'Já existe uma tentativa em processamento. Atualize para conferir o pagamento antes de tentar novamente.'})
+        try {
+          pagamento=await asaas(cfg,'/payments/'+encodeURIComponent(pagamento.id)+'/payWithCreditCard',{method:'POST',body:cartao,timeout:65000})
+        } catch(e) {
+          // Uma recusa explícita pode ser corrigida. Timeout ou 5xx mantêm a trava até conciliação.
+          if(e instanceof ErroAsaas && e.status===400) await patchSv('/rest/v1/assinatura_faturas?id=eq.'+f.id,{pagamento_iniciado_em:null})
+          throw e
+        }
+        await rpc('processar_pagamento_asaas',{p_evento:'SYNC',p_pagamento:pagamento},true)
+      if(PAGOS.includes(pagamento.status)) await enviarAcessoPago(sv,pagamento,env).catch(()=>{})
+        // O cartão tokenizado no Asaas será usado nas próximas cobranças da assinatura.
+        if(PAGOS.includes(pagamento.status)) {
+          try {
+            await asaas(cfg,'/subscriptions/'+encodeURIComponent(a.gateway_assinatura_id)+'/creditCard',{method:'PUT',body:pagamento.creditCard?.creditCardToken?{creditCardToken:pagamento.creditCard.creditCardToken,remoteIp:cartao.remoteIp}:cartao,timeout:15000})
+          } catch {
+            avisoRecorrencia='Pagamento confirmado. Fale com o suporte para conferir o cartão das próximas cobranças.'
+            await patchSv('/rest/v1/assinaturas?id=eq.'+a.id,{erro:'Pagamento processado; conferir cartão da recorrência no Asaas.'}).catch(()=>{})
+          }
+        }
+      }
+      const checkout=await apresentarPagamento(cfg,pagamento,body.codigos!==false)
+      if(avisoRecorrencia) checkout.aviso=avisoRecorrencia
+      return res.json(checkout)
+    }
+
     // ------------------------------------------------------------------ Assinaturas recorrentes
     if(body.acao==='checkout_cliente') {
       if(!UUID.test(body.org ?? '')) return res.status(400).json({error:'Organização inválida'})
@@ -143,7 +205,7 @@ export default async function handler(req,res) {
         if(['PIX','BOLETO','UNDEFINED'].includes(p.billingType)) pix=await asaas(cfg,`/payments/${encodeURIComponent(p.id)}/pixQrCode`).catch(()=>null)
         if(p.billingType==='BOLETO') boleto=await asaas(cfg,`/payments/${encodeURIComponent(p.id)}/identificationField`).catch(()=>null)
       }
-      return res.json({pago,liberado:pago && !org?.suspensa,email_enviado:!!atual?.boas_vindas_em,email_falhou:emailResultado.includes('falhou'),
+      return res.json({assinatura_id:a.id,pago,liberado:pago && !org?.suspensa,email_enviado:!!atual?.boas_vindas_em,email_falhou:emailResultado.includes('falhou'),
         valor_centavos:a.valor_centavos,plano:a.plano_id,ciclo:a.ciclo,pix,boleto,
         url:p?.invoiceUrl ?? a.link_pagamento,boleto_url:p?.bankSlipUrl ?? null})
     }
@@ -264,7 +326,7 @@ export default async function handler(req,res) {
     await patch({verificado_em:new Date().toISOString(),...(pago?{status:'paga',confirmado_em:new Date().toISOString()}:{})})
     return res.json({pago})
   } catch(e) {
-    const status=e.status===401?401:e instanceof ErroAsaas?(e.status===503?503:502):e.status===400||e.status===409?400:e.status===503?503:502
+    const status=[400,401,403,404,409].includes(e.status)?e.status:e instanceof ErroAsaas?(e.status===503?503:502):e.status===400||e.status===409?400:e.status===503?503:502
     return res.status(status).json({error:e instanceof ErroAsaas?`Asaas: ${e.message}`:(e.message || 'Falha na integração de pagamentos')})
   }
 }

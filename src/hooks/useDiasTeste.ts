@@ -6,7 +6,7 @@ import { DIAS_TESTE } from '@/lib/planos'
 export function useDiasTeste() {
   const q = useQuery({
     queryKey: ['dias-teste-gratis'],
-    staleTime: 10 * 60_000,
+    staleTime: 60_000,
     retry: 1,
     queryFn: async () => {
       const { data, error } = await supabase.rpc('dias_teste_gratis')
