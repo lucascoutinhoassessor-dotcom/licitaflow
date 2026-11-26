@@ -4,6 +4,7 @@ import type { Session, User } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 import { iniciarSessao } from '@/lib/iniciarSessao'
 import { FalhaAcesso } from '@/components/FalhaAcesso'
+import { aoRetomarAcesso } from '@/lib/retomarAcesso'
 
 interface AuthCtx {
   session: Session | null
@@ -45,6 +46,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (evento === 'USER_UPDATED' || evento === 'SIGNED_OUT') setRecuperandoSenha(false)
     }, () => { setErro(true); setCarregando(false) })
   }, [qc, tentativa])
+
+  useEffect(() => {
+    if (!erro) return
+    return aoRetomarAcesso(() => setTentativa(n => n + 1))
+  }, [erro])
 
   const sair = async () => {
     await supabase.auth.signOut()
