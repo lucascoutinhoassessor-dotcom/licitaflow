@@ -1,5 +1,6 @@
 // Notificações push neste aparelho (lado do cliente). O envio é feito por api/push.js.
 import { supabase } from '@/lib/supabase'
+import { emAppInstalado } from '@/lib/pwa'
 
 export type EstadoPush = 'ativo' | 'inativo' | 'negado' | 'sem-suporte'
 
@@ -8,7 +9,15 @@ export const pushSuportado = () =>
 
 /** No iPhone o push só existe com o app instalado na Tela de Início. */
 export const precisaInstalar = () =>
-  typeof navigator !== 'undefined' && /iPhone|iPad|iPod/.test(navigator.userAgent) && !window.matchMedia('(display-mode: standalone)').matches
+  typeof navigator !== 'undefined' && (/iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) && !emAppInstalado()
+
+/** Permissão e inscrição são estados diferentes: uma falha de rede não revoga a permissão. */
+export const notificacoesPermitidas = () => typeof Notification !== 'undefined' && Notification.permission === 'granted'
+
+export function devePedirNotificacoes(estado: EstadoPush, instalado: boolean) {
+  if (notificacoesPermitidas() || estado === 'ativo') return false
+  return estado === 'inativo' || estado === 'negado' || (estado === 'sem-suporte' && precisaInstalar() && !instalado)
+}
 
 export function chaveParaBytes(base64: string) {
   const pad = '='.repeat((4 - (base64.length % 4)) % 4)
@@ -42,6 +51,11 @@ export async function ativarPush(): Promise<EstadoPush> {
   if (!pushSuportado()) return 'sem-suporte'
   const permissao = await Notification.requestPermission()
   if (permissao !== 'granted') return permissao === 'denied' ? 'negado' : 'inativo'
+  return inscreverPush(true)
+}
+
+/** Recupera a inscrição sem abrir o pedido de permissão nem exibir confirmação no login. */
+async function inscreverPush(confirmar: boolean): Promise<EstadoPush> {
   const r = await fetch('/api/push', { cache: 'no-store' })
   if (!r.ok) throw new Error('Não foi possível ativar agora')
   const { chave } = await r.json()
@@ -53,7 +67,7 @@ export async function ativarPush(): Promise<EstadoPush> {
   if (sub && atual && btoa(String.fromCharCode(...new Uint8Array(atual))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '') !== chave) { await sub.unsubscribe(); sub = null }
   sub = sub || (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: chaveParaBytes(chave) }))
   await chamar({ acao: 'inscrever', inscricao: sub.toJSON() })
-  reg.showNotification('Notificações ativadas', { body: 'Os avisos do LicitaForce vão chegar aqui na hora, mesmo com o app fechado.', icon: '/icons/icone-192.png', badge: '/icons/badge-96.png', tag: 'licitaforce-ativado' }).catch(() => undefined)
+  if (confirmar) reg.showNotification('Notificações ativadas', { body: 'Os avisos do LicitaForce vão chegar aqui na hora, mesmo com o app fechado.', icon: '/icons/icone-192.png', badge: '/icons/badge-96.png', tag: 'licitaforce-ativado' }).catch(() => undefined)
   return 'ativo'
 }
 
@@ -63,6 +77,7 @@ export async function ativarPush(): Promise<EstadoPush> {
  */
 export async function sincronizarPush(): Promise<EstadoPush> {
   const estado = await estadoPush()
+  if (estado === 'inativo' && notificacoesPermitidas()) return inscreverPush(false).catch(() => estado)
   if (estado !== 'ativo') return estado
   const reg = await navigator.serviceWorker.getRegistration()
   const sub = await reg?.pushManager.getSubscription()
@@ -73,11 +88,20 @@ export async function sincronizarPush(): Promise<EstadoPush> {
 /** Avisa quando o usuário muda a permissão de notificações nas configurações do navegador. */
 export function observarPermissao(aoMudar: () => void) {
   let status: PermissionStatus | null = null
+  let ativo = true
   const permissoes = typeof navigator !== 'undefined' ? navigator.permissions : undefined
-  permissoes?.query({ name: 'notifications' as PermissionName }).then((s) => { status = s; s.onchange = aoMudar }).catch(() => undefined)
+  permissoes?.query({ name: 'notifications' as PermissionName }).then((s) => { if (ativo) { status = s; s.addEventListener('change', aoMudar) } }).catch(() => undefined)
   const visivel = () => { if (document.visibilityState === 'visible') aoMudar() }
   document.addEventListener('visibilitychange', visivel)
-  return () => { if (status) status.onchange = null; document.removeEventListener('visibilitychange', visivel) }
+  window.addEventListener('focus', aoMudar)
+  window.addEventListener('pageshow', aoMudar)
+  return () => {
+    ativo = false
+    status?.removeEventListener('change', aoMudar)
+    document.removeEventListener('visibilitychange', visivel)
+    window.removeEventListener('focus', aoMudar)
+    window.removeEventListener('pageshow', aoMudar)
+  }
 }
 
 export async function desativarPush() {

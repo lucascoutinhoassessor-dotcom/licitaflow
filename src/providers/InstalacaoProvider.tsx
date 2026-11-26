@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { Download, MoreVertical, Share, SquarePlus, X } from 'lucide-react'
+import { appJaInstalado, instalacaoLembrada, lembrarInstalacao } from '@/lib/instalacao'
+import { emAppInstalado } from '@/lib/pwa'
 
 interface InstallEvent extends Event {
   prompt(): Promise<void>
@@ -14,19 +16,14 @@ const ehMovel = () => (navigator as Navigator & { userAgentData?: { mobile?: boo
   || /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || ehIOS()
 /** Pedido de instalação guardado por public/pwa.js antes do React carregar (o Chrome pode disparar cedo). */
 const pedidoAntecipado = () => ((window as Window & { __lfInstalar?: InstallEvent | null }).__lfInstalar ?? null)
-/** Android/Chrome: confere se o app deste endereço já está instalado (related_applications nos manifestos). */
-async function appJaInstalado() {
-  const nav = navigator as Navigator & { getInstalledRelatedApps?: () => Promise<{ platform: string }[]> }
-  if (!nav.getInstalledRelatedApps) return false
-  try { return (await nav.getInstalledRelatedApps()).some(a => a.platform === 'webapp') } catch { return false }
-}
-const emAplicativo = () => window.matchMedia('(display-mode: standalone)').matches || (navigator as Navigator & { standalone?: boolean }).standalone === true
+const emAplicativo = emAppInstalado
 
 export function InstalacaoProvider({ children }: { children: ReactNode }) {
   const [standalone, setStandalone] = useState(emAplicativo)
   const [instaladoNestaVisita, setInstaladoNestaVisita] = useState(false)
   const [mobile, setMobile] = useState(ehMovel)
-  const [jaInstalado, setJaInstalado] = useState(false)
+  const [jaInstalado, setJaInstalado] = useState(instalacaoLembrada)
+  const [conferindo, setConferindo] = useState(true)
   // O Chrome só oferece a instalação (beforeinstallprompt) quando o app NÃO está instalado neste aparelho.
   const [disponivel, setDisponivel] = useState(() => !!pedidoAntecipado())
   const [descartado, setDescartado] = useState(false)
@@ -38,9 +35,9 @@ export function InstalacaoProvider({ children }: { children: ReactNode }) {
   const [ios] = useState(ehIOS)
   const [master, setMaster] = useState(false)
   // Some no computador, dentro do app e quando o app já está instalado. No Android só aparece quando o navegador
-  // pode instalar na hora (o botão abre a instalação direto). No iPhone/iPad não há como saber se já foi instalado
-  // nem instalar por botão: aparece com o passo a passo do Safari.
-  const ocultar = standalone || instaladoNestaVisita || !mobile || jaInstalado || (!ios && !disponivel)
+  // pode instalar na hora. No iPhone/iPad também aceita a confirmação manual do usuário.
+  const instalado = standalone || instaladoNestaVisita || jaInstalado
+  const ocultar = conferindo || instalado || !mobile || (!ios && !disponivel)
   const mostrarAviso = mobile && !ocultar && !descartado
 
   useEffect(() => {
@@ -54,38 +51,60 @@ export function InstalacaoProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const media = window.matchMedia('(display-mode: standalone)')
+    let versao = 0
+    let ativo = true
     const atualizar = () => {
+      const consulta = ++versao
       setStandalone(emAplicativo())
       setMobile(ehMovel())
-      void appJaInstalado().then(setJaInstalado)
+      void appJaInstalado().then(valor => {
+        if (!ativo || consulta !== versao) return
+        setJaInstalado(valor)
+        setConferindo(false)
+      })
     }
     const receber = (e: Event) => {
+      ++versao
       e.preventDefault()
+      lembrarInstalacao(false)
       evento.current = e as InstallEvent
       setDisponivel(true)
       setJaInstalado(false)
+      setConferindo(false)
       // Elegibilidade nova permite oferecer novamente, inclusive após uma desinstalação.
       setInstaladoNestaVisita(false)
       setDescartado(false)
       setAjuda(false)
     }
     const concluir = () => {
+      ++versao
+      lembrarInstalacao(true)
       evento.current = null
       setDisponivel(false)
       setInstaladoNestaVisita(true)
+      setJaInstalado(true)
+      setConferindo(false)
       setAjuda(false)
     }
-    atualizar()
+    if (pedidoAntecipado()) receber(pedidoAntecipado()!)
+    else atualizar()
+    const visivel = () => { if (document.visibilityState === 'visible') atualizar() }
+    const armazenamento = () => atualizar()
     window.addEventListener('beforeinstallprompt', receber)
     window.addEventListener('appinstalled', concluir)
     window.addEventListener('pageshow', atualizar)
     window.addEventListener('focus', atualizar)
+    window.addEventListener('storage', armazenamento)
+    document.addEventListener('visibilitychange', visivel)
     media.addEventListener('change', atualizar)
     return () => {
+      ativo = false
       window.removeEventListener('beforeinstallprompt', receber)
       window.removeEventListener('appinstalled', concluir)
       window.removeEventListener('pageshow', atualizar)
       window.removeEventListener('focus', atualizar)
+      window.removeEventListener('storage', armazenamento)
+      document.removeEventListener('visibilitychange', visivel)
       media.removeEventListener('change', atualizar)
     }
   }, [])
@@ -104,13 +123,13 @@ export function InstalacaoProvider({ children }: { children: ReactNode }) {
     try {
       await disponivel.prompt()
       const resposta = await disponivel.userChoice
-      if (resposta.outcome === 'accepted') setInstaladoNestaVisita(true)
+      if (resposta.outcome === 'accepted') { lembrarInstalacao(true); setInstaladoNestaVisita(true) }
       else setDescartado(true)
     } catch { setAjuda(true) }
     finally { emAndamento.current = false; setInstalando(false) }
   }
 
-  return <CtxInstalacao.Provider value={{ ocultar, instalando, ajuda, instalar }}>
+  return <CtxInstalacao.Provider value={{ ocultar, instalado, conferindo, instalando, ajuda, instalar }}>
     {children}
     {mostrarAviso && <section ref={aviso} aria-label="Instalação do LicitaForce" className="fixed inset-x-3 bottom-[calc(var(--barra-inferior,0px)+max(.75rem,env(safe-area-inset-bottom)))] z-30 mx-auto max-w-lg rounded-xl border border-slate-600 bg-slate-900 p-4 text-white shadow-2xl">
       <div className="flex items-start gap-3">
@@ -119,6 +138,7 @@ export function InstalacaoProvider({ children }: { children: ReactNode }) {
         <button aria-label="Fechar aviso de instalação" onClick={() => { setDescartado(true); setAjuda(false) }} className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"><X className="h-5 w-5"/></button>
       </div>
       <button onClick={instalar} disabled={instalando} className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-medium hover:bg-blue-500 disabled:opacity-50"><Download className="h-4 w-4"/>{instalando ? 'Aguarde…' : 'Instalar aplicativo'}</button>
+      {ios && <button onClick={() => { lembrarInstalacao(true); setJaInstalado(true); setAjuda(false) }} className="ml-2 inline-flex min-h-11 items-center rounded-lg px-4 text-sm font-medium hover:bg-slate-800">Já instalei</button>}
     </section>}
     <Dialog.Root open={ajuda} onOpenChange={setAjuda}>
       <Dialog.Portal>

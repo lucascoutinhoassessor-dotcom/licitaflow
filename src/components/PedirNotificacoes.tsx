@@ -3,7 +3,8 @@ import { BellRing } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button, Modal } from '@/components/ui'
 import { useAuth } from '@/providers/AuthProvider'
-import { ativarPush, observarPermissao, precisaInstalar, sincronizarPush, type EstadoPush } from '@/lib/push'
+import { ativarPush, devePedirNotificacoes, estadoPush, notificacoesPermitidas, observarPermissao, sincronizarPush, type EstadoPush } from '@/lib/push'
+import { useInstalacao } from '@/hooks/useInstalacao'
 import { mensagemErro } from '@/lib/supabase'
 
 const CHAVE_ESTADO = 'lf-push-ultimo-estado'
@@ -19,45 +20,63 @@ const gravar = (s: Storage, k: string, v: string | null) => { try { if (v === nu
  */
 export default function PedirNotificacoes() {
   const { user } = useAuth()
+  const { instalado, conferindo } = useInstalacao()
   const [estado, setEstado] = useState<EstadoPush | null>(null)
   const [aberto, setAberto] = useState(false)
   const [desativou, setDesativou] = useState(false)
   const [ocupado, setOcupado] = useState(false)
   const ultimo = useRef<string | null>(null)
+  const consulta = useRef(0)
 
   const conferir = useCallback(async () => {
-    if (!user) return
-    const e = await sincronizarPush().catch(() => 'inativo' as EstadoPush)
+    if (!user || conferindo) return
+    const versao = ++consulta.current
+    const e = await estadoPush().catch(() => 'inativo' as EstadoPush)
+    if (versao !== consulta.current) return
+    const permitido = notificacoesPermitidas()
     const antes = ultimo.current ?? ler(localStorage, CHAVE_ESTADO)
-    ultimo.current = e
-    gravar(localStorage, CHAVE_ESTADO, e)
+    const atual = permitido ? 'permitido' : e
+    ultimo.current = atual
+    gravar(localStorage, CHAVE_ESTADO, atual)
     setEstado(e)
-    if (e === 'ativo') { setAberto(false); return }
-    const precisa = e === 'inativo' || e === 'negado' || (e === 'sem-suporte' && precisaInstalar())
-    if (!precisa) return
+    if (permitido) void sincronizarPush().catch(() => undefined)
+    if (!devePedirNotificacoes(e, instalado)) { setAberto(false); setDesativou(false); return }
     // Estava ativo e deixou de estar: pergunta de novo, mesmo que tenha dito "agora não" antes.
-    if (antes === 'ativo') { setDesativou(true); gravar(sessionStorage, chaveAdiado(user.id), null) }
+    if (antes === 'ativo' || antes === 'permitido') { setDesativou(true); gravar(sessionStorage, chaveAdiado(user.id), null) }
     if (!ler(sessionStorage, chaveAdiado(user.id))) setAberto(true)
-  }, [user])
+  }, [user, instalado, conferindo])
 
   useEffect(() => {
-    if (!user) return
+    ultimo.current = null
+    setAberto(false)
+    setDesativou(false)
+    if (!user || conferindo) return
     // Espera a tela carregar antes de perguntar.
     const t = window.setTimeout(() => void conferir(), 1500)
     const parar = observarPermissao(() => void conferir())
-    return () => { window.clearTimeout(t); parar() }
-  }, [user, conferir])
+    return () => { ++consulta.current; window.clearTimeout(t); parar() }
+  }, [user, conferindo, conferir])
 
   if (!user || !estado) return null
   function adiar() { gravar(sessionStorage, chaveAdiado(user!.id), '1'); setAberto(false) }
   async function ativar() {
     setOcupado(true)
+    ++consulta.current
     try {
       const e = await ativarPush()
       ultimo.current = e; gravar(localStorage, CHAVE_ESTADO, e); setEstado(e)
       if (e === 'ativo') { setAberto(false); setDesativou(false); toast.success('Notificações ativadas neste aparelho.') }
       else if (e === 'negado') toast.error('O navegador bloqueou as notificações. Libere nas configurações do site e volte aqui.')
-    } catch (e) { toast.error(mensagemErro(e)) } finally { setOcupado(false) }
+    } catch (e) { toast.error(mensagemErro(e)) } finally {
+      ++consulta.current
+      if (notificacoesPermitidas()) {
+        ultimo.current = 'permitido'
+        gravar(localStorage, CHAVE_ESTADO, 'permitido')
+        setAberto(false)
+        setDesativou(false)
+      }
+      setOcupado(false)
+    }
   }
 
   const titulo = desativou ? 'As notificações foram desativadas' : 'Ative as notificações'
