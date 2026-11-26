@@ -138,3 +138,14 @@ export function emailRadar({ nome, empresa, org_id, empresa_id, oportunidades })
 export function emailTeste() {
   return { assunto: 'Teste de e-mail do LicitaForce', html: layout('Envio funcionando', '<p>Este é um e-mail de teste enviado pelo Painel Master. Se chegou com o nome e o logo do LicitaForce, está tudo certo.</p>'), texto: 'Este é um e-mail de teste enviado pelo Painel Master.' }
 }
+
+/** Ticket e atualizações: o conteúdo é escapado antes de entrar no HTML. */
+export function emailChamado({ id, assunto, organizacao, tipo, texto, evento, master = false }) {
+  const titulo = evento === 'abrir' ? 'Solicitação aberta' : evento === 'responder' ? 'Nova resposta no atendimento' : 'Atendimento atualizado'
+  const url = `${URL_SITE}/${master ? 'master/suporte' : 'suporte'}`
+  return {
+    assunto: `[Ticket ${id}] ${titulo}: ${String(assunto).replace(/[\r\n]/g, ' ')}`,
+    html: layout(titulo, `<p><b>${esc(assunto)}</b></p><p>Protocolo: ${esc(id)}<br>Organização: ${esc(organizacao)}<br>Tipo: ${esc(tipo)}</p><p style="white-space:pre-wrap">${esc(texto)}</p>${botao(url, 'Acompanhar ticket')}${nota('Acesse o ticket no painel para responder e acompanhar o histórico.')}`),
+    texto: `${titulo}: ${assunto}\nProtocolo: ${id}\nOrganização: ${organizacao}\nTipo: ${tipo}\n\n${texto}\n\nAcompanhe e responda pelo painel: ${url}`,
+  }
+}

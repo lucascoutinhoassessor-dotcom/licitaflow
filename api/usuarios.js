@@ -1,3 +1,4 @@
+import suporteHandler from '../server/suporte.js'
 // Criação de usuários pelo master, sem passar pelo cadastro público nem pelo pagamento.
 // Cria o login (e-mail já confirmado), e opcionalmente a organização com o plano e o prazo de teste
 // escolhidos, com o novo usuário como dono. Tudo com a chave de serviço, depois de conferir que quem
@@ -89,6 +90,7 @@ export default async function handler(req,res) {
     try { return await iniciarCompra(pedido,req,res,env) }
     catch { return res.status(502).json({error:'Não foi possível iniciar a compra. Tente novamente.'}) }
   }
+  if(['suporte_abrir','suporte_responder','suporte_atualizar'].includes(pedido.acao)) return suporteHandler({method:req.method,headers:req.headers,body:{...pedido,acao:pedido.acao.slice(8)}},res)
   if(ACOES_PUBLICAS.includes(pedido.acao)) {
     try { return await contaPublica(pedido,req,res,env) }
     catch(e) { return res.status(502).json({error:e instanceof ErroEmail?e.message:'Não foi possível enviar o e-mail agora. Tente de novo em instantes.'}) }
