@@ -4,23 +4,36 @@ vi.mock('./supabase',()=>({supabase:{rpc,auth:{getSession}}}))
 import {pesquisarIndice} from './buscaIndice'
 import {filtrosExtras} from './filtrosOportunidades'
 const f={...filtrosExtras,busca:'microcomputador',inicio:'2026-11-01',fim:'2026-11-17',uf:'',modalidade:'6',situacao:'abertas' as const}
-afterEach(()=>{vi.resetAllMocks();vi.unstubAllGlobals()})
+afterEach(()=>{vi.restoreAllMocks();vi.resetAllMocks();vi.unstubAllGlobals()})
 const semSessao=()=>getSession.mockResolvedValue({data:{session:null}})
 const comSessao=()=>getSession.mockResolvedValue({data:{session:{access_token:'tk'}}})
 describe('consulta indexada',()=>{
+ it('encerra o carregamento mesmo se a leitura da sessão não responder',async()=>{
+  getSession.mockReturnValue(new Promise(()=>undefined))
+  const c=new AbortController();vi.spyOn(AbortSignal,'timeout').mockReturnValue(c.signal)
+  const pendente=pesquisarIndice(f,1)
+  c.abort()
+  await expect(pendente).rejects.toThrow('demorou mais')
+  expect(rpc).not.toHaveBeenCalled()
+ })
+ it('não devolve resultados do Postgres como se fossem o histórico de publicações',async()=>{
+  comSessao();vi.stubGlobal('fetch',vi.fn().mockResolvedValue(new Response('{}',{status:503})))
+  await expect(pesquisarIndice({...f,situacao:'publicacoes'},1)).rejects.toThrow('histórico')
+  expect(rpc).not.toHaveBeenCalled()
+ })
  it('faz uma única RPC paginada sem consultar a fonte externa',async()=>{
   semSessao()
   const data={data:[],totalRegistros:141,totalPaginas:8}
   rpc.mockReturnValue({abortSignal});abortSignal.mockResolvedValue({data,error:null})
   const c=new AbortController();expect(await pesquisarIndice(f,3,c.signal)).toEqual(data)
-  expect(rpc).toHaveBeenCalledTimes(1);expect(rpc).toHaveBeenCalledWith('buscar_oportunidades',{p_filtros:f,p_pagina:3,p_tamanho:20});expect(abortSignal).toHaveBeenCalledWith(c.signal)
+  expect(rpc).toHaveBeenCalledTimes(1);expect(rpc).toHaveBeenCalledWith('buscar_oportunidades',{p_filtros:f,p_pagina:3,p_tamanho:20});expect(abortSignal).toHaveBeenCalledWith(expect.any(AbortSignal))
  })
  it('não inicia varredura externa se o índice ainda não estiver implantado',async()=>{
-  semSessao();rpc.mockResolvedValue({data:null,error:{code:'PGRST202'}})
+  semSessao();rpc.mockReturnValue({abortSignal});abortSignal.mockResolvedValue({data:null,error:{code:'PGRST202'}})
   await expect(pesquisarIndice(f,1)).rejects.toThrow('sendo preparado');expect(rpc).toHaveBeenCalledTimes(1)
  })
  it('explica quando a busca passa do tempo limite do banco',async()=>{
-  semSessao();rpc.mockResolvedValue({data:null,error:{code:'57014'}})
+  semSessao();rpc.mockReturnValue({abortSignal});abortSignal.mockResolvedValue({data:null,error:{code:'57014'}})
   await expect(pesquisarIndice(f,1)).rejects.toThrow('demorou mais que o esperado')
  })
  it('usa a base rápida (Turso) quando ela responde, sem chamar o Postgres',async()=>{
@@ -34,7 +47,7 @@ describe('consulta indexada',()=>{
   comSessao()
   const fetch=vi.fn().mockResolvedValue(new Response(JSON.stringify({codigo:'turso_carregando'}),{status:409}));vi.stubGlobal('fetch',fetch)
   const data={data:[],totalRegistros:1,totalPaginas:1}
-  rpc.mockResolvedValue({data,error:null})
+  rpc.mockReturnValue({abortSignal});abortSignal.mockResolvedValue({data,error:null})
   expect(await pesquisarIndice(f,1)).toEqual(data);expect(await pesquisarIndice(f,2)).toEqual(data)
   expect(fetch).toHaveBeenCalledTimes(1);expect(rpc).toHaveBeenCalledTimes(2)
  })

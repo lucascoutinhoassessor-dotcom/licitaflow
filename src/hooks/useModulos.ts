@@ -14,8 +14,8 @@ export function useModulos() {
     enabled: !!org,
     staleTime: 60_000,
     retry: 1,
-    queryFn: async () => {
-      const { data, error } = await supabase.rpc('modulos_da_org', { p_org: org!.id })
+    queryFn: async ({signal}) => {
+      const { data, error } = await supabase.rpc('modulos_da_org', { p_org: org!.id }).abortSignal(AbortSignal.any([signal,AbortSignal.timeout(15_000)]))
       if (error) throw error
       return (data ?? {}) as Record<string, string>
     },
