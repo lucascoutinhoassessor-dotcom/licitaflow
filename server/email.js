@@ -44,12 +44,12 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 const data = (d) => (d ? new Date(`${d}T12:00:00`).toLocaleDateString('pt-BR') : '')
 const ola = (nome) => (nome ? `Olá, ${String(nome).trim().split(/\s+/)[0]}!` : 'Olá!')
 
-function layout(titulo, corpo) {
+function layout(titulo, corpo, site = URL_SITE) {
   return `<!doctype html><html><body style="margin:0;background:#f4f4f5;font-family:Arial,Helvetica,sans-serif;color:#18181b">
 <div style="max-width:520px;margin:24px auto;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e4e4e7">
 <div style="background:${COR};color:#ffffff;padding:18px 24px;font-size:18px;font-weight:bold"><img src="cid:licitaflow-logo" width="40" height="40" alt="LicitaForce" style="vertical-align:middle;margin-right:12px;border-radius:8px">LicitaForce</div>
 <div style="padding:24px"><h1 style="font-size:20px;margin:0 0 16px">${esc(titulo)}</h1>${corpo}</div>
-<div style="padding:16px 24px;font-size:12px;color:#71717a;border-top:1px solid #e4e4e7">Você recebeu este e-mail porque tem uma conta no LicitaForce. <a href="${URL_SITE}" style="color:${COR}">${URL_SITE.replace(/^https?:\/\//, '')}</a></div>
+<div style="padding:16px 24px;font-size:12px;color:#71717a;border-top:1px solid #e4e4e7">Você recebeu este e-mail porque tem uma conta no LicitaForce. <a href="${site}" style="color:${COR}">${site.replace(/^https?:\/\//, '')}</a></div>
 </div></body></html>`
 }
 const botao = (url, rotulo) =>
@@ -108,6 +108,31 @@ ${urlSenha ? `<p>Para definir a sua senha, use o botão abaixo (o link vale por 
 ${nota(`Esqueceu a senha depois? <a href="${URL_SITE}/recuperar-senha" style="color:${COR}">Crie uma nova aqui</a>.`)}`)
   const texto = `${ola(nome)}\n\nA conta da empresa ${organizacao} está liberada${fim ? `, com acesso até ${fim}` : ''}.\n\nEndereço: ${login}\nE-mail: ${email}${urlSenha ? `\nCrie sua senha (vale 1 hora): ${urlSenha}` : ''}`
   return { assunto: 'Sua conta no LicitaForce está liberada', html, texto }
+}
+
+/** Resumo das oportunidades novas, com acesso ao Radar para decidir a participação. */
+export function emailRadar({ nome, empresa, org_id, empresa_id, oportunidades }) {
+  const site = 'https://licitaflow.com.br'
+  const urlRadar = `${site}/app/agentes/radar?org=${encodeURIComponent(org_id)}&empresa=${encodeURIComponent(empresa_id)}`
+  const quantidade = oportunidades.length
+  const titulo = `${quantidade} ${quantidade === 1 ? 'oportunidade nova' : 'oportunidades novas'} para ${empresa}`
+  const fichas = oportunidades.map((o) => {
+    const prazo = o.encerramento && Number.isFinite(Date.parse(o.encerramento))
+      ? new Date(o.encerramento).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'short', timeStyle: 'short' }) + ' (Brasília)' : 'Não informado'
+    const valor = o.valor != null && Number.isFinite(Number(o.valor))
+      ? Number(o.valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'Não informado'
+    const url = `${urlRadar}&sugestao=${encodeURIComponent(o.id)}`
+    const motivos = Array.isArray(o.motivos) ? o.motivos : []
+    return {
+      html: `<div style="border:1px solid #e4e4e7;border-radius:8px;padding:16px;margin:16px 0"><h2 style="font-size:16px;margin:0 0 12px">${esc(o.objeto || 'Objeto não informado')}</h2><p>Órgão: ${esc(o.orgao || 'Não informado')}${o.uf ? ` / ${esc(o.uf)}` : ''}<br>Valor estimado: <b>${esc(valor)}</b><br>Prazo das propostas: <b>${esc(prazo)}</b></p>${motivos.length ? nota(motivos.map(esc).join('<br>')) : ''}${botao(url, 'Avaliar oportunidade')}</div>`,
+      texto: `${o.objeto || 'Objeto não informado'}\nÓrgão: ${o.orgao || 'Não informado'} / ${o.uf || ''}\nValor estimado: ${valor}\nPrazo das propostas: ${prazo}\n${motivos.join('\n')}\nAvaliar oportunidade: ${url}`,
+    }
+  })
+  return {
+    assunto: `Radar LicitaForce · ${titulo}`.replace(/[\r\n]/g, ' '),
+    html: layout(titulo, `<p>${esc(ola(nome))}</p><p>O Radar encontrou editais que combinam com o perfil da empresa <b>${esc(empresa)}</b>. Confira as oportunidades e escolha quais deseja adicionar ao funil para participar.</p>${fichas.map((f) => f.html).join('')}${botao(urlRadar, 'Ver oportunidades no Radar')}${nota('Entre com sua conta LicitaForce para ver os detalhes, adicionar ao funil ou descartar. Confira o edital antes de decidir participar.')}`, site),
+    texto: `${ola(nome)}\n\n${titulo}\nEscolha no Radar quais oportunidades deseja adicionar ao funil para participar.\n\n${fichas.map((f) => f.texto).join('\n\n')}\n\nVer oportunidades no Radar: ${urlRadar}\nEntre com sua conta LicitaForce. Confira o edital antes de decidir participar.`,
+  }
 }
 
 export function emailTeste() {

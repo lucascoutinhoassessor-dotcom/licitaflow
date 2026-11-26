@@ -110,4 +110,38 @@ await db.exec('reset role')
 ok(av.length === 2 && av.every((a) => a.quantidade >= 1 && a.empresa) && av2.length === 0, 'avisos agrupados por empresa, uma vez só')
 ok(await falha(U1, 'select public.radar_para_avisar($1)', [token]), 'cliente não chama a função de avisos')
 
+// E-mail tem fila própria: o push e a busca manual não consomem seus avisos.
+const reservarEmail = async () => (await db.query('select public.radar_emails_reservar($1) r', [token])).rows[0].r
+const concluirEmail = (lote, sucesso) => db.query('select public.radar_email_concluir($1, $2, $3, $4)', [token, lote.id, lote.reserva, sucesso])
+const emails = await reservarEmail()
+ok(emails.length === 2 && emails.every((x) => x.email === 'a@t.com' && x.oportunidades.length > 0), 'e-mails por empresa apenas para membros da organização monitorada')
+ok(emails.every((x) => x.oportunidades.every((o) => o.objeto && o.orgao && o.encerramento)), 'e-mail inclui objeto, órgão, valor, prazo e motivos das sugestões')
+ok((await reservarEmail()).length === 0, 'reserva impede envios concorrentes do mesmo lote')
+await concluirEmail(emails[0], true)
+await concluirEmail(emails[1], false)
+const retentar = await reservarEmail()
+ok(retentar.length === 1 && retentar[0].id === emails[1].id && retentar[0].reserva !== emails[1].reserva, 'só o e-mail que falhou volta para envio')
+await concluirEmail(emails[1], true)
+ok((await db.query('select enviado_em from licitaflow_radar.emails where id = $1', [emails[1].id])).rows[0].enviado_em === null, 'confirmação antiga não conclui a reserva atual')
+await db.exec(`update licitaflow_radar.emails set reservado_ate = now() - interval '1 minute' where enviado_em is null`)
+const expiradas = await reservarEmail()
+ok(expiradas.length === 1, 'reserva abandonada expira e permite nova tentativa')
+await concluirEmail(expiradas[0], true)
+ok((await reservarEmail()).length === 0, 'e-mail enviado não se repete')
+ok(await falha(U1, 'select public.radar_emails_reservar($1)', [token]), 'cliente não acessa fila nem destinatários dos e-mails')
+let recusado = false
+try { await db.query('select public.radar_emails_reservar($1)', ['errado']) } catch { recusado = true }
+ok(recusado, 'fila de e-mail exige token válido do agendador')
+
+// Uma sugestão nova pode ser enviada mesmo após a busca manual marcar o push.
+await edital(100, 'Papel branco para escritório', 'MG', 12)
+await db.exec(`update licitaflow_radar.execucoes set executado_em = now() - interval '1 hour'`)
+await como(U1, 'select public.radar_buscar_agora($1)', [e1])
+const manuais = await reservarEmail()
+ok(manuais.length === 1 && manuais[0].oportunidades.some((x) => x.objeto.includes('Papel branco')), 'busca manual preserva envio por e-mail')
+// Se o membro saiu da organização, não recebe o lote pendente.
+await concluirEmail(manuais[0], false)
+await db.query('delete from public.memberships where org_id = $1 and user_id = $2', [o1, U1])
+ok((await reservarEmail()).length === 0, 'membro removido não recebe e-mail pendente')
+
 console.log(`\n${n} verificações do Radar ok`)
