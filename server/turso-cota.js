@@ -22,7 +22,8 @@ const positivo = (v) => { const n = Number(v); return Number.isFinite(n) && n > 
 
 /** Plano e limites a partir das variáveis da Vercel. */
 export function configCota(env = process.env) {
-  const id0 = String(env.TURSO_PLANO ?? '').trim().toLowerCase()
+  // Esta instalação do LicitaForce usa o Developer; uma configuração explícita continua prevalecendo.
+  const id0 = String(env.TURSO_PLANO ?? 'developer').trim().toLowerCase()
   const id = PLANOS[id0] ? id0 : APELIDOS[id0] ?? 'gratis'
   const p = PLANOS[id]
   const dia = positivo(env.TURSO_CICLO_DIA)
