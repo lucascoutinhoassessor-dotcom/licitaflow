@@ -2,6 +2,7 @@
 // Chamado pelo pg_cron (POST /api/agentes?agente=sentinela&acao=verificar com o token x-coleta).
 // Não usa IA. Detalhes em docs/sentinela.md.
 import webpushPadrao from 'web-push'
+import { filtrarPushAgente } from './pushAgentes.js'
 
 const CONSULTA = 'https://pncp.gov.br/api/consulta/v1/orgaos'
 const PNCP = 'https://pncp.gov.br/api/pncp/v1/orgaos'
@@ -360,7 +361,7 @@ export async function avisarPorPush(avisos, { chamar, webpush }) {
   const orgs = [...new Set([...porProcesso.values()].map((p) => p.org_id))]
   const membros = (await chamar(`/rest/v1/memberships?select=org_id,user_id&org_id=in.(${orgs.join(',')})`)) ?? []
   const usuarios = [...new Set(membros.map((m) => m.user_id))]
-  const inscricoes = usuarios.length ? ((await chamar(`/rest/v1/push_inscricoes?select=id,user_id,endpoint,p256dh,auth&user_id=in.(${usuarios.join(',')})`)) ?? []) : []
+  const inscricoes = await filtrarPushAgente(usuarios.length ? ((await chamar(`/rest/v1/push_inscricoes?select=id,user_id,endpoint,p256dh,auth&user_id=in.(${usuarios.join(',')})`)) ?? []) : [], 'sentinela', chamar)
   let enviados = 0, falhas = 0
   const mortas = []
   for (const p of porProcesso.values()) {

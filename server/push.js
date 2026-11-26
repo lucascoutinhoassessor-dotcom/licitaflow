@@ -7,6 +7,7 @@
 // POST {acao:'agendados'}  → (pg_cron, sem login) manda os pushes agendados que já venceram
 // As chaves VAPID são geradas no primeiro uso e guardadas em push_vapid (só a chave de serviço lê).
 import webpushPadrao from 'web-push'
+import { enviarResumoAgentes } from './pushAgentes.js'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const CONTATO = 'https://licitaforce-app.vercel.app'
@@ -110,6 +111,15 @@ export function criarHandler({ webpush = webpushPadrao, fetcher = fetch } = {}) 
       if (req.method === 'GET') return res.status(200).json({ chave: (await chaves()).publica })
       if (req.method !== 'POST') return res.status(405).json({ error: 'Método não permitido' })
       const corpo = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : req.body ?? {}
+      if (corpo.acao === 'resumo-agentes') {
+        const coleta = String(req.headers['x-coleta'] ?? '')
+        if (!/^[0-9a-f]{32,128}$/.test(coleta)) return res.status(401).json({ error: 'Não autorizado' })
+        try {
+          return res.status(200).json(await enviarResumoAgentes({ token: coleta, chamar, webpush }))
+        } catch (e) {
+          return res.status(/token/i.test(e.message) ? 401 : 502).json({ error: 'Não foi possível enviar o resumo dos agentes' })
+        }
+      }
       // Chamado pelo pg_cron a cada minuto quando há push vencido. Não precisa de login: só dispara o que
       // já está na hora e ainda não saiu (cada aviso é reservado antes de enviar, então nunca sai duas vezes).
       if (corpo.acao === 'agendados') {

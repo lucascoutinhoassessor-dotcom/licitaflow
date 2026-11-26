@@ -92,7 +92,7 @@ export default function PedirNotificacoes() {
                 ? 'No iPhone, as notificações só funcionam com o LicitaForce instalado: toque em Compartilhar → Adicionar à Tela de Início e abra o app por lá.'
                 : desativou
                   ? 'Este aparelho deixou de receber os avisos do LicitaForce. Ative de novo para receber disputas, prazos e comunicados na hora, mesmo com o app fechado.'
-                  : 'Receba disputas, prazos e comunicados do LicitaForce na hora, no celular ou no computador, mesmo com o app fechado.'}
+                  : 'Receba oportunidades do Radar, mudanças da Sentinela, o resumo diário das suas IAs e comunicados do LicitaForce no celular ou no computador, mesmo com o app fechado. Escolha os avisos na tela Agentes de IA.'}
           </p>
         </div>
         <div className="flex flex-wrap justify-end gap-2">

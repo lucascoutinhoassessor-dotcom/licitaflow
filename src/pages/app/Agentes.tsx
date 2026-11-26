@@ -5,6 +5,7 @@ import { Badge, Button, CabecalhoPagina, Campo, Card, Input } from '@/components
 import { useLista } from '@/hooks/useDados'
 import { controleDe, rotaLeitor } from '@/lib/leitor'
 import type { Processo } from '@/types/db'
+import PushAgentes from '@/components/PushAgentes'
 
 const PROXIMOS = [
   { icone: Gavel, nome: 'Jurídico', texto: 'Redige impugnações, esclarecimentos e recursos a partir do edital e da sessão.' },
@@ -27,6 +28,7 @@ export default function Agentes() {
   return (
     <>
       <CabecalhoPagina titulo="Agentes de IA" descricao="Assistentes que leem os documentos das licitações e fazem o trabalho repetitivo por você." />
+      <PushAgentes />
 
       <Card className="mb-6 p-5 sm:p-6">
         <div className="flex items-start gap-3">

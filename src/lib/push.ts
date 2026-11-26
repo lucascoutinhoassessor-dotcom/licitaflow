@@ -67,7 +67,7 @@ async function inscreverPush(confirmar: boolean): Promise<EstadoPush> {
   if (sub && atual && btoa(String.fromCharCode(...new Uint8Array(atual))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '') !== chave) { await sub.unsubscribe(); sub = null }
   sub = sub || (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: chaveParaBytes(chave) }))
   await chamar({ acao: 'inscrever', inscricao: sub.toJSON() })
-  if (confirmar) reg.showNotification('Notificações ativadas', { body: 'Os avisos do LicitaForce vão chegar aqui na hora, mesmo com o app fechado.', icon: '/icons/icone-192.png', badge: '/icons/badge-96.png', tag: 'licitaforce-ativado' }).catch(() => undefined)
+  if (confirmar) reg.showNotification('Notificações ativadas', { body: 'Avisos das suas IAs e comunicados do LicitaForce chegam aqui, mesmo com o app fechado. Configure em Agentes de IA.', icon: '/icons/icone-192.png', badge: '/icons/badge-96.png', tag: 'licitaforce-ativado' }).catch(() => undefined)
   return 'ativo'
 }
 

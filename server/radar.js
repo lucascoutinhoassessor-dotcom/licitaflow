@@ -2,7 +2,11 @@
 // novas, o banco chama GET /api/agentes?agente=radar&acao=avisar (header x-coleta) para push e e-mail.
 // Os e-mails têm fila própria por empresa e membro, com tentativas nas próximas rodadas. Não usa IA.
 import webpushPadrao from 'web-push'
+
 import { emailRadar, enviarEmail, montarSmtp } from './email.js'
+
+import { filtrarPushAgente } from './pushAgentes.js'
+
 
 const CONTATO = 'https://licitaforce-app.vercel.app'
 
@@ -58,7 +62,7 @@ async function avisarPush({ grupos, chamar, webpush }) {
   const orgs = [...new Set(grupos.map((g) => g.org_id))]
   const membros = (await chamar(`/rest/v1/memberships?select=org_id,user_id&org_id=in.(${orgs.join(',')})`)) ?? []
   const usuarios = [...new Set(membros.map((m) => m.user_id))]
-  const inscricoes = usuarios.length ? ((await chamar(`/rest/v1/push_inscricoes?select=id,user_id,endpoint,p256dh,auth&user_id=in.(${usuarios.join(',')})`)) ?? []) : []
+  const inscricoes = await filtrarPushAgente(usuarios.length ? ((await chamar(`/rest/v1/push_inscricoes?select=id,user_id,endpoint,p256dh,auth&user_id=in.(${usuarios.join(',')})`)) ?? []) : [], 'radar', chamar)
   let enviados = 0, falhas = 0
   const mortas = []
   for (const g of grupos) {

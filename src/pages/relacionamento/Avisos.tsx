@@ -9,6 +9,7 @@ import { Aviso,Badge,Button,CabecalhoPagina,Campo,Card,Carregando,Input,Modal,Te
 import { TIPOS_LOG,type LogPlataforma } from '@/lib/logsPlataforma'
 import { SONS_AVISO,type SomAviso } from '@/lib/somAviso'
 import { tocarPing } from '@/lib/ping'
+import { Link } from 'react-router-dom'
 
 interface Comunicado {id:string;titulo:string;texto:string;org_id:string|null;org_ids:string[]|null;ativo:boolean;expira_em:string|null;created_at:string;publicar_em:string;enviar_push:boolean;push_enviado_em:string|null;som?:SomAviso}
 const FORM_VAZIO={titulo:'',texto:'',dest:'todos' as 'todos'|'alguns',orgs:[] as string[],busca:'',quando:'agora' as 'agora'|'agendar',data:'',push:true,som:'principal' as SomAviso,expira:''}
@@ -101,6 +102,7 @@ export default function Avisos({master=false}:{master?:boolean}) {
     {q.isLoading && <Carregando/>}{q.isError && <Aviso>Não foi possível consultar os avisos. Tente atualizar a página.</Aviso>}{leituras.isError && <Aviso>Não foi possível consultar seus registros de leitura.</Aviso>}
     {!master && push && push!=='sem-suporte' && <Card className="mb-4 flex flex-wrap items-center gap-3 p-4"><div className="min-w-0 flex-1"><p className="font-medium">{push==='ativo'?'Notificações ativadas neste aparelho':'Receber os avisos na hora'}</p><p className="text-sm text-muted-foreground">{push==='negado'?'As notificações deste site estão bloqueadas. Libere nas configurações do navegador e toque em Ativar.':push==='ativo'?'Cada aviso novo chega como notificação, mesmo com o app fechado.':'Ative para receber cada aviso como notificação no celular ou no computador, mesmo com o app fechado.'}</p></div><Button tamanho="sm" variante={push==='ativo'?'contorno':'primario'} carregando={ocupado} onClick={alternarPush}>{push==='ativo'?'Desativar':'Ativar notificações'}</Button></Card>}
     {!master && push==='sem-suporte' && precisaInstalar() && <div className="mb-4"><Aviso>No iPhone, as notificações só funcionam com o LicitaForce instalado: toque em Compartilhar → Adicionar à Tela de Início e abra por lá.</Aviso></div>}
+    {!master && <p className="mb-4 text-sm"><Link to="/app/agentes" className="font-medium text-primary hover:underline">Configurar notificações das IAs e resumo diário →</Link></p>}
     <div className="space-y-4">{q.data?.map(a=>{
       const expirado=!!a.expira_em && new Date(a.expira_em)<new Date()
       const lido=leituras.data?.includes(a.id)
