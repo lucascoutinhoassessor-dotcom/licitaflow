@@ -52,18 +52,27 @@ describe('cadastro e senha pelo e-mail da plataforma', () => {
     expect(fetch.mock.calls.some(c => String(c[0]).includes('generate_link'))).toBe(false)
   })
   it('cadastro: cria sem e-mail do Supabase e manda a confirmação com destino', async () => {
-    const { r, enviar, fetch } = await rodar({ acao: 'cadastrar', nome: 'Ana Souza', email: 'ana@x.com', senha: 'senha-forte-1', voltar: '/onboarding' }, (u) =>
+    const { r, enviar, fetch } = await rodar({ acao: 'cadastrar', nome: 'Ana Souza', email: 'ana@x.com', telefone: '(11) 91234-5678', senha: 'senha-forte-1', voltar: '/onboarding' }, (u) =>
       u.includes('plataforma_email') ? Response.json(smtp()) : u.includes('registrar_pedido_email') ? Response.json(true) : Response.json({ hashed_token: 'tk9' }))
     expect(r.json).toHaveBeenCalledWith({ ok: true })
     const gerar = fetch.mock.calls.find(c => String(c[0]).includes('generate_link'))!
-    expect(JSON.parse(String(gerar[1].body))).toEqual({ type: 'signup', email: 'ana@x.com', password: 'senha-forte-1', data: { nome: 'Ana Souza' } })
+    expect(JSON.parse(String(gerar[1].body))).toEqual({ type: 'signup', email: 'ana@x.com', password: 'senha-forte-1', data: { nome: 'Ana Souza', telefone: '11912345678' } })
     expect(enviar.mock.calls[0][1].html).toContain('/confirmar-email?token_hash=tk9&amp;type=signup&amp;voltar=%2Fonboarding')
   })
   it('cadastro com e-mail já usado: 409', async () => {
-    const { r, enviar } = await rodar({ acao: 'cadastrar', nome: 'Ana', email: 'ana@x.com', senha: 'senha-forte-1' }, (u) =>
+    const { r, enviar } = await rodar({ acao: 'cadastrar', nome: 'Ana', email: 'ana@x.com', telefone: '11912345678', senha: 'senha-forte-1' }, (u) =>
       u.includes('plataforma_email') ? Response.json(smtp()) : u.includes('registrar_pedido_email') ? Response.json(true)
         : Response.json({ msg: 'A user with this email address has already been registered' }, { status: 422 }))
     expect(r.status).toHaveBeenCalledWith(409)
     expect(enviar).not.toHaveBeenCalled()
+  })
+})
+
+describe('cadastro exige WhatsApp', () => {
+  it('recusa cadastro sem WhatsApp válido antes de criar o login', async () => {
+    const { r, fetch } = await rodar({ acao: 'cadastrar', nome: 'Ana', email: 'ana@x.com', telefone: '1234', senha: 'senha-forte-1' }, (u) =>
+      u.includes('plataforma_email') ? Response.json(smtp()) : Response.json(true))
+    expect(r.status).toHaveBeenCalledWith(400)
+    expect(fetch.mock.calls.some(([u]) => String(u).includes('generate_link'))).toBe(false)
   })
 })

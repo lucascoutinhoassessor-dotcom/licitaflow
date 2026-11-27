@@ -1,12 +1,11 @@
 import { useCatalogoPlanos } from '@/hooks/useCatalogoPlanos'
-import { Link } from 'react-router-dom'
-import { useMemo, useState, type FormEvent } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { CheckCircle2, Circle, Search } from 'lucide-react'
+import { useState, type FormEvent } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
+import { CheckCircle2, Circle } from 'lucide-react'
 import { toast } from 'sonner'
 import { supabase, mensagemErro } from '@/lib/supabase'
-import { diasAte, formatarData, formatarDataHora } from '@/lib/format'
-import { Aviso, Badge, Button, CabecalhoPagina, Campo, Card, Carregando, Input, Modal, Select } from '@/components/ui'
+import { diasAte, formatarData } from '@/lib/format'
+import { Badge, Button, Campo, Input, Select } from '@/components/ui'
 
 export interface OrgAdmin {
   id: string
@@ -45,7 +44,7 @@ export function progresso(o: OrgAdmin) {
   return { passos, pct: Math.round((passos.filter((p) => p.ok).length / passos.length) * 100) }
 }
 
-function statusOrg(o: OrgAdmin) {
+export function statusOrg(o: OrgAdmin) {
   if (o.suspensa) return <Badge cor="vermelho">Suspensa</Badge>
   if (o.plano === 'trial') {
     const d = diasAte(o.trial_ate)
@@ -161,109 +160,5 @@ export function EditarOrg({ org, aoFechar }: { org: OrgAdmin; aoFechar: () => vo
         Salvar alterações
       </Button>
     </form>
-  )
-}
-
-export default function Organizacoes() {
-  const [busca, setBusca] = useState('')
-  const [filtro, setFiltro] = useState('todas')
-  const [editando, setEditando] = useState<OrgAdmin | null>(null)
-
-  const q = useQuery({
-    queryKey: ['admin-orgs'],
-    queryFn: async () => {
-      const { data, error } = await supabase.rpc('admin_organizacoes')
-      if (error) throw error
-      return data as OrgAdmin[]
-    },
-  })
-
-  const lista = useMemo(() => {
-    const t = busca.trim().toLowerCase()
-    return (q.data ?? []).filter((o) => {
-      if (t && !`${o.nome} ${o.dono_email} ${o.dono_nome}`.toLowerCase().includes(t)) return false
-      if (filtro === 'suspensas') return o.suspensa
-      if (filtro === 'trial') return o.plano === 'trial' && !o.suspensa
-      if (filtro === 'vencidos') return o.plano === 'trial' && diasAte(o.trial_ate) < 0
-      if (filtro === 'pagantes') return !['trial', 'cancelado'].includes(o.plano)
-      return true
-    })
-  }, [q.data, busca, filtro])
-
-  return (
-    <>
-      <CabecalhoPagina titulo="Organizações" descricao="Todas as contas clientes: plano, teste grátis, uso e implantação." />
-
-      <div className="mb-4 flex flex-col gap-2 sm:flex-row">
-        <div className="relative flex-1">
-          <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-          <Input className="pl-9" placeholder="Buscar por nome ou e-mail do dono" value={busca} onChange={(e) => setBusca(e.target.value)} />
-        </div>
-        <Select className="sm:w-48" value={filtro} onChange={(e) => setFiltro(e.target.value)} aria-label="Filtro">
-          <option value="todas">Todas</option>
-          <option value="trial">Em teste</option>
-          <option value="vencidos">Teste vencido</option>
-          <option value="pagantes">Planos comerciais</option>
-          <option value="suspensas">Suspensas</option>
-        </Select>
-      </div>
-
-      {q.isLoading && <Carregando />}
-      {q.error && <Aviso>{(q.error as Error).message}</Aviso>}
-
-      <Card className="overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/50 text-left text-xs uppercase tracking-wide text-muted-foreground">
-              <tr>
-                <th className="px-4 py-3 font-medium">Organização</th>
-                <th className="px-4 py-3 font-medium">Status</th>
-                <th className="hidden px-4 py-3 font-medium md:table-cell">Implantação</th>
-                <th className="hidden px-4 py-3 text-right font-medium lg:table-cell">Uso</th>
-                <th className="hidden px-4 py-3 font-medium md:table-cell">Última atividade</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {lista.map((o) => {
-                const { pct } = progresso(o)
-                return (
-                  <tr key={o.id} onClick={() => setEditando(o)} className="cursor-pointer hover:bg-muted/40">
-                    <td className="max-w-0 px-4 py-3">
-                      <Link onClick={(e) => e.stopPropagation()} to={`/master/organizacoes/${o.id}`} className="block truncate font-medium text-primary hover:underline">{o.nome} · Ver ficha</Link>
-                      <button className="text-xs text-primary hover:underline" onClick={() => setEditando(o)}>Gerenciar plano e acesso</button>
-                      <div className="truncate text-xs text-muted-foreground">{o.dono_email} · {o.tipo === 'assessoria' ? 'assessoria' : 'fornecedor'}</div>
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-right md:text-left">{statusOrg(o)}</td>
-                    <td className="hidden px-4 py-3 md:table-cell">
-                      <div className="flex items-center gap-2">
-                        <div className="h-1.5 w-20 rounded-full bg-muted">
-                          <div className="h-1.5 rounded-full bg-accent" style={{ width: `${pct}%` }} />
-                        </div>
-                        <span className="text-xs tabular-nums text-muted-foreground">{pct}%</span>
-                      </div>
-                    </td>
-                    <td className="hidden px-4 py-3 text-right text-xs tabular-nums text-muted-foreground lg:table-cell">
-                      {o.membros} memb. · {o.empresas} emp. · {o.processos} proc.
-                    </td>
-                    <td className="hidden px-4 py-3 text-xs text-muted-foreground md:table-cell">{formatarDataHora(o.ultima_atividade)}</td>
-                  </tr>
-                )
-              })}
-              {!q.isLoading && lista.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="px-4 py-10 text-center text-muted-foreground">
-                    Nenhuma organização encontrada.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </Card>
-
-      <Modal aberto={!!editando} aoFechar={() => setEditando(null)} titulo={editando?.nome ?? ''}>
-        {editando && <EditarOrg org={editando} aoFechar={() => setEditando(null)} />}
-      </Modal>
-    </>
   )
 }

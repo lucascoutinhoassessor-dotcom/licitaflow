@@ -162,8 +162,8 @@ function Atencao({ r, fin, chamados }: { r: Resumo; fin?: ReturnType<typeof useF
     fin && fin.clientes_inadimplentes > 0 && { texto: `${fin.clientes_inadimplentes} cliente(s) com fatura vencida (${formatarMoeda(fin.inadimplente / 100)})`, rota: '/master/assinaturas' },
     fin && fin.suspensas_por_atraso > 0 && { texto: `${fin.suspensas_por_atraso} conta(s) suspensa(s) automaticamente por atraso`, rota: '/master/assinaturas' },
     fin && fin.assinaturas.pendentes > 0 && { texto: `${fin.assinaturas.pendentes} assinatura(s) aguardando o 1º pagamento`, rota: '/master/assinaturas' },
-    r.trials_vencendo > 0 && { texto: `${r.trials_vencendo} teste(s) grátis vencem em até 3 dias: hora de converter`, rota: '/master/organizacoes' },
-    r.trials_vencidos > 0 && { texto: `${r.trials_vencidos} teste(s) vencido(s) sem plano`, rota: '/master/organizacoes' },
+    r.trials_vencendo > 0 && { texto: `${r.trials_vencendo} teste(s) grátis vencem em até 3 dias: hora de converter`, rota: '/master/clientes?filtro=trial' },
+    r.trials_vencidos > 0 && { texto: `${r.trials_vencidos} teste(s) vencido(s) sem plano`, rota: '/master/clientes?filtro=vencidos' },
     chamados > 0 && { texto: `${chamados} chamado(s) de suporte aberto(s)`, rota: '/master/suporte' },
     fin?.gateway && !fin.gateway.ativo && { texto: 'Asaas desativado: clientes não conseguem contratar planos', rota: '/master/integracoes' },
   ].filter(Boolean) as { texto: string; rota: string }[]

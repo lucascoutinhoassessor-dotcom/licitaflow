@@ -5,6 +5,15 @@
 import { emailConfirmarCadastro, emailRedefinirSenha, enviarEmail, montarSmtp, URL_SITE } from './email.js'
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+/** Mesma regra de src/lib/telefone.ts: só dígitos, DDD + número (10 ou 11), aceita o 55 na frente. */
+export function normalizarWhatsapp(valor) {
+  let d = String(valor ?? '').replace(/\D/g, '')
+  if ((d.length === 12 || d.length === 13) && d.startsWith('55')) d = d.slice(2)
+  if (d.length !== 10 && d.length !== 11) return null
+  if (d[0] === '0' || d[2] === '0' || (d.length === 11 && d[2] !== '9')) return null
+  return d
+}
+
 export const ACOES_PUBLICAS = ['cadastrar', 'recuperar_senha']
 
 export async function contaPublica(body, req, res, env) {
@@ -46,10 +55,12 @@ export async function contaPublica(body, req, res, env) {
   const senha = String(body.senha ?? '')
   const voltar = String(body.voltar ?? '')
   if (nome.length < 2 || nome.length > 120) return res.status(400).json({ error: 'Informe seu nome (2 a 120 caracteres).' })
+  const telefone = normalizarWhatsapp(body.telefone)
+  if (!telefone) return res.status(400).json({ error: 'Informe um WhatsApp válido com DDD.' })
   if (senha.length < 8 || senha.length > 72) return res.status(400).json({ error: 'A senha precisa ter de 8 a 72 caracteres.' })
   if (!(await limite('ip:' + ip, 20, 60)) || !(await limite('cadastro:' + email, 3, 60))) return res.status(429).json({ error: 'Muitas tentativas. Aguarde alguns minutos e tente de novo.' })
   let link
-  try { link = await sv('/auth/v1/admin/generate_link', { method: 'POST', body: JSON.stringify({ type: 'signup', email, password: senha, data: { nome } }) }) }
+  try { link = await sv('/auth/v1/admin/generate_link', { method: 'POST', body: JSON.stringify({ type: 'signup', email, password: senha, data: { nome, telefone } }) }) }
   catch (e) {
     if (e.status === 422 || /already|registered|exists/i.test(e.message)) return res.status(409).json({ error: 'Já existe uma conta com este e-mail. Use "Entrar" ou "Esqueci minha senha".' })
     if (e.status === 400 && /password/i.test(e.message)) return res.status(400).json({ error: 'Senha fraca: use letras e números, com pelo menos 8 caracteres.' })

@@ -1,6 +1,7 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
 import { cifrar, decifrar, montarConfig } from './asaas.js'
 import { montarSmtp } from './email.js'
+import { normalizarWhatsapp } from './conta-emails.js'
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const resumo = v => createHash('sha256').update(String(v)).digest()
@@ -32,6 +33,7 @@ export async function iniciarCompra(body, req, res, env) {
   const nome = String(body.nome || '').trim(), email = String(body.email || '').trim().toLowerCase()
   const empresa = String(body.empresa || '').trim()
   const tipo = body.tipo === 'assessoria' ? 'assessoria' : 'fornecedor'
+  const telefone = normalizarWhatsapp(body.telefone)
   if (nome.length < 2 || nome.length > 120 || empresa.length < 2 || empresa.length > 120 || !EMAIL.test(email) || email.length > 254) return res.status(400).json({ error: 'Informe seu nome, empresa e um e-mail válido.' })
   const ip = String(req.headers['x-forwarded-for'] || 'sem-ip').split(',')[0].trim().slice(0, 60)
   for (const [chave, limite] of [['compra-ip:' + ip, 20], ['compra-email:' + email, 10]]) {
@@ -51,7 +53,7 @@ export async function iniciarCompra(body, req, res, env) {
     // Sem a chave do pedido (outro navegador), não entrega a sessão: evita que terceiros assumam a conta só com o e-mail.
     if (!mesmaChave(body.chave_pedido, usuario.app_metadata?.chave_compra)) return res.status(409).json({ error: 'Já existe um pedido em andamento para este e-mail. Continue pelo mesmo navegador em que começou ou fale com o suporte.' })
     await sv(`/rest/v1/organizations?id=eq.${acesso.org_id}`, { method: 'PATCH', body: JSON.stringify({ nome: empresa, tipo }) }).catch(() => {})
-    await sv(`/auth/v1/admin/users/${usuario.id}`, { method: 'PUT', body: JSON.stringify({ user_metadata: { ...usuario.user_metadata, nome } }) }).catch(() => {})
+    await sv(`/auth/v1/admin/users/${usuario.id}`, { method: 'PUT', body: JSON.stringify({ user_metadata: { ...usuario.user_metadata, nome, ...(telefone ? { telefone } : {}) } }) }).catch(() => {})
     const session = await entrar(email, decifrar(acesso.senha_cifrada, env))
     return res.json({ org: acesso.org_id, access_token: session.access_token, refresh_token: session.refresh_token, retomada: true })
   }
@@ -71,7 +73,7 @@ export async function iniciarCompra(body, req, res, env) {
   const chave = randomBytes(24).toString('base64url')
   let usuario, org
   try {
-    usuario = await sv('/auth/v1/admin/users', { method: 'POST', body: JSON.stringify({ email, password: senha, email_confirm: true, user_metadata: { nome }, app_metadata: { chave_compra: resumo(chave).toString('hex') } }) })
+    usuario = await sv('/auth/v1/admin/users', { method: 'POST', body: JSON.stringify({ email, password: senha, email_confirm: true, user_metadata: { nome, ...(telefone ? { telefone } : {}) }, app_metadata: { chave_compra: resumo(chave).toString('hex') } }) })
     ;[org] = await sv('/rest/v1/organizations', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ nome: empresa, tipo, created_by: usuario.id, plano: 'trial', trial_ate: '2000-01-01', suspensa: true, motivo_suspensao: 'Aguardando o primeiro pagamento' }) })
     await sv('/rest/v1/memberships', { method: 'POST', body: JSON.stringify({ org_id: org.id, user_id: usuario.id, papel: 'owner' }) })
     await sv('/rest/v1/checkout_acessos', { method: 'POST', body: JSON.stringify({ org_id: org.id, usuario_id: usuario.id, senha_cifrada: cifrar(senha, env) }) })

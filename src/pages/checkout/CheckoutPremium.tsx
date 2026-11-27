@@ -157,7 +157,7 @@ export default function CheckoutPremium() {
       if (!user) {
         const chave = localStorage.getItem(CHAVE_PEDIDO(dados.email)) || undefined
         const r = await fetch('/api/usuarios', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
-          acao: 'iniciar_compra', nome: dados.nome, email: dados.email, empresa: dados.empresa, tipo: dados.tipo, plano: plano.id, chave_pedido: chave }) })
+          acao: 'iniciar_compra', nome: dados.nome, email: dados.email, empresa: dados.empresa, tipo: dados.tipo, telefone: apenasDigitos(dados.telefone), plano: plano.id, chave_pedido: chave }) })
         const d = await r.json().catch(() => ({}))
         if (!r.ok) {
           if (d.entrar) { setErroDados(<>{d.error} <Link className="font-medium underline" to={`/entrar?voltar=${encodeURIComponent(`/checkout?plano=${plano.id}&ciclo=${ciclo}`)}`}>Entrar agora</Link></>); return }

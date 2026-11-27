@@ -3,8 +3,8 @@ import suporteHandler from '../server/suporte.js'
 // Cria o login (e-mail já confirmado), e opcionalmente a organização com o plano e o prazo de teste
 // escolhidos, com o novo usuário como dono. Tudo com a chave de serviço, depois de conferir que quem
 // pediu é master. Fica registrado em admin_audit.
-import {ACOES_PUBLICAS,contaPublica} from '../server/conta-emails.js'
 import {iniciarCompra} from '../server/compra-publica.js'
+import {ACOES_PUBLICAS,contaPublica,normalizarWhatsapp} from '../server/conta-emails.js'
 import {ErroEmail,emailContaLiberada,emailRedefinirSenha,enviarEmail,montarSmtp,URL_SITE} from '../server/email.js'
 
 const EMAIL=/^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -135,6 +135,8 @@ export default async function handler(req,res) {
     if(!EMAIL.test(email) || email.length>254) return res.status(400).json({error:'E-mail inválido'})
     if(nome.length<2 || nome.length>120) return res.status(400).json({error:'Informe o nome (2 a 120 caracteres)'})
     if(senha.length<8 || senha.length>72) return res.status(400).json({error:'A senha precisa ter de 8 a 72 caracteres'})
+    const telefone=normalizarWhatsapp(body.telefone)
+    if(!telefone) return res.status(400).json({error:'Informe um WhatsApp válido com DDD'})
 
     const o=body.org
     let org=null
@@ -148,7 +150,7 @@ export default async function handler(req,res) {
     }
 
     try {
-      criado=await chamar('/auth/v1/admin/users',{method:'POST',body:JSON.stringify({email,password:senha,email_confirm:true,user_metadata:{nome}})})
+      criado=await chamar('/auth/v1/admin/users',{method:'POST',body:JSON.stringify({email,password:senha,email_confirm:true,user_metadata:{nome,telefone}})})
     } catch(e) {
       if(e.status===422 || /already|registered|exists/i.test(e.message)) return res.status(409).json({error:'Já existe um usuário com esse e-mail'})
       throw e

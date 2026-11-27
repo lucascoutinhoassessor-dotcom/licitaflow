@@ -28,7 +28,7 @@ export default function Ranking() {
       <thead><tr className="border-b text-left text-muted-foreground"><th className="p-3 font-medium">#</th><th className="font-medium">Cliente</th><th className="font-medium">Total pago</th><th className="font-medium">Faturas pagas</th><th className="font-medium">Processos</th><th className="font-medium">Usuários</th><th className="font-medium">Último acesso</th><th className="font-medium">Saúde</th></tr></thead>
       <tbody>{q.data.map((l, i) => { const s = saude(l); return <tr key={l.org_id} className="border-b last:border-0 hover:bg-muted/40">
         <td className="p-3 tabular-nums">{i < 3 ? <Trophy className={`h-4 w-4 ${['text-amber-400', 'text-zinc-400', 'text-orange-600'][i]}`} aria-label={`${i + 1}º`} /> : i + 1}</td>
-        <td><Link to={`/master/organizacoes/${l.org_id}`} className="font-medium hover:underline">{l.nome}</Link>
+        <td><Link to={`/master/clientes/${l.org_id}`} className="font-medium hover:underline">{l.nome}</Link>
           <div className="flex flex-wrap gap-1 pt-1 text-xs text-muted-foreground">{l.plano}{l.assinatura_status && <Badge cor={STATUS_ASSINATURA[l.assinatura_status].cor}>{STATUS_ASSINATURA[l.assinatura_status].rotulo}</Badge>}</div></td>
         <td className="font-medium tabular-nums">{formatarMoeda(l.total_pago / 100)}</td>
         <td className="tabular-nums">{l.meses_pagos}</td><td className="tabular-nums">{l.processos}</td><td className="tabular-nums">{l.usuarios}</td>

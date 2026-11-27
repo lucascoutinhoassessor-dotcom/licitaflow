@@ -2,7 +2,7 @@ import { Suspense, useEffect, type ReactNode } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { LimiteDeErro } from '@/components/LimiteDeErro'
 import { Carregando } from '@/components/ui'
-import { Settings, Wallet, Plug, CreditCard, Headphones, Megaphone, BarChart3, Activity, FileText, History, Building2, LayoutDashboard, LogOut, ShieldCheck, Users, Repeat, Receipt, Trophy, ExternalLink, Download, ToggleRight, Bot, Ticket, ScrollText, Volume2, BellRing, Lightbulb, BookOpen } from 'lucide-react'
+import { Settings, Wallet, Plug, CreditCard, Headphones, Megaphone, BarChart3, Activity, FileText, History, LayoutDashboard, LogOut, ShieldCheck, Users, Repeat, Receipt, Trophy, ExternalLink, Download, ToggleRight, Bot, Ticket, ScrollText, Volume2, BellRing, Lightbulb, BookOpen } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { useFinanceiro } from './Financeiro'
@@ -16,8 +16,7 @@ import AvisoAppAntigo from '@/components/AvisoAppAntigo'
 const grupos: { titulo: string; abas: { rota: string; rotulo: string; icone: typeof Settings; end?: boolean }[] }[] = [
   { titulo: 'Painel', abas: [{ rota: '/master', rotulo: 'Visão geral', icone: LayoutDashboard, end: true }] },
   { titulo: 'Clientes', abas: [
-    { rota: '/master/organizacoes', rotulo: 'Organizações', icone: Building2 },
-    { rota: '/master/usuarios', rotulo: 'Usuários', icone: Users },
+    { rota: '/master/clientes', rotulo: 'Clientes', icone: Users },
     { rota: '/master/ranking', rotulo: 'Melhores clientes', icone: Trophy },
   ] },
   { titulo: 'Receita', abas: [

@@ -6,11 +6,13 @@ import { contaEmailAPI } from '@/lib/contaEmail'
 import { Aviso, Button, Campo, Input, InputSenha } from '@/components/ui'
 import { AuthShell } from './AuthShell'
 import { useDiasTeste } from '@/hooks/useDiasTeste'
+import { normalizarWhatsapp } from '@/lib/telefone'
 
 export default function Cadastro() {
   const dias = useDiasTeste()
   const [nome, setNome] = useState('')
   const [email, setEmail] = useState('')
+  const [whatsapp, setWhatsapp] = useState('')
   const [senha, setSenha] = useState('')
   const [erro, setErro] = useState('')
   const [enviando, setEnviando] = useState(false)
@@ -23,11 +25,13 @@ export default function Cadastro() {
   async function enviar(e: FormEvent) {
     e.preventDefault()
     setErro('')
+    const telefone = normalizarWhatsapp(whatsapp)
+    if (!telefone) return setErro('Informe um WhatsApp válido com DDD, por exemplo (11) 91234-5678.')
     if (senha.length < 8) return setErro('A senha precisa ter pelo menos 8 caracteres.')
     setEnviando(true)
     // E-mail de confirmação pela plataforma (nome e logo do LicitaForce); sem ele configurado, segue o cadastro padrão do Supabase.
     try {
-      if (await contaEmailAPI({ acao: 'cadastrar', nome: nome.trim(), email: email.trim(), senha, voltar: destino })) {
+      if (await contaEmailAPI({ acao: 'cadastrar', nome: nome.trim(), email: email.trim(), telefone, senha, voltar: destino })) {
         setEnviando(false)
         return setConfirmar(true)
       }
@@ -38,7 +42,7 @@ export default function Cadastro() {
     const { data, error } = await supabase.auth.signUp({
       email: email.trim(),
       password: senha,
-      options: { data: { nome: nome.trim() }, emailRedirectTo: `${window.location.origin}${destino}` },
+      options: { data: { nome: nome.trim(), telefone }, emailRedirectTo: `${window.location.origin}${destino}` },
     })
     setEnviando(false)
     if (error) return setErro(mensagemErro(error))
@@ -86,6 +90,9 @@ export default function Cadastro() {
         </Campo>
         <Campo rotulo="E-mail" htmlFor="email">
           <Input id="email" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+        </Campo>
+        <Campo rotulo="WhatsApp" htmlFor="whatsapp" ajuda="Com DDD. Usado para avisos urgentes de prazos e disputas.">
+          <Input id="whatsapp" type="tel" inputMode="tel" autoComplete="tel" required placeholder="(11) 91234-5678" maxLength={20} value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)} />
         </Campo>
         <Campo rotulo="Senha" htmlFor="senha" ajuda="Mínimo de 8 caracteres.">
           <InputSenha id="senha" autoComplete="new-password" required minLength={8} value={senha} onChange={(e) => setSenha(e.target.value)} />

@@ -7,7 +7,8 @@ import { formatarMoeda, formatarDataHora } from '@/lib/format'
 import { Aviso, Badge, Button, CabecalhoPagina, Campo, Card, Carregando, Input, Modal, Select } from '@/components/ui'
 import { AssinaturaPainel } from '@/components/AssinaturaPainel'
 import { LimitesIACliente } from '@/components/LimitesIACliente'
-import { EditarOrg, type OrgAdmin } from './Organizacoes'
+import { EditarOrg } from './Organizacoes'
+import { AtivacoesCliente, WhatsApp, paraOrgAdmin, useClientes } from './Clientes'
 import { DadosOrgMaster, EditarMembroMaster } from '@/components/EdicaoClienteMaster'
 
 interface Membro { id:string; nome:string|null; email:string; papel:string; ultimo_acesso:string|null }
@@ -26,8 +27,9 @@ export default function ClienteDetalhe() {
   const [editandoConta,setEditandoConta]=useState(false)
   const [editandoDados,setEditandoDados]=useState(false)
   const [editandoLogin,setEditandoLogin]=useState<Membro|null>(null)
-  const orgs=useQuery({queryKey:['admin-orgs'],queryFn:async()=>{const {data,error}=await supabase.rpc('admin_organizacoes');if(error)throw error;return data as OrgAdmin[]}})
-  const conta=orgs.data?.find(o=>o.id===id)
+  const clientes=useClientes()
+  const ficha=clientes.data?.organizacoes.find(o=>o.id===id)
+  const conta=ficha && paraOrgAdmin(ficha)
   const q=useQuery({queryKey:['admin-cliente',id],enabled:!!id,queryFn:async()=>{
     const {data,error}=await supabase.rpc('admin_cliente',{p_org:id})
     if(error) throw error
@@ -49,7 +51,7 @@ export default function ClienteDetalhe() {
   const c=q.data
   if(!c) return null
   return <>
-    <Link className="mb-4 inline-block text-sm text-primary hover:underline" to="/master/organizacoes">← Organizações</Link>
+    <Link className="mb-4 inline-block text-sm text-primary hover:underline" to="/master/clientes">← Clientes</Link>
     <CabecalhoPagina titulo={c.nome} descricao="Ficha do cliente: dados, plano, assinatura, empresas, equipe, login, e-mails de liberação e de senha. Alterações são auditadas." acoes={conta && <><Button variante="contorno" onClick={()=>setEditandoDados(true)}>Nome e tipo</Button><Button variante="contorno" onClick={()=>setEditandoConta(true)}>Plano, teste e suspensão</Button></>}/>
     {conta && <div className="mb-5 flex flex-wrap gap-2">
       <Badge cor={conta.suspensa?'vermelho':'verde'}>{conta.suspensa?`Suspensa${conta.motivo_suspensao?': '+conta.motivo_suspensao:''}`:'Acesso liberado'}</Badge>
@@ -58,6 +60,7 @@ export default function ClienteDetalhe() {
       {conta.dono_email && <Badge>Dono: {conta.dono_email}</Badge>}
     </div>}
     {id && <div className="mb-6"><AssinaturaPainel org={id} master/></div>}
+    {ficha && <Card className="mb-6 p-4"><AtivacoesCliente c={ficha}/></Card>}
     {id && <LimitesIACliente org={id}/>}
     <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-3">{[
       ['Processos',c.processos],['Contratos',c.contratos],['Documentos',c.documentos],['Prazos pendentes',c.prazos_pendentes],['Recebido nos contratos',formatarMoeda(c.recebido)],['A receber nos contratos',formatarMoeda(c.a_receber)],
@@ -65,7 +68,7 @@ export default function ClienteDetalhe() {
     <p className="mb-5 text-xs text-muted-foreground">Os valores financeiros são da operação do cliente. Não representam pagamentos de assinatura ao LicitaForce.</p>
     <div className="grid gap-6 lg:grid-cols-2">
       <Card className="divide-y"><h2 className="p-4 font-semibold">Empresas ({c.empresas.length})</h2>{c.empresas.map(e=><div className="p-4" key={e.id}><p className="font-medium">{e.nome} {!e.ativa && <Badge>Inativa</Badge>}</p><p className="text-sm text-muted-foreground">{e.cnpj} · {e.uf ?? 'UF não informada'}</p></div>)}{!c.empresas.length && <p className="p-4 text-sm text-muted-foreground">Nenhuma empresa cadastrada.</p>}</Card>
-      <Card className="divide-y"><h2 className="p-4 font-semibold">Equipe ({c.membros.length})</h2>{c.membros.map(m=><div className="space-y-2 p-4" key={m.id}><p className="break-all font-medium">{m.nome || m.email}</p><p className="break-all text-sm text-muted-foreground">{m.email}</p><p className="text-xs text-muted-foreground">Último acesso: {formatarDataHora(m.ultimo_acesso)}</p><div className="flex flex-wrap items-center justify-between gap-2"><Badge>{m.papel}</Badge><div className="flex flex-wrap gap-2"><Button tamanho="sm" variante="contorno" onClick={()=>setEditandoLogin(m)}>Editar login e e-mails</Button>{m.papel!=='owner' && <Button tamanho="sm" variante="contorno" onClick={()=>{setMembro(m);setPapel(m.papel);setMotivo('')}}>Alterar acesso</Button>}</div></div></div>)}</Card>
+      <Card className="divide-y"><h2 className="p-4 font-semibold">Equipe ({c.membros.length})</h2>{c.membros.map(m=><div className="space-y-2 p-4" key={m.id}><p className="break-all font-medium">{m.nome || m.email}</p><p className="break-all text-sm text-muted-foreground">{m.email}</p><WhatsApp numero={ficha?.membros.find(x=>x.id===m.id)?.telefone ?? null} className="text-sm"/><p className="text-xs text-muted-foreground">Último acesso: {formatarDataHora(m.ultimo_acesso)}</p><div className="flex flex-wrap items-center justify-between gap-2"><Badge>{m.papel}</Badge><div className="flex flex-wrap gap-2"><Button tamanho="sm" variante="contorno" onClick={()=>setEditandoLogin(m)}>Editar login e e-mails</Button>{m.papel!=='owner' && <Button tamanho="sm" variante="contorno" onClick={()=>{setMembro(m);setPapel(m.papel);setMotivo('')}}>Alterar acesso</Button>}</div></div></div>)}</Card>
     </div>
     <Modal aberto={editandoConta && !!conta} aoFechar={()=>setEditandoConta(false)} titulo={conta?.nome ?? ''}>{conta && <EditarOrg org={conta} aoFechar={()=>{setEditandoConta(false);qc.invalidateQueries({queryKey:['admin-cliente',id]})}}/>}</Modal>
     <Modal aberto={editandoDados && !!conta} aoFechar={()=>setEditandoDados(false)} titulo="Dados da organização">{conta && id && <DadosOrgMaster org={id} nome={conta.nome} tipo={conta.tipo} aoSalvar={()=>setEditandoDados(false)}/>}</Modal>

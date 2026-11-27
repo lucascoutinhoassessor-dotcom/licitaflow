@@ -82,7 +82,7 @@ export default function Financeiro() {
           <p className="flex justify-between"><span className="text-muted-foreground">Testes ativos</span><span>{f.trials.ativos}</span></p>
           <p className="flex justify-between"><span className="text-muted-foreground">Testes vencendo em 7 dias</span><Badge cor={f.trials.vencendo_7d ? 'amarelo' : 'neutro'}>{f.trials.vencendo_7d}</Badge></p>
           <p className="flex justify-between"><span className="text-muted-foreground">Teste vencido sem plano</span><Badge cor={f.trials.vencidos_sem_plano ? 'vermelho' : 'neutro'}>{f.trials.vencidos_sem_plano}</Badge></p>
-          <Link to="/master/organizacoes" className="block pt-1 text-primary hover:underline">Abordar clientes em teste →</Link>
+          <Link to="/master/clientes" className="block pt-1 text-primary hover:underline">Abordar clientes em teste →</Link>
         </div>
       </Card>
     </div>

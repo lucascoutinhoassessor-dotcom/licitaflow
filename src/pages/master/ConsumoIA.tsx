@@ -51,7 +51,7 @@ export default function ConsumoIA() {
                 const estourou = lim !== null && lim !== undefined && lim > 0 && l.novas >= lim
                 return (
                   <tr key={`${l.org_id}-${l.agente}`}>
-                    <td className="p-3"><Link className="font-medium text-primary hover:underline" to={`/master/organizacoes/${l.org_id}`}>{l.org}</Link></td>
+                    <td className="p-3"><Link className="font-medium text-primary hover:underline" to={`/master/clientes/${l.org_id}`}>{l.org}</Link></td>
                     <td className="p-3">{l.plano}</td>
                     <td className="p-3">{nomeAgente(l.agente)}<span className="block text-xs text-muted-foreground">{textoLimite(lim)}{l.limite?.origem === 'cliente' ? ' (exceção)' : ''}</span></td>
                     <td className="p-3 text-right">{l.novas} {estourou && <Badge cor="amarelo">No limite</Badge>}</td>

@@ -44,7 +44,7 @@ export default function Assinaturas() {
     {q.data && <Card className="overflow-x-auto"><table className="w-full min-w-[860px] whitespace-nowrap text-sm">
       <thead><tr className="border-b text-left text-muted-foreground"><th className="p-3 font-medium">Cliente</th><th className="font-medium">Plano</th><th className="font-medium">Valor</th><th className="font-medium">Situação</th><th className="font-medium">Próx. vencimento</th><th className="font-medium">Pago até</th><th className="font-medium">Total pago</th><th /></tr></thead>
       <tbody>{visiveis.map(l => <tr key={l.id} className="border-b last:border-0 hover:bg-muted/40">
-        <td className="p-3"><Link to={`/master/organizacoes/${l.org_id}`} className="font-medium hover:underline">{l.org_nome}</Link><div className="text-xs text-muted-foreground">{l.dono_email}</div></td>
+        <td className="p-3"><Link to={`/master/clientes/${l.org_id}`} className="font-medium hover:underline">{l.org_nome}</Link><div className="text-xs text-muted-foreground">{l.dono_email}</div></td>
         <td>{l.plano_nome}<div className="text-xs text-muted-foreground">{l.ciclo}</div></td>
         <td className="tabular-nums">{formatarMoeda(l.valor_centavos / 100)}</td>
         <td><div className="flex flex-wrap gap-1"><Badge cor={STATUS_ASSINATURA[l.status].cor}>{STATUS_ASSINATURA[l.status].rotulo}</Badge>{l.suspensa && <Badge cor="vermelho">Conta suspensa</Badge>}{l.erro && <Badge cor="amarelo">Revisar</Badge>}</div>

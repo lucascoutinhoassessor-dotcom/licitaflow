@@ -54,8 +54,7 @@ const TermometroPagamento = lazy(() => import('@/pages/app/TermometroPagamento')
 const MasterEntrar = lazy(() => import('@/pages/master/MasterEntrar'))
 const MasterLayout = lazy(() => import('@/pages/master/MasterLayout'))
 const MasterVisaoGeral = lazy(() => import('@/pages/master/VisaoGeral'))
-const MasterOrganizacoes = lazy(() => import('@/pages/master/Organizacoes'))
-const MasterUsuarios = lazy(() => import('@/pages/master/Usuarios'))
+const MasterClientes = lazy(() => import('@/pages/master/Clientes'))
 const MasterConteudo = lazy(() => import('@/pages/master/Conteudo'))
 const MasterCliente = lazy(() => import('@/pages/master/ClienteDetalhe'))
 const MasterAuditoria = lazy(() => import('@/pages/master/Auditoria'))
@@ -217,8 +216,11 @@ export default function App() {
           <Route path="/master/entrar" element={<MasterEntrar />} />
           <Route path="/master" element={<ExigeMaster />}>
             <Route index element={<MasterVisaoGeral />} />
-            <Route path="organizacoes" element={<MasterOrganizacoes />} />
-            <Route path="usuarios" element={<MasterUsuarios />} />
+            <Route path="clientes" element={<MasterClientes />} />
+            <Route path="clientes/:id" element={<MasterCliente />} />
+            {/* Abas antigas (Organizações e Usuários) viraram a aba única Clientes. */}
+            <Route path="organizacoes" element={<Navigate to="/master/clientes" replace />} />
+            <Route path="usuarios" element={<Navigate to="/master/clientes" replace />} />
             <Route path="organizacoes/:id" element={<MasterCliente />} />
             <Route path="conteudo" element={<MasterConteudo />} />
             <Route path="auditoria" element={<MasterAuditoria />} />
