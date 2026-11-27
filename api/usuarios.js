@@ -4,6 +4,7 @@ import suporteHandler from '../server/suporte.js'
 // escolhidos, com o novo usuário como dono. Tudo com a chave de serviço, depois de conferir que quem
 // pediu é master. Fica registrado em admin_audit.
 import {ACOES_PUBLICAS,contaPublica} from '../server/conta-emails.js'
+import {iniciarCompra} from '../server/compra-publica.js'
 import {ErroEmail,emailContaLiberada,emailRedefinirSenha,enviarEmail,montarSmtp,URL_SITE} from '../server/email.js'
 
 const EMAIL=/^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -96,6 +97,10 @@ export default async function handler(req,res) {
   const token=req.headers.authorization
   // Cadastro e "esqueci minha senha" com e-mail da plataforma: públicos (sem login).
   const pedido=typeof req.body==='string'?(()=>{try{return JSON.parse(req.body)}catch{return {}}})():req.body ?? {}
+  if(pedido.acao==='iniciar_compra') {
+    try { return await iniciarCompra(pedido,req,res,env) }
+    catch { return res.status(502).json({error:'Não foi possível iniciar a compra. Tente novamente.'}) }
+  }
   if(['suporte_abrir','suporte_responder','suporte_atualizar'].includes(pedido.acao)) return suporteHandler({method:req.method,headers:req.headers,body:{...pedido,acao:pedido.acao.slice(8)}},res)
   if(ACOES_PUBLICAS.includes(pedido.acao)) {
     try { return await contaPublica(pedido,req,res,env) }

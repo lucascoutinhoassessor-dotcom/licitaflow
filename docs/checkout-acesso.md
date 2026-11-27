@@ -17,5 +17,3 @@ Referências da integração: [Pix](https://docs.asaas.com/docs/cobrancas-via-pi
 A tentativa de pagamento com cartão reserva a fatura atomicamente. Recusas explícitas permitem corrigir os dados; um timeout mantém a reserva. Após dois minutos, uma nova consulta ao Asaas que confirme a fatura ainda pendente permite tentar novamente. Pagamentos confirmados nunca são cobrados de novo por essa ação. A recorrência utiliza o cartão registrado no Asaas; falha nessa atualização fica visível para conferência.
 
 Referência do cartão: [pagar cobrança existente](https://docs.asaas.com/reference/pagar-uma-cobranca-com-cartao-de-credito) e [cartão nas assinaturas](https://docs.asaas.com/docs/criando-assinatura-com-cartao-de-credito).
-
-> **Desligado em 27/11/2026.** O usuário escolheu o fluxo local de checkout (cadastro com conta bloqueada e pagamento em "Meu plano"). A compra sem conta (`/checkout`, `/obrigado`, `acao=iniciar_compra` e `acao=checkout_cliente`) foi removida; os dois endereços levam ao cadastro. A tabela `checkout_acessos` continua no banco, sem uso.

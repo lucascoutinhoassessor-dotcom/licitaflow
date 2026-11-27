@@ -3,12 +3,13 @@ import {configuracao,criarCheckout,consultarPagamento} from '../server/gateways.
 import {asaas,cifrar,corpoAssinatura,ErroAsaas,hojeSP,montarConfig} from '../server/asaas.js'
 import {emailCupomAcesso,emailTeste,enviarEmail,montarSmtp} from '../server/email.js'
 import {enviarAcessoPago} from '../server/acesso-pago.js'
+import {URL_SITE} from '../server/email.js'
 
 export const config={maxDuration:120}
 
 const UUID=/^[0-9a-f-]{36}$/i
 // Ações que dono/administrador da organização pode pedir; o restante é exclusivo do master.
-const ACOES_CLIENTE=['assinar','trocar_plano','cancelar_assinatura','conferir_cupom','resgatar_cupom','checkout_assinatura','pagar_cartao']
+const ACOES_CLIENTE=['assinar','trocar_plano','cancelar_assinatura','conferir_cupom','resgatar_cupom','checkout_cliente','checkout_assinatura','pagar_cartao']
 
 export default async function handler(req,res) {
   res.setHeader('Cache-Control','no-store')
@@ -182,6 +183,32 @@ export default async function handler(req,res) {
     }
 
     // ------------------------------------------------------------------ Assinaturas recorrentes
+    if(body.acao==='checkout_cliente') {
+      if(!UUID.test(body.org ?? '')) return res.status(400).json({error:'Organização inválida'})
+      if(!admin && await rpc('pode_gerir_cobranca',{p_org:body.org})!==true) return res.status(403).json({error:'Você não administra esta organização'})
+      const [a]=await sv(`/rest/v1/assinaturas?select=*&org_id=eq.${body.org}&status=neq.cancelada`)
+      if(!a?.gateway_assinatura_id) return res.status(409).json({error:'Escolha um plano para iniciar o pagamento.'})
+      const {cfg}=await carregarAsaas()
+      if(!cfg?.ativo) return res.status(503).json({error:'Pagamentos temporariamente indisponíveis.'})
+      const pagamentos=await asaas(cfg,`/subscriptions/${encodeURIComponent(a.gateway_assinatura_id)}/payments?limit=100`)
+      let emailResultado=''
+      for(const p of pagamentos.data ?? []) {
+        const resultado=await rpc('processar_pagamento_asaas',{p_evento:'SYNC',p_pagamento:p},true)
+        if(resultado==='acesso liberado') emailResultado=await enviarAcessoPago(sv,p,env)
+      }
+      const [atual]=await sv(`/rest/v1/assinaturas?select=status,pago_ate,boas_vindas_em&id=eq.${a.id}`)
+      const [org]=await sv(`/rest/v1/organizations?select=suspensa,motivo_suspensao&id=eq.${a.org_id}`)
+      const pago=!!atual?.pago_ate && atual.pago_ate>=hojeSP()
+      const p=(pagamentos.data ?? []).sort((x,y)=>String(x.dueDate).localeCompare(String(y.dueDate))).find(p=>!['RECEIVED','CONFIRMED','RECEIVED_IN_CASH','REFUNDED','DELETED'].includes(p.status))
+      let pix=null, boleto=null
+      if(!pago && p) {
+        if(['PIX','BOLETO','UNDEFINED'].includes(p.billingType)) pix=await asaas(cfg,`/payments/${encodeURIComponent(p.id)}/pixQrCode`).catch(()=>null)
+        if(p.billingType==='BOLETO') boleto=await asaas(cfg,`/payments/${encodeURIComponent(p.id)}/identificationField`).catch(()=>null)
+      }
+      return res.json({assinatura_id:a.id,pago,liberado:pago && !org?.suspensa,email_enviado:!!atual?.boas_vindas_em,email_falhou:emailResultado.includes('falhou'),
+        valor_centavos:a.valor_centavos,plano:a.plano_id,ciclo:a.ciclo,pix,boleto,
+        url:p?.invoiceUrl ?? a.link_pagamento,boleto_url:p?.bankSlipUrl ?? null})
+    }
     if(body.acao==='assinar') {
       if(!UUID.test(body.org ?? '')) return res.status(400).json({error:'Organização inválida'})
       const {cfg}=await carregarAsaas()
@@ -213,7 +240,8 @@ export default async function handler(req,res) {
           const c=await asaas(cfg,'/customers',{method:'POST',body:{name:org.nome,cpfCnpj:a.documento,email:usuario?.email || undefined,externalReference:a.org_id,notificationDisabled:false}})
           cliente=c.id
         }
-        criada=await asaas(cfg,'/subscriptions',{method:'POST',body:corpoAssinatura(a,cliente,plano?.nome ?? a.plano_id)})
+        const retorno=`${(env.BILLING_PUBLIC_URL || URL_SITE).replace(/\/$/,'')}/obrigado?org=${a.org_id}`
+        criada=await asaas(cfg,'/subscriptions',{method:'POST',body:{...corpoAssinatura(a,cliente,plano?.nome ?? a.plano_id),callback:{successUrl:retorno,autoRedirect:true}}})
         const pagamentos=await asaas(cfg,`/subscriptions/${encodeURIComponent(criada.id)}/payments`).catch(()=>({data:[]}))
         const primeiro=(pagamentos.data ?? []).sort((x,y)=>String(x.dueDate).localeCompare(String(y.dueDate)))[0]
         await patchSv(`/rest/v1/assinaturas?id=eq.${a.id}`,{gateway_cliente_id:cliente,gateway_assinatura_id:criada.id,proximo_vencimento:criada.nextDueDate ?? hojeSP(),link_pagamento:primeiro?.invoiceUrl?.startsWith('https://')?primeiro.invoiceUrl:null,erro:null})
