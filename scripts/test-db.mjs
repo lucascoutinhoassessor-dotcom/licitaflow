@@ -358,7 +358,8 @@ try { expect((await db.query(`select public.dias_teste_gratis() d`)).rows[0].d==
 blocked=false;try{await as(U1, `select public.admin_teste_gratis(60, true)`);}catch{blocked=true;}
 expect(blocked,'cliente não altera o prazo do teste grátis');
 blocked=false;try{await as(U2, `select public.admin_teste_gratis(0, true)`);}catch{blocked=true;}
-expect(blocked,'prazo do teste fica entre 1 e 90 dias');
+expect(!blocked,'chamada antiga com zero desativa o teste grátis sem ambiguidade');
+expect((await as(U2, 'select public.admin_teste_status() r')).rows[0].r.ativo===false,'zero no controle antigo desativa a nova política');
 await as(U2, `select public.admin_teste_gratis(7, true)`);
 const o3=(await as(U1, `select public.criar_organizacao('Org Nova', 'fornecedor') as id`)).rows[0].id;
 expect((await db.query(`select trial_ate - current_date d from public.organizations where id='${o3}'`)).rows[0].d===7,'novo cadastro recebe o prazo definido pelo master');
@@ -378,6 +379,33 @@ await sistema(`update public.organizations set trial_ate=current_date-1 where id
 await sistema(`select public.rotina_cobranca()`);
 expect((await db.query(`select suspensa from public.organizations where id='${o3}'`)).rows[0].suspensa===false,'com o bloqueio desligado, teste vencido não é suspenso');
 await db.exec(`delete from public.assinaturas; delete from public.organizations where id='${o3}'`);
+
+// Oferta desativada: continua sem teste mesmo com o bloqueio de vencidos desligado.
+blocked=false;try{await as(U1, `select public.admin_teste_gratis(14, false, false, false)`);}catch{blocked=true;}
+expect(blocked,'cliente não pode desligar o teste grátis');
+const trialAntes=(await db.query(`select trial_ate::text t from public.organizations where id='${o1}'`)).rows[0].t;
+await as(U2, `select public.admin_teste_gratis(14, false, false, false)`);
+expect((await as(U2, `select public.admin_teste_status() r`)).rows[0].r.ativo===false,'master consegue desativar o teste');
+await db.exec('set role anon');
+try {expect((await db.query('select public.dias_teste_gratis() d')).rows[0].d===0,'landing recebe zero quando a oferta está desativada');}finally{await db.exec('reset role')}
+const semTeste=(await as(U1, `select public.criar_organizacao('Sem teste','fornecedor') id`)).rows[0].id;
+const nova=(await db.query(`select plano,suspensa,motivo_suspensao from public.organizations where id='${semTeste}'`)).rows[0];
+expect(nova.suspensa && nova.plano==='cancelado' && nova.motivo_suspensao==='Contratação pendente (automático)','sem teste: cadastro nasce bloqueado aguardando contratação');
+expect((await as(U1, `select public.pode_gerir_cobranca('${semTeste}') b`)).rows[0].b,'dono da conta sem teste pode acessar o checkout');
+expect(!(await as(U1, `select public.is_member('${semTeste}') b`)).rows[0].b,'conta sem teste não acessa funcionalidades pelo banco');
+expect((await db.query(`select trial_ate::text t from public.organizations where id='${o1}'`)).rows[0].t===trialAntes,'desativar oferta preserva testes concedidos');
+await sistema('select public.rotina_cobranca()');
+expect((await db.query(`select suspensa from public.organizations where id='${semTeste}'`)).rows[0].suspensa,'rotina não libera contratação pendente com bloqueio de testes desligado');
+const novaAss=(await as(U1, `select public.preparar_assinatura('${semTeste}','essencial','mensal','PIX','12345678909') id`)).rows[0].id;
+await sistema(`update public.assinaturas set gateway_assinatura_id='sub_sem_teste' where id='${novaAss}'`);
+await sistema(`select public.processar_pagamento_asaas('PAYMENT_RECEIVED','{"id":"pay_sem_teste","subscription":"sub_sem_teste","value":197,"status":"RECEIVED"}')`);
+expect((await db.query(`select not suspensa and plano='essencial' b from public.organizations where id='${semTeste}'`)).rows[0].b,'pagamento confirmado libera a nova conta sem teste');
+await sistema(`update public.organizations set suspensa=true,motivo_suspensao='Suspensão manual' where id='${semTeste}'`);
+await sistema(`select public.processar_pagamento_asaas('PAYMENT_RECEIVED','{"id":"pay_sem_teste","subscription":"sub_sem_teste","value":197,"status":"RECEIVED"}')`);
+expect((await db.query(`select suspensa from public.organizations where id='${semTeste}'`)).rows[0].suspensa,'pagamento nunca desfaz suspensão manual');
+await db.exec(`delete from public.assinatura_faturas where assinatura_id='${novaAss}'; delete from public.assinaturas where id='${novaAss}'; delete from public.organizations where id='${semTeste}'`);
+await as(U2, 'select public.admin_teste_gratis(14,false,false,true)');
+expect((await as(U2, 'select public.admin_teste_status() r')).rows[0].r.ativo===true,'master reativa a oferta');
 
 // Liberação de funcionalidades: master decide; cliente recebe só o estado efetivo da própria org.
 expect((await as(U1, `select public.modulos_da_org('${o1}') r`)).rows[0].r.agentes==='em_breve','cliente recebe os estados dos módulos');

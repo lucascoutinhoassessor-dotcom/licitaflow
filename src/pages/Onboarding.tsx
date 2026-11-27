@@ -1,3 +1,4 @@
+import { ContaSuspensa } from '@/pages/ContaSuspensa'
 import { useState, type FormEvent } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { Briefcase, Building2, Check } from 'lucide-react'
@@ -23,6 +24,7 @@ export default function Onboarding() {
   if (carregando || carregandoAdmin) return <Carregando telaCheia />
   // Conta de administração sem organização própria: o lugar dela é o console
   if (ehAdmin && !org) return <Navigate to="/master" replace />
+  if (org?.suspensa) return <ContaSuspensa />
   if (org && empresas.length > 0) return <Navigate to="/app" replace />
 
   const etapa = org ? 2 : 1

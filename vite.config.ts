@@ -8,6 +8,24 @@ function apiLocal(): Plugin {
     name: 'licitaflow-api-local',
     configureServer(server) {
       Object.assign(process.env, loadEnv('development', process.cwd(), ''))
+      server.middlewares.use('/api/pagamentos', async (req, res) => {
+        const resposta = {
+          setHeader: (k: string, v: string) => res.setHeader(k, v),
+          status(c: number) { res.statusCode = c; return resposta },
+          json(o: unknown) { res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(o)) },
+        }
+        try {
+          let texto = ''
+          for await (const parte of req) {
+            texto += parte.toString()
+            if (Buffer.byteLength(texto) > 32_768) return resposta.status(413).json({ error: 'Requisição grande demais' })
+          }
+          let body: unknown = {}
+          try { body = texto ? JSON.parse(texto) : {} } catch { return resposta.status(400).json({ error: 'JSON inválido' }) }
+          const mod = await server.ssrLoadModule('/api/pagamentos.js')
+          await mod.default({ method: req.method, headers: req.headers, socket: req.socket, body }, resposta)
+        } catch { resposta.status(500).json({ error: 'Falha na API local de pagamentos' }) }
+      })
       for (const nome of ['resultados', 'precos', 'compra', 'atas', 'mercado', 'juridico']) server.middlewares.use(`/api/${nome}`, async (req, res) => {
         const mod = await server.ssrLoadModule(`/server/${nome}.js`)
         const url = new URL(req.url ?? '', 'http://localhost')

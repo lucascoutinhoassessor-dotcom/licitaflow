@@ -47,3 +47,14 @@ describe('conteúdo da landing page', () => {
     expect(comDias('{dias} dias grátis, {dias}!', 7)).toBe('7 dias grátis, 7!')
   })
 })
+
+
+describe('oferta desativada na landing', () => {
+  it('remove promessas de teste e cartão dispensado sem alterar o conteúdo salvo', () => {
+    for (const texto of ['Testar grátis','Começar {dias} dias grátis','Criar minha conta grátis']) expect(comDias(texto,0)).toBe('Criar minha conta')
+    expect(comDias('Comece com {dias} dias grátis em qualquer plano. Sem cartão, sem fidelidade.',0)).not.toMatch(/grátis|0 dias|sem cartão/i)
+    expect(comDias('Preciso de cartão de crédito para testar?',0)).toBe('Como começo a usar?')
+    expect(comDias('Sem cartão de crédito',0)).not.toMatch(/sem cartão/i)
+    expect(comDias('Conheça os planos',0)).toBe('Conheça os planos')
+  })
+})

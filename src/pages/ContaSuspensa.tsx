@@ -14,9 +14,10 @@ export function ContaSuspensa() {
   const { org, organizacoes, trocarOrg, podeAdministrar } = useOrg()
   const outras = organizacoes.filter((o) => o.id !== org?.id && !o.suspensa)
   const teste = org?.motivo_suspensao === TESTE_VENCIDO
+  const contratacao = org?.motivo_suspensao === 'Contratação pendente (automático)'
   const atraso = org?.motivo_suspensao === ATRASO
   // Teste vencido ou atraso: quem administra a conta regulariza aqui mesmo e o acesso volta ao pagar.
-  const regularizar = (teste || atraso) && podeAdministrar && !!org
+  const regularizar = (teste || atraso || contratacao) && podeAdministrar && !!org
 
   return (
     <div className="flex min-h-full items-center justify-center px-4 py-10">
@@ -26,9 +27,9 @@ export function ContaSuspensa() {
           <div className={`mx-auto mt-6 flex h-12 w-12 items-center justify-center rounded-full ${teste ? 'bg-primary/10' : 'bg-destructive/10'}`}>
             {teste ? <Sparkles className="h-6 w-6 text-primary" /> : <Lock className="h-6 w-6 text-destructive" />}
           </div>
-          <h1 className="mt-4 text-lg font-semibold">{teste ? 'Seu teste grátis terminou' : 'Acesso suspenso'}</h1>
+          <h1 className="mt-4 text-lg font-semibold">{teste ? 'Seu teste grátis terminou' : contratacao ? 'Escolha seu plano para começar' : 'Acesso suspenso'}</h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            {teste
+            {contratacao ? <>Sua conta foi criada. Contrate um plano abaixo para acessar o LicitaForce. O acesso será liberado após a confirmação do pagamento.</> : teste
               ? <>Esperamos que o LicitaForce tenha ajudado <strong className="text-foreground">{org?.nome}</strong>. Contrate um plano para continuar: seus processos, documentos e dados estão guardados e voltam assim que o pagamento for confirmado.</>
               : atraso
                 ? <>Há uma fatura vencida de <strong className="text-foreground">{org?.nome}</strong>. Pague para liberar o acesso na hora. Seus dados estão preservados.</>

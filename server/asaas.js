@@ -56,13 +56,13 @@ export function montarConfig(linha, env) {
   return null
 }
 
-export async function asaas(cfg, caminho, { method = 'GET', body } = {}) {
+export async function asaas(cfg, caminho, { method = 'GET', body, timeout = 15000 } = {}) {
   if (!cfg?.apiKey) throw new ErroAsaas('Asaas ainda não configurado. Cadastre a chave em Master → Integrações.', 503)
   const r = await fetch(BASE[cfg.ambiente] + caminho, {
     method,
     headers: { access_token: cfg.apiKey, 'Content-Type': 'application/json', 'User-Agent': 'LicitaForce' },
     body: body ? JSON.stringify(body) : undefined,
-    signal: AbortSignal.timeout(15000),
+    signal: AbortSignal.timeout(timeout),
   })
   const texto = await r.text()
   let dados = {}

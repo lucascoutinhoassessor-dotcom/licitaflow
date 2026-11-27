@@ -69,7 +69,7 @@ export default function Cadastro() {
   return (
     <AuthShell
       titulo="Criar sua conta"
-      subtitulo={`${dias} dias grátis. Sem cartão de crédito.`}
+      subtitulo={dias > 0 ? `${dias} dias grátis. Sem cartão de crédito.` : 'Crie sua conta e contrate um plano para começar.'}
       rodape={
         <>
           Já tem conta?{' '}
