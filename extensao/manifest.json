@@ -1,0 +1,28 @@
+{
+  "manifest_version": 3,
+  "name": "LicitaForce – Propostas do Compras.gov.br",
+  "short_name": "LicitaForce",
+  "version": "1.0.0",
+  "description": "Quando você abre uma compra no LicitaForce, busca no Compras.gov.br todas as propostas de cada item (colocação, preço, marca, modelo, quantidade e situação) e leva para o histórico de preços.",
+  "permissions": ["tabs"],
+  "host_permissions": ["https://cnetmobile.estaleiro.serpro.gov.br/*"],
+  "background": { "service_worker": "coordenador.js", "type": "module" },
+  "content_scripts": [
+    {
+      "matches": ["https://licitaforce-app.vercel.app/*", "https://licitaflow-prod.vercel.app/*", "http://localhost/*"],
+      "js": ["ponte.js"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/public/compras/acompanhamento-compra*"],
+      "js": ["coletor-pagina.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": ["https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/public/compras/acompanhamento-compra*"],
+      "js": ["coletor.js"],
+      "run_at": "document_start"
+    }
+  ]
+}

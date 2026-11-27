@@ -138,7 +138,7 @@ export default function CompraDetalhe() {
         </Card>
         <EmpresasDisputa controle={c.controle} colocacoes={colocacoesDa(c)} />
         <h2 className="mb-3 flex items-center gap-2 text-lg font-semibold"><Tag className="h-5 w-5 text-sky-400" />Itens, vencedores e marcas</h2>
-        <DisputaComprasGov idCompra={idCompra} itens={c.itens.map((i) => i.numero)} className="mb-4" />
+        <DisputaComprasGov idCompra={idCompra} itens={c.itens.map((i) => i.numero)} guardados={enviadas.isSuccess ? (enviadas.data ?? []).flatMap((a) => a.resultado.itens ?? []).filter((i) => i.fonte === 'portal').length : null} className="mb-4" />
         <EnviarAta idCompra={idCompra} controle={c.controle} enviadas={enviadas.data ?? []} />
         <div className="space-y-2">{c.itens.map((i) => <Item key={i.numero} item={i} todos={c.itens} atas={atasJuntas} atasCarregando={(atas.isLoading && atas.fetchStatus !== 'idle') || enviadas.isLoading} />)}</div>
       </>}

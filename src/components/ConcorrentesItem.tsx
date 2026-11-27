@@ -1,3 +1,4 @@
+import { StatusExtensao } from '@/components/StatusExtensao'
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ExternalLink, ListChecks, Trophy } from 'lucide-react'
@@ -65,7 +66,7 @@ export function BotaoDisputaItem({ numero }: { numero: number }) {
  * (colocação, valores, marca, modelo, quantidade, desclassificadas e inabilitadas com motivo).
  * Carrega no navegador do usuário, com a verificação invisível do portal; o LicitaForce não lê o conteúdo.
  */
-export function DisputaComprasGov({ idCompra, itens = [], className }: { idCompra: string; itens?: number[]; className?: string }) {
+export function DisputaComprasGov({ idCompra, itens = [], guardados = null, className }: { idCompra: string; itens?: number[]; guardados?: number | null; className?: string }) {
   const [item, setItem] = useState<number | null>(null)
   useEffect(() => {
     const ouvir = (e: Event) => setItem(Number((e as CustomEvent<number>).detail) || null)
@@ -88,6 +89,7 @@ export function DisputaComprasGov({ idCompra, itens = [], className }: { idCompr
         )}
         <a href={endereco} target="_blank" rel="noopener noreferrer" className="inline-flex h-9 items-center gap-1.5 rounded-full border px-3 text-sm font-semibold hover:bg-muted"><ExternalLink className="h-4 w-4" />Abrir no portal</a>
       </div>
+      <StatusExtensao idCompra={idCompra} itens={itens} guardados={guardados} />
       <iframe key={endereco} src={endereco} title="Disputa completa no Compras.gov.br" loading="lazy" referrerPolicy="no-referrer" className="block h-[80vh] min-h-[520px] w-full bg-white" />
     </Card>
   )

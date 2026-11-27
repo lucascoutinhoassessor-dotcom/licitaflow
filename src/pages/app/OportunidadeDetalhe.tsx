@@ -143,7 +143,7 @@ export default function OportunidadeDetalhe() {
 
       <section id="itens">
         <h2 className="mb-3 text-lg font-semibold">Itens do edital</h2>
-        {encerrada && idCompra && <DisputaComprasGov idCompra={idCompra} itens={(itens.data ?? []).map((i) => i.numeroItem)} className="mb-4" />}
+        {encerrada && idCompra && <DisputaComprasGov idCompra={idCompra} itens={(itens.data ?? []).map((i) => i.numeroItem)} guardados={enviadas.isSuccess ? (enviadas.data ?? []).flatMap((a) => a.resultado.itens ?? []).filter((i) => i.fonte === 'portal').length : null} className="mb-4" />}
         {itens.isLoading ? <Carregando texto="Carregando itens…" /> : itens.isError ? (
           <Card className="p-5 text-sm">Não foi possível carregar os itens agora. <button className="font-semibold text-primary underline" onClick={() => itens.refetch()}>Tentar novamente</button></Card>
         ) : <ItensAcordeao itens={itens.data ?? []} tipoEdital={compra.materialOuServico} extra={encerrada ? (i) => <ConcorrentesEdital item={i} todos={itens.data ?? []} colocacoes={resultados.data} atas={atasJuntas} comDisputa={!!idCompra} /> : undefined} />}

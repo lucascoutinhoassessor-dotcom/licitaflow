@@ -64,7 +64,8 @@ export async function historicoPrecos(item: Pick<ItemCatalogo, 'tipo' | 'codigo'
   if (!data.session) throw new Error('Entre na sua conta para consultar preços.')
   const qs = new URLSearchParams({ tipo: item.tipo, codigo: String(item.codigo) })
   for (const [k, v] of Object.entries(filtros)) if (v) qs.set(k, v)
-  const r = await fetch(`/api/precos?${qs}`, { headers: { Authorization: `Bearer ${data.session.access_token}` }, signal })
+  // no-cache: as propostas trazidas do Compras.gov.br aparecem logo (o servidor ainda guarda a consulta por 10 min).
+  const r = await fetch(`/api/precos?${qs}`, { headers: { Authorization: `Bearer ${data.session.access_token}` }, signal, cache: 'no-cache' })
   const corpo = await r.json().catch(() => null)
   if (!r.ok) throw new Error(corpo?.error ?? 'Não foi possível consultar os preços agora.')
   return corpo as HistoricoPrecos
