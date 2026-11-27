@@ -68,11 +68,16 @@ A chave `termometro` em `limites_ia` vale **sem limite** em todos os planos, men
 - 🔴 **Pagamento lento:** média acima de 15 dias, ou 10% ou mais acima de 30 dias. Quando há o mês do serviço: média acima de 45 dias, ou 25% ou mais acima de 60.
 - 🟡 **Pagamento regular:** o resto.
 
-**Atualização:** o pg_cron `licitaflow-termometro-federal` roda todo dia às 7h de Brasília e chama `GET /api/agentes?agente=termometro&acao=federal` (header `x-coleta`). A rodada:
-- lê, em ordem, os dias seguintes ao último gravado (`config.recursos.federal`), até alcançar o Portal ou passar de ~230 s;
-- não aceita repetir um dia;
+**Atualização:** o pg_cron `licitaflow-termometro-federal` roda de hora em hora, da 0h às 6h de Brasília (3h–9h UTC). Ele chama `GET /api/agentes?agente=termometro&acao=federal` (header `x-coleta`). A rodada:
+- lê, em ordem, os dias seguintes ao último gravado (`config.recursos.federal`), **no máximo 3 dias** e até ~200 s;
+- manda cada dia em **lotes de até 2.500 linhas**, com tudo de um empenho no mesmo lote;
+- guarda o lote em que parou (`config.recursos.federal_parte = 'AAAAMMDD:k'`), e a próxima rodada continua dele;
+- o dia só conta como lido no último lote;
+- recusa lote repetido, fora de ordem ou de outro dia enquanto um dia está pela metade;
 - pula o dia que falta há mais de 10 dias, desde que o seguinte já tenha saído.
 
-Na primeira vez começa 120 dias atrás: cada rodada lê uns 60 dias. Para a carga inicial, rode `select licitaflow_termometro.disparar_federal()` duas ou três vezes no SQL Editor.
+Atrasada, a carga anda ~21 dias por noite. Em dia, cada rodada só confere se saiu um dia novo. Na primeira vez começa 120 dias atrás.
+
+**Cuidado (queda de 27/11/2026):** a primeira versão mandava o dia inteiro (~1,3 MB) numa chamada só, e um agendamento temporário rodava a cada 5 minutos. Na máquina Nano a gravação estourava o tempo. A chamada desistia, mas a consulta continuava no banco; elas se acumularam e ajudaram a derrubá-lo, até ser preciso reiniciar o projeto. **Não** volte a mandar o dia inteiro nem a agendar de 5 em 5 minutos.
 
 **Limite:** mede o prazo **depois** do ateste. A demora entre a entrega da nota e a liquidação só aparece pelo mês do serviço, quando o Contratos.gov.br informa. A tela diz isso.

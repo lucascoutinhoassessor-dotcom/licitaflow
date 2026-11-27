@@ -69,4 +69,17 @@ ok((await como(U1, `select nome from public.termometro_federal_ug where nome_bus
 const cons = (await como(U1, `select public.termometro_federal_consulta(array['158129', '999999']) r`))[0].r
 ok(cons.length === 1 && cons[0].orgao === 'Instituto Federal Baiano', 'consulta devolve só a UG conhecida')
 
+// Lotes: o dia só conta como lido no último lote; lote repetido não grava de novo; fora de ordem é recusado.
+const E4 = '158129264042026NE000004', E5 = '158129264042026NE000005'
+await dia('20261111', [[E4, '2026-11-11', null], [E5, '2026-11-11', null]], [])
+const lote = (d, parte, partes, liq, pag) => como('servico', 'select public.termometro_federal_dia($1, $2, $3, $4, $5, $6, $7) r', [token, d, JSON.stringify(liq), JSON.stringify(pag), '[]', parte, partes])
+ok((await lote('20261112', 0, 2, [], [[E4, '2026-11-12']]))[0].r.casados === 1, 'primeiro lote grava')
+const cfg = async () => (await db.query('select recursos from licitaflow_termometro.config')).rows[0].recursos
+ok((await cfg()).federal === '20261111' && (await cfg()).federal_parte === '20261112:1', 'no meio do dia guarda o lote, não o dia')
+ok((await lote('20261112', 0, 2, [], [[E4, '2026-11-12']]))[0].r.situacao === 'já gravado', 'lote repetido não conta de novo')
+ok(await falha('servico', 'select public.termometro_federal_dia($1, $2, $3, $4, $5, $6, $7)', [token, '20261113', '[]', '[]', '[]', 0, 1]), 'dia seguinte antes de terminar o atual é recusado')
+ok((await lote('20261112', 1, 2, [], [[E5, '2026-11-12']]))[0].r.casados === 1, 'último lote grava')
+ok((await cfg()).federal === '20261112' && !('federal_parte' in (await cfg())), 'no último lote o dia conta como lido')
+ok((await db.query(`select n from public.termometro_federal where ug = '158129' and mes = '2026-11-01'`)).rows[0].n === 3, 'os dois lotes somam no resumo')
+
 console.log(`\n${n} verificações do Termômetro ok`)
