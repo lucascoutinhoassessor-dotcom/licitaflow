@@ -1,4 +1,5 @@
-import { lazy, Suspense, useEffect, type ReactNode } from 'react'
+import { Suspense, useEffect, type ReactNode } from 'react'
+import { lazy, preCarregarPaginas } from '@/lib/carregarPagina'
 import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom'
 import { useAuth } from '@/providers/AuthProvider'
 import { OrgProvider, useOrg } from '@/providers/OrgProvider'
@@ -93,6 +94,7 @@ function ExigeOrganizacao() {
   if (!org || empresas.length === 0) return <Navigate to="/onboarding" replace />
   return (
     <AppLayout>
+      <PreCarregarPaginas />
       <LimiteDeErroDaRota>
         <Suspense fallback={<Carregando />}>
           <GuardaModulo><Outlet /></GuardaModulo>
@@ -100,6 +102,12 @@ function ExigeOrganizacao() {
       </LimiteDeErroDaRota>
     </AppLayout>
   )
+}
+
+/** Logado, baixa todas as páginas em segundo plano: trocar de página deixa de depender da rede e do deploy. */
+function PreCarregarPaginas() {
+  useEffect(() => { preCarregarPaginas() }, [])
+  return null
 }
 
 /** Erro numa página não apaga o app inteiro; trocar de página limpa o erro. */
@@ -118,6 +126,7 @@ function ExigeMaster() {
   if (!ehAdmin) return <AcessoNegadoMaster />
   return (
     <Suspense fallback={<Carregando telaCheia />}>
+      <PreCarregarPaginas />
       <MasterLayout />
     </Suspense>
   )

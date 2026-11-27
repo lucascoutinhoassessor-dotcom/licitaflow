@@ -1,6 +1,7 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react'
 import { AlertTriangle } from 'lucide-react'
 import { registrar } from '@/lib/registroUso'
+import { emOperacaoCritica } from '@/lib/operacaoCritica'
 
 const CHAVE = 'lf-recarregou-versao'
 
@@ -10,8 +11,10 @@ export function ehFalhaDeCarregamento(e: unknown): boolean {
   return /dynamically imported module|Importing a module script failed|error loading dynamically imported|Failed to fetch|ChunkLoadError|Loading chunk|Unable to preload CSS/i.test(m)
 }
 
-/** Recarrega uma vez para pegar a versão nova. Não repete em menos de 30 s (evita ficar em laço se o problema for outro). */
+/** Recarrega uma vez para pegar a versão nova. Não repete em menos de 30 s (evita ficar em laço se o problema for outro).
+ *  Nunca recarrega durante operação crítica (disputa ao vivo etc.). */
 export function recarregarParaVersaoNova(): boolean {
+  if (emOperacaoCritica()) return false
   try {
     const ultima = Number(sessionStorage.getItem(CHAVE) ?? 0)
     if (Date.now() - ultima < 30_000) return false
