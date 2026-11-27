@@ -105,9 +105,9 @@ export default function ResumoEditaisHoje({ termos = '', className }: { termos?:
       </div>
     </div>
 
-    {/* Tipo e faixa de valor */}
-    <div className="grid grid-cols-2 gap-3 px-5 sm:grid-cols-3 sm:px-6 lg:grid-cols-5">
-      {blocos.map(b => {
+    {/* Tipo e faixa de valor em duas linhas (tipos; faixas): o quadro divide a largura com a agenda e cinco colunas ficariam estreitas. */}
+    {[blocos.slice(0, 2), blocos.slice(2)].map((linha, i) => <div key={i} className={cn('grid gap-3 px-5 sm:px-6', i === 0 ? 'grid-cols-2' : 'mt-3 grid-cols-1 sm:grid-cols-3')}>
+      {linha.map(b => {
         const parte = s?.editais && b.valor !== undefined ? Math.round(b.valor / s.editais * 100) : 0
         return <Link key={b.filtro} to={destino(b.filtro)} className={cn('group rounded-2xl border bg-gradient-to-br p-4 transition hover:-translate-y-0.5', b.cor, foco)}>
           <div className="flex items-center justify-between gap-2 text-[11px] font-semibold uppercase tracking-wider"><span className="inline-flex items-center gap-1.5">{b.Icone && <b.Icone className="h-3.5 w-3.5" />}{b.nome}</span><ArrowUpRight className="h-3.5 w-3.5 shrink-0 opacity-0 transition group-hover:opacity-100" /></div>
@@ -116,7 +116,7 @@ export default function ResumoEditaisHoje({ termos = '', className }: { termos?:
           <p className="mt-1 text-[11px] text-muted-foreground">{s?.editais ? `${parte}% do dia` : ' '}</p>
         </Link>
       })}
-    </div>
+    </div>)}
 
     {/* Estados */}
     {!!s?.ufs?.length && <div className="px-5 pt-5 sm:px-6">
