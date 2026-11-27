@@ -77,7 +77,7 @@ export function lerCsvEstados(texto, { posicao, fonte } = {}) {
 }
 
 /** Abre um ZIP (XLSX) e devolve os arquivos pedidos como texto. Suporta "stored" e "deflate". */
-export function abrirZip(buf, nomes) {
+export function abrirZip(buf, nomes, codificacao = 'utf8') {
   const b = Buffer.isBuffer(buf) ? buf : Buffer.from(buf)
   let fim = -1
   for (let i = b.length - 22; i >= Math.max(0, b.length - 65_557); i--) if (b.readUInt32LE(i) === 0x06054b50) { fim = i; break }
@@ -94,7 +94,7 @@ export function abrirZip(buf, nomes) {
     if (!nomes.includes(nome)) continue
     const ini = local + 30 + b.readUInt16LE(local + 26) + b.readUInt16LE(local + 28)
     const dados = b.subarray(ini, ini + tam)
-    saida[nome] = (metodo === 0 ? dados : inflateRawSync(dados)).toString('utf8')
+    saida[nome] = (metodo === 0 ? dados : inflateRawSync(dados)).toString(codificacao)
   }
   return saida
 }

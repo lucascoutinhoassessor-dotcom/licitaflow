@@ -4,6 +4,7 @@ import { excedeuLimite } from './protecao.js'
 import { rodadaSentinela } from './sentinela.js'
 import { avisarRadar } from './radar.js'
 import { atualizarCapag } from './termometro.js'
+import { atualizarFederal } from './termometroFederal.js'
 // Agentes de IA (Claude API). Uma rota só para todos os agentes, por causa do limite de funções da Vercel.
 //
 // Leitor de editais (?agente=leitor):
@@ -229,6 +230,7 @@ export function fichaDaCompra(compra) {
     link_origem: typeof compra.linkSistemaOrigem === 'string' && /^https?:\/\//.test(compra.linkSistemaOrigem) ? compra.linkSistemaOrigem : null,
     esfera: compra.orgaoEntidade?.esferaId ?? null,
     codigo_ibge: compra.unidadeOrgao?.codigoIbge ?? null,
+    codigo_unidade: compra.unidadeOrgao?.codigoUnidade ?? null,
   }
 }
 
@@ -297,7 +299,7 @@ export function criarHandler({ fetcher = fetch, cliente, webpush } = {}) {
     // Chamadas do pg_cron (sem login; o token x-coleta é conferido pelo banco):
     // Sentinela (rodada de verificação) e Radar (push das sugestões novas).
     const doAgendador = (q.agente === 'sentinela' && q.acao === 'verificar') || (q.agente === 'radar' && q.acao === 'avisar')
-      || (q.agente === 'termometro' && q.acao === 'atualizar')
+      || (q.agente === 'termometro' && (q.acao === 'atualizar' || q.acao === 'federal'))
     if (doAgendador) {
       const coleta = String(req.headers['x-coleta'] ?? '')
       if (!/^[0-9a-f]{32,128}$/.test(coleta)) return res.status(401).json({ error: 'Não autorizado' })
@@ -311,6 +313,7 @@ export function criarHandler({ fetcher = fetch, cliente, webpush } = {}) {
       try {
         const extra = webpush ? { webpush } : {}
         if (q.agente === 'radar') return res.status(200).json(await avisarRadar({ token: coleta, rpc, chamar, ...extra }))
+        if (q.agente === 'termometro' && q.acao === 'federal') return res.status(200).json(await atualizarFederal({ token: coleta, rpc, fetcher }))
         if (q.agente === 'termometro') return res.status(200).json(await atualizarCapag({ token: coleta, rpc, fetcher, forcar: q.forcar === '1' }))
         return res.status(200).json(await rodadaSentinela({ token: coleta, rpc, chamar, fetcher, ...extra }))
       } catch (e) {

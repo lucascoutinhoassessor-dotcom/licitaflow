@@ -129,9 +129,9 @@ export default function OportunidadeDetalhe() {
         ) : <p className="text-sm text-muted-foreground">Peça a um administrador para adicionar este edital aos processos.</p>}
       </Card>
 
-      {/* Termômetro de Pagamento: nota CAPAG do órgão comprador (esfera e IBGE do PNCP; sem eles, pelo nome). */}
+      {/* Termômetro de Pagamento: nota CAPAG do órgão comprador (esfera e IBGE do PNCP; sem eles, pelo nome); federal, prazos pela UG. */}
       {(() => {
-        const alvoPncp = alvoPeloPncp(compra.orgaoEntidade.esferaId, compra.unidadeOrgao?.codigoIbge, compra.unidadeOrgao?.ufSigla)
+        const alvoPncp = alvoPeloPncp(compra.orgaoEntidade.esferaId, compra.unidadeOrgao?.codigoIbge, compra.unidadeOrgao?.ufSigla, compra.unidadeOrgao?.codigoUnidade)
         const alvo = alvoPncp ?? alvoPeloNome(compra.orgaoEntidade.razaoSocial, compra.unidadeOrgao?.ufSigla, compra.unidadeOrgao?.municipioNome)
         return <CartaoTermometro alvo={alvo} peloNome={!alvoPncp} className="mb-5" />
       })()}
