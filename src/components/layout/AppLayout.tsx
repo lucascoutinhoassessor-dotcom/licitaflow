@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import * as Menu from '@radix-ui/react-dropdown-menu'
 import * as Dialog from '@radix-ui/react-dialog'
 import { Bell, Building, Check, ChevronDown, ChevronsUpDown, CircleHelp, Download, LayoutDashboard, LogOut, Menu as IconeMais, Moon, Sun, X } from 'lucide-react'
@@ -10,6 +11,7 @@ import { Logo } from '@/components/ui'
 import { useAuth } from '@/providers/AuthProvider'
 import { useOrg } from '@/providers/OrgProvider'
 import { useInstalacao } from '@/hooks/useInstalacao'
+import { supabase } from '@/lib/supabase'
 import PedirNotificacoes from '@/components/PedirNotificacoes'
 import AvisoAppAntigo from '@/components/AvisoAppAntigo'
 
@@ -126,6 +128,39 @@ function MenuUsuario() {
 
 const botaoIcone = 'inline-flex h-10 w-10 items-center justify-center rounded-lg text-sidebar-foreground/85 outline-none hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-white/40'
 
+/** Quantos dos avisos listados em /app/avisos o usuário ainda não marcou como lidos.
+ *  A chave começa com 'aviso-leituras': o "Marcar como lido" da página já atualiza o sininho. */
+function useAvisosNaoLidos() {
+  const { user } = useAuth()
+  const q = useQuery({
+    queryKey: ['aviso-leituras', 'nao-lidos', user?.id],
+    enabled: !!user,
+    refetchInterval: 120_000,
+    queryFn: async () => {
+      const { data: avisos, error } = await supabase.from('plataforma_avisos').select('id').order('created_at', { ascending: false }).limit(100)
+      if (error) throw error
+      const ids = (avisos ?? []).map((a) => a.id as string)
+      if (!ids.length) return 0
+      const { data: lidos, error: e2 } = await supabase.from('aviso_leituras').select('aviso_id').eq('user_id', user!.id).in('aviso_id', ids)
+      if (e2) throw e2
+      const jaLidos = new Set((lidos ?? []).map((r) => r.aviso_id as string))
+      return ids.filter((id) => !jaLidos.has(id)).length
+    },
+  })
+  return q.data ?? 0
+}
+
+/** Sininho da barra superior com o número de avisos não lidos. */
+function SininhoAvisos() {
+  const n = useAvisosNaoLidos()
+  return (
+    <Link to="/app/avisos" className={cn(botaoIcone, 'relative')} aria-label={n ? `Avisos: ${n} não ${n === 1 ? 'lido' : 'lidos'}` : 'Avisos'}>
+      <Bell className="h-5 w-5" />
+      {n > 0 && <span className="absolute right-1 top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold leading-none text-white ring-2 ring-black" aria-hidden>{n > 9 ? '9+' : n}</span>}
+    </Link>
+  )
+}
+
 /** Gaveta de baixo para cima com os itens de um grupo (celular). */
 function Gaveta({ titulo, aberto, aoMudar, itens, extra }: { titulo: string; aberto: boolean; aoMudar: (v: boolean) => void; itens: ItemNav[]; extra?: ReactNode }) {
   const { pathname } = useLocation()
@@ -237,7 +272,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
           {!instalacao.ocultar && <button type="button" onClick={() => { void instalacao.instalar() }} className="inline-flex h-9 items-center gap-1.5 rounded-full border border-white/15 px-3 text-sm font-medium text-white outline-none hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-white/40" aria-label="Instalar aplicativo">
             <Download className="h-4 w-4" /><span className="hidden sm:inline">Instalar app</span>
           </button>}
-          <Link to="/app/avisos" className={botaoIcone} aria-label="Avisos"><Bell className="h-5 w-5" /></Link>
+          <SininhoAvisos />
           <Link to="/suporte" className={cn(botaoIcone, 'hidden sm:inline-flex')} aria-label="Ajuda e suporte"><CircleHelp className="h-5 w-5" /></Link>
           <MenuUsuario />
         </div>
