@@ -11,6 +11,7 @@ import { MODALIDADES } from '@/lib/dominio'
 import { DADOS_VAZIOS, PECAS, htmlParaWord, montarPeca, pecaPorId, pedidosPadrao, prazoDaPeca, type DadosPeca, type TipoPeca } from '@/lib/juridico'
 import { cn } from '@/lib/utils'
 import type { Processo } from '@/types/db'
+import { RedigirComIA } from '@/components/RedigirComIA'
 
 const hoje = () => {
   const d = new Date()
@@ -342,6 +343,26 @@ function Editor({ tipo, modelo }: { tipo: TipoPeca; modelo: Modelo | null }) {
               </Campo>
             )}
           </Card>
+
+          <RedigirComIA
+            tipo={tipo}
+            processoId={processoId}
+            dados={dados}
+            teses={def.teses.filter((t) => d.teses.includes(t.id))}
+            aoRedigir={(p) => {
+              setD((x) => ({
+                ...x,
+                fatos: p.fatos || x.fatos,
+                argumentos: p.argumentos || x.argumentos,
+                pedidos: p.pedidos || x.pedidos,
+                perguntas: p.perguntas || x.perguntas,
+                // As teses marcadas já foram desenvolvidas na fundamentação: não repete o texto pronto.
+                teses: p.argumentos ? [] : x.teses,
+              }))
+              setEditado(false)
+              setAgendado(false)
+            }}
+          />
         </div>
 
         <div className="min-w-0 lg:sticky lg:top-20 lg:self-start">

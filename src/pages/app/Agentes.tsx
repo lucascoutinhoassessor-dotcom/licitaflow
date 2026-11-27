@@ -7,9 +7,6 @@ import { controleDe, rotaLeitor } from '@/lib/leitor'
 import type { Processo } from '@/types/db'
 import PushAgentes from '@/components/PushAgentes'
 
-const PROXIMOS = [
-  { icone: Gavel, nome: 'Jurídico', texto: 'Redige impugnações, esclarecimentos e recursos a partir do edital e da sessão.' },
-]
 
 export default function Agentes() {
   const navigate = useNavigate()
@@ -121,15 +118,19 @@ export default function Agentes() {
         </Card>
       </Link>
 
-      <h2 className="mb-3 text-lg font-semibold">Próximos agentes</h2>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {PROXIMOS.map((a) => (
-          <Card key={a.nome} className="p-4 opacity-80">
-            <p className="flex items-center gap-2 font-semibold"><a.icone className="h-4 w-4 text-primary" />{a.nome} <Badge>Em breve</Badge></p>
-            <p className="mt-1 text-sm text-muted-foreground">{a.texto}</p>
-          </Card>
-        ))}
-      </div>
+      <Link to="/app/juridico/impugnacao" className="mb-6 block">
+        <Card className="flex items-start gap-3 p-5 transition-colors hover:bg-muted/40 sm:p-6">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary/10"><Gavel className="h-6 w-6 text-primary" /></div>
+          <div className="min-w-0 flex-1">
+            <h2 className="flex flex-wrap items-center gap-2 text-lg font-semibold">Jurídico com IA <Badge cor="azul">Beta</Badge></h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Redige impugnação, esclarecimento, intenção de recurso, recurso e contrarrazões a partir do seu relato, das teses da Lei 14.133,
+              da leitura do edital e de peças parecidas já publicadas. Você revisa e baixa em Word.
+            </p>
+            <p className="mt-2 text-sm font-semibold text-primary">Abrir o Jurídico →</p>
+          </div>
+        </Card>
+      </Link>
     </>
   )
 }
