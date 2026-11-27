@@ -606,6 +606,13 @@ const diaSP = (iso) => new Date(new Date(iso).getTime() - 3 * 3600_000).toISOStr
  */
 export const LIMITE_CONTAGEM = 1000
 export const LIMITE_CONTAGEM_HISTORICO = LIMITE_CONTAGEM
+/**
+ * Com folga de cota (plano Developer: 2,5 bi de leituras/mês), a busca volta a contar tudo e a paginar até o fim:
+ * o teto de 1.000 fazia a lista parar na página 50 e parecia que a base tinha encolhido. O limite de 1.000 volta
+ * sozinho quando a cota de leituras entra em economia. A contagem fica 10 min em cache por filtro.
+ */
+export const LIMITE_CONTAGEM_FOLGA = 50_000
+export const limiteContagem = (nivelLeituras) => (peloMenos(nivelLeituras ?? 'normal', 'economia') ? LIMITE_CONTAGEM : LIMITE_CONTAGEM_FOLGA)
 
 export class FiltroInvalido extends Error {}
 
@@ -810,7 +817,7 @@ export async function buscarTurso(turso, filtros, pagina = 1, tamanho = 20) {
     : inverter ? 'e.encerramento desc, e.controle desc' : 'e.encerramento asc, e.controle asc'
   // Contagens param no limite (L + 1 linhas). Os pendentes (sem itens coletados) são contados na mesma janela dos
   // primeiros L + 1 editais do filtro base: servem para comparar com o total, que também para no limite.
-  const L = LIMITE_CONTAGEM
+  let L = LIMITE_CONTAGEM
   const contar = (w, a) => [`select count(*) as n from (select 1 from editais e where ${w} limit ${L + 1})`, a]
   // Total e pendentes dependem só dos filtros (não da página): ficam em memória e também no Turso (cache_busca),
   // compartilhados entre as instâncias. A lista de órgãos saiu daqui: só é lida quando alguém abre o filtro (orgaosTurso).
@@ -828,16 +835,19 @@ export async function buscarTurso(turso, filtros, pagina = 1, tamanho = 20) {
   const cota = cotaTurso(turso, e)
   NIVEL.set(chaveNivel(turso), { em: Date.now(), leituras: cota.leituras, escritas: cota.escritasNivel })
   if (peloMenos(cota.leituras, 'critico')) throw new CotaTurso('Cota do Turso no fim do mês')
-  // Em economia, as contagens valem 30 min (normal: 10 min).
+  // Em economia, as contagens valem 30 min (normal: 10 min) e param em 1.000.
   const validade = (peloMenos(cota.leituras, 'economia') ? 30 : 10) * 60_000
+  L = limiteContagem(cota.leituras)
+  // Contagem feita com outro limite (ex.: guardada antes da troca) não vale: um total "1.001" pararia a lista ali.
+  if (contagem && contagem.limite !== L) { porFiltro.delete(chaveFiltro); contagem = undefined }
   if (!contagem && guardada?.[0]) {
     const v = lerJson(guardada[0].valor)
-    if (v) contagem = { ...v, expira: Date.parse(guardada[0].expira) }
+    if (v && v.limite === L) contagem = { ...v, expira: Date.parse(guardada[0].expira) }
   }
   if (!contagem) {
     const r = await turso.lote([contar(onde.join(' and '), args),
       ...(porItem ? [[`select count(*) as n from (select e.itens_completos from editais e where ${base.onde.join(' and ')} limit ${L + 1}) where itens_completos = 0`, base.args]] : [])])
-    contagem = { total: r[0][0]?.n ?? 0, pendentes: porItem ? r[1][0]?.n ?? 0 : 0, expira: Date.now() + validade }
+    contagem = { total: r[0][0]?.n ?? 0, pendentes: porItem ? r[1][0]?.n ?? 0 : 0, limite: L, expira: Date.now() + validade }
     // Guarda para as outras instâncias (uma escrita), a não ser que a cota de escrita já esteja no fim.
     if (!peloMenos(cota.escritasNivel, 'critico')) {
       const { expira, ...valor } = contagem

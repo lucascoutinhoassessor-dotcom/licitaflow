@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createRequire } from 'node:module'
-import { buscarTurso, clienteTurso, coletarRodada, itensTurso, LIMITE_CONTAGEM, linhas, montarFiltros, orgaosTurso, urlHttp } from './turso.js'
+import { buscarTurso, clienteTurso, coletarRodada, itensTurso, LIMITE_CONTAGEM, limiteContagem, linhas, montarFiltros, orgaosTurso, urlHttp } from './turso.js'
 import { consultaFts, diaUtil, filtroDescricao, portalDe, raiz, tempo, tipoPeloObjeto } from './turso-regras.js'
 import { criarHandler } from './oportunidades.js'
 
@@ -202,8 +202,14 @@ describe('coleta e busca no Turso', () => {
     turso.db.exec(`with recursive n(i) as (select 100 union all select i + 1 from n where i < ${100 + LIMITE_CONTAGEM + 50})
       insert into editais(controle,cnpj,ano,sequencial,modalidade,portal,uf,situacao,orgao_cnpj,orgao_nome,encerramento,coletado_em,compra)
       select '12345678000199-1-' || i || '/2026','12345678000199',2026,i,6,'pcp','PR',1,'12345678000199','X','${enc}','x','{"sequencialCompra":' || i || '}' from n`)
+    // Cota folgada: conta tudo e pagina até o fim (antes a lista parava em 1.000).
     const r = await buscarTurso(turso as never, {})
-    expect(r.totalLimitado).toBe(true); expect(r.totalRegistros).toBe(LIMITE_CONTAGEM); expect(r.totalPaginas).toBe(LIMITE_CONTAGEM / 20)
+    const [{ n: abertos }] = await turso.consultar('select count(*) as n from editais where encerramento >= ?', [new Date().toISOString()]) as { n: number }[]
+    expect(abertos).toBeGreaterThan(LIMITE_CONTAGEM)
+    expect(r.totalLimitado).toBe(false); expect(r.totalRegistros).toBe(abertos); expect(r.totalPaginas).toBe(Math.ceil(abertos / 20))
+    expect((await buscarTurso(turso as never, {}, r.totalPaginas)).data.length).toBe(abertos % 20 || 20)
+    // Cota em economia: volta a parar em 1.000.
+    expect(limiteContagem('economia')).toBe(LIMITE_CONTAGEM); expect(limiteContagem('normal')).toBeGreaterThan(36_000)
     expect((await buscarTurso(turso as never, { ufs: ['SP'] })).totalRegistros).toBe(1)
     const plano = turso.db.prepare("explain query plan select count(*) from editais e where e.uf = 'AC' and e.encerramento >= '2026'").all() as { detail: string }[]
     expect(plano.map((p) => p.detail).join(' ')).toContain('editais_uf_abertos')
