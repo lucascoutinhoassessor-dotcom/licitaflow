@@ -28,5 +28,10 @@ export function mensagemErro(e: unknown): string {
   for (const [k, v] of Object.entries(mapa)) if (msg.includes(k)) return v
   if (/rate limit/i.test(msg)) return 'Muitas tentativas. Aguarde alguns minutos e tente de novo.'
   if (/fetch|network/i.test(msg)) return 'Falha de conexão. Verifique sua internet.'
+  // Supabase lento ou fora do ar (504/AuthRetryableFetchError): o corpo vem vazio e a mensagem vira "{}".
+  const erro = e as { name?: string; status?: number }
+  if (!msg.trim() || /^\s*(\{\s*\}|\[object Object\]|undefined|null)\s*$/.test(msg) || erro?.name === 'AuthRetryableFetchError' || (erro?.status ?? 0) >= 500) {
+    return 'O servidor está demorando para responder. Tente de novo em instantes.'
+  }
   return msg
 }
