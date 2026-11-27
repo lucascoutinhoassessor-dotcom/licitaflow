@@ -18,6 +18,8 @@ function Item({ item, todos, atas, atasCarregando }: { item: ItemCompraFederal; 
   const [aberto, setAberto] = useState(false)
   const vencedor = item.resultados[0]
   const { lista, semItem } = concorrentesDoItem(item, todos, atas)
+  // Sem marca nos dados abertos, vale a marca da proposta vencedora trazida do Compras.gov.br.
+  const marcaVencedora = item.marca ?? lista.find((c) => c.situacao === 'vencedora' && c.marca)?.marca ?? null
   const lidas = atas?.documentos.some((d) => d.lido) ?? false
   return (
     <article className={cn('lf-cartao overflow-hidden rounded-2xl border bg-card', aberto && 'border-primary/40')}>
@@ -27,7 +29,7 @@ function Item({ item, todos, atas, atasCarregando }: { item: ItemCompraFederal; 
           <span className="block truncate font-semibold">{item.resumo || item.descricao || 'Item sem descrição'}</span>
           <span className="block text-xs text-muted-foreground">
             {vencedor ? <>Vencedor: {vencedor.fornecedor} · {vencedor.valorUnitario ? formatarMoeda(vencedor.valorUnitario) : '—'}</> : item.situacao ?? 'Sem resultado'}
-            {item.marca && <> · Marca: {item.marca}</>}
+            {marcaVencedora && <> · Marca: {marcaVencedora}</>}
           </span>
         </span>
         <ChevronDown className={cn('h-5 w-5 shrink-0 text-muted-foreground transition-transform', aberto && 'rotate-180')} />
@@ -38,8 +40,8 @@ function Item({ item, todos, atas, atasCarregando }: { item: ItemCompraFederal; 
             <div><dt className="text-[11px] font-semibold uppercase text-muted-foreground">Tipo</dt><dd className="mt-1 font-semibold">{item.tipo ?? '—'}</dd></div>
             <div><dt className="text-[11px] font-semibold uppercase text-muted-foreground">Quantidade</dt><dd className="mt-1 font-semibold">{item.quantidade?.toLocaleString('pt-BR') ?? '—'} {item.unidade ?? ''}</dd></div>
             <div><dt className="text-[11px] font-semibold uppercase text-muted-foreground">Estimado (unit.)</dt><dd className="mt-1 font-semibold">{item.sigiloso ? 'Sigiloso' : item.valorEstimado ? formatarMoeda(item.valorEstimado) : '—'}</dd></div>
-            <div><dt className="text-[11px] font-semibold uppercase text-muted-foreground">Marca vencedora</dt><dd className="mt-1 font-semibold">{item.marca ?? 'Não informada'}</dd>
-              {item.marca && <a href={linkPesquisaMarca(item.marca, item.resumo ?? item.descricao)} target="_blank" rel="noopener noreferrer" className="mt-1 inline-flex h-7 items-center gap-1 rounded-full border px-2.5 text-xs font-semibold hover:bg-muted">Pesquisar no Google</a>}</div>
+            <div><dt className="text-[11px] font-semibold uppercase text-muted-foreground">Marca vencedora</dt><dd className="mt-1 font-semibold">{marcaVencedora ?? 'Não informada'}</dd>
+              {marcaVencedora && <a href={linkPesquisaMarca(marcaVencedora, item.resumo ?? item.descricao)} target="_blank" rel="noopener noreferrer" className="mt-1 inline-flex h-7 items-center gap-1 rounded-full border px-2.5 text-xs font-semibold hover:bg-muted">Pesquisar no Google</a>}</div>
           </dl>
           <p className="mt-3 whitespace-pre-wrap break-words text-muted-foreground">{item.descricao}</p>
           <div className="mt-2 flex flex-wrap gap-2">{[item.criterio, item.beneficio, item.situacao].filter(Boolean).map((t) => <Badge key={t}>{t}</Badge>)}</div>
@@ -136,7 +138,7 @@ export default function CompraDetalhe() {
           </div>
           <p className="mt-3 text-xs text-muted-foreground">Lances, propostas desclassificadas e motivos ficam na página oficial da compra, no portal da disputa, que exige acesso próprio.</p>
         </Card>
-        <EmpresasDisputa controle={c.controle} colocacoes={colocacoesDa(c)} />
+        <EmpresasDisputa controle={c.controle} colocacoes={colocacoesDa(c)} portal={(enviadas.data ?? []).flatMap((a) => a.resultado.itens ?? []).filter((i) => i.fonte === 'portal')} />
         <h2 className="mb-3 flex items-center gap-2 text-lg font-semibold"><Tag className="h-5 w-5 text-sky-400" />Itens, vencedores e marcas</h2>
         <DisputaComprasGov idCompra={idCompra} itens={c.itens.map((i) => i.numero)} guardados={enviadas.isSuccess ? (enviadas.data ?? []).flatMap((a) => a.resultado.itens ?? []).filter((i) => i.fonte === 'portal').length : null} className="mb-4" />
         <EnviarAta idCompra={idCompra} controle={c.controle} enviadas={enviadas.data ?? []} />

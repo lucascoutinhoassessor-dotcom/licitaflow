@@ -137,7 +137,7 @@ export default function OportunidadeDetalhe() {
       })()}
 
       {/* Depois da abertura das propostas, as atas publicadas no PNCP mostram quem disputou. */}
-      {encerrada && <EmpresasDisputa controle={compra.numeroControlePNCP} colocacoes={resultados.data} carregandoResultados={resultados.isLoading && resultados.fetchStatus !== 'idle'} />}
+      {encerrada && <EmpresasDisputa controle={compra.numeroControlePNCP} colocacoes={resultados.data} portal={(enviadas.data ?? []).flatMap((a) => a.resultado.itens ?? []).filter((i) => i.fonte === 'portal')} carregandoResultados={resultados.isLoading && resultados.fetchStatus !== 'idle'} />}
 
       <div id="arquivos" className="scroll-mt-20"><ArquivosEdital cnpj={compra.orgaoEntidade.cnpj} ano={compra.anoCompra} seq={compra.sequencialCompra} linkFonte={linkCompra(compra)} /></div>
 

@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Users } from 'lucide-react'
 import { Badge, Card, Carregando } from '@/components/ui'
 import { ListaOcorrencias } from '@/components/OcorrenciasAta'
-import { atasDaCompra, NOME_TIPO, type TipoOcorrencia } from '@/lib/atas'
+import { atasDaCompra, NOME_TIPO, type ItemAta, type TipoOcorrencia } from '@/lib/atas'
 import type { ColocacaoItem } from '@/lib/resultadosEdital'
 import { formatarCnpj, formatarMoeda } from '@/lib/format'
 
@@ -27,11 +27,12 @@ const so = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase
 /**
  * Todas as empresas de uma compra, com a situação de cada uma:
  * - vencedoras e colocações homologadas (dados oficiais; no registro de preço vêm 2º, 3º... do cadastro de reserva);
+ * - todas as propostas de cada item trazidas do Compras.gov.br pela extensão (portal): colocações, desclassificadas e inabilitadas com motivo;
  * - desclassificadas, inabilitadas, que não enviaram proposta e demais licitantes, lidas nas atas publicadas no PNCP.
  * Cada empresa com CNPJ leva à análise dela.
  */
-export default function EmpresasDisputa({ controle, vencedoras = [], colocacoes = [], carregandoResultados = false }: {
-  controle: string | null; vencedoras?: Vencedora[]; colocacoes?: ColocacaoItem[]; carregandoResultados?: boolean
+export default function EmpresasDisputa({ controle, vencedoras = [], colocacoes = [], portal = [], carregandoResultados = false }: {
+  controle: string | null; vencedoras?: Vencedora[]; colocacoes?: ColocacaoItem[]; portal?: ItemAta[]; carregandoResultados?: boolean
 }) {
   const valido = controle && /^\d{14}-1-\d+\/\d{4}$/.test(controle) ? controle : null
   const q = useQuery({ queryKey: ['atas-compra', valido], enabled: !!valido, staleTime: 3_600_000, retry: 1, queryFn: ({ signal }) => atasDaCompra(valido!, signal) })
@@ -55,6 +56,23 @@ export default function EmpresasDisputa({ controle, vencedoras = [], colocacoes 
       if (ordem) {
         l.colocacao = Math.min(l.colocacao ?? ordem, ordem)
         if (ordem > 1) l.colocacoes.push(`${ordem}º no item ${c.item}`)
+      }
+    }
+  }
+  // Propostas do Compras.gov.br: colocação de cada empresa em cada item e quem caiu (com o motivo).
+  // A vencedora já entrou pelos resultados homologados; aqui só conta item vencido se não houver resultado oficial do item.
+  for (const i of portal) {
+    const rotulo = `${i.tipo === 'grupo' ? 'grupo' : 'item'} ${i.numero}`
+    const itens = `${i.tipo === 'grupo' ? 'Grupo' : 'Item'} ${i.numero}`
+    for (const e of i.empresas) {
+      const l = pegar(e.cnpj, e.nome)
+      if (e.adjudicada && !porItem.has(i.numero) && !vencedoras.length) { l.itens++; l.valor += e.valorTotal ?? 0 }
+      if (e.situacao === 'desclassificacao' || e.situacao === 'inabilitacao' || e.situacao === 'recusa') {
+        if (!l.situacoes.some((s) => s.itens === itens && s.tipo === e.situacao)) l.situacoes.push({ tipo: e.situacao, itens, motivo: e.motivo ?? 'Motivo não informado.' })
+      } else if (e.colocacao) {
+        l.colocacao = Math.min(l.colocacao ?? e.colocacao, e.colocacao)
+        const texto = `${e.colocacao}º no ${rotulo}`
+        if (e.colocacao > 1 && !l.colocacoes.includes(texto)) l.colocacoes.push(texto)
       }
     }
   }
@@ -102,7 +120,7 @@ export default function EmpresasDisputa({ controle, vencedoras = [], colocacoes 
                   {[...new Set(l.situacoes.map((s) => s.tipo))].map((t) => <Badge key={t} cor={COR_SITUACAO[t]}>{t === 'desclassificacao' ? 'Desclassificada' : t === 'inabilitacao' ? 'Inabilitada' : t === 'recusa' ? 'Proposta recusada' : NOME_TIPO[t]}</Badge>)}
                   {!l.itens && !l.situacoes.length && (l.colocacao ? <Badge cor="azul">Classificada</Badge> : <Badge>Participou</Badge>)}
                 </span>
-                {l.colocacoes.length > 0 && <span className="mt-1 block text-xs text-muted-foreground">Cadastro de reserva: {l.colocacoes.slice(0, 6).join(', ')}{l.colocacoes.length > 6 ? '…' : ''}</span>}
+                {l.colocacoes.length > 0 && <span className="mt-1 block text-xs text-muted-foreground">{portal.length ? 'Colocações' : 'Cadastro de reserva'}: {l.colocacoes.slice(0, 6).join(', ')}{l.colocacoes.length > 6 ? '…' : ''}</span>}
                 {l.situacoes.slice(0, 2).map((s, i) => <span key={i} className="mt-1 block text-xs text-muted-foreground">{s.itens ? `${s.itens}: ` : ''}{s.motivo.length > 180 ? `${s.motivo.slice(0, 177)}…` : s.motivo}</span>)}
               </span>
             </li>
@@ -113,6 +131,7 @@ export default function EmpresasDisputa({ controle, vencedoras = [], colocacoes 
       {!valido ? (linhas.length === 0 && <p className="text-sm text-muted-foreground">Nenhuma empresa identificada.</p>)
         : q.isLoading ? <div className="mt-3"><Carregando texto="Procurando os participantes nas atas da compra…" /></div>
         : q.isError ? <p className="mt-3 text-sm">{(q.error as Error).message} <button className="font-semibold text-primary underline" onClick={() => q.refetch()}>Tentar novamente</button></p>
+        : lidos.length === 0 && portal.length ? <p className="mt-3 text-xs text-muted-foreground">Colocações, desclassificadas e inabilitadas de {portal.length} {portal.length === 1 ? 'item' : 'itens'} vieram das propostas no Compras.gov.br.</p>
         : lidos.length === 0 ? <p className="mt-3 text-xs text-muted-foreground">{linhas.length ? 'Aparecem só os resultados homologados: esta' : 'Esta'} compra não tem ata da sessão em PDF com texto publicada, e é na ata que ficam as desclassificadas, inabilitadas e quem não enviou proposta. A lista completa fica na página da disputa, no portal de compras.</p>
         : <>
           {linhas.length === 0 && <p className="text-sm text-muted-foreground">A ata foi lida, mas não traz o CNPJ nem o nome das empresas (alguns portais mostram só "Licitante 01, 02…").</p>}
