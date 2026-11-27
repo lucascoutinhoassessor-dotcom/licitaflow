@@ -27,4 +27,4 @@ As retentativas descritas são do resumo diário. Os avisos imediatos de Radar e
 
 ## Verificação
 
-`node scripts/test-push-agentes.mjs` verifica as permissões, a janela de Brasília, deduplicação, reserva, confirmação, retentativas e bloqueio de ex-membros e organizações suspensas num Postgres em memória. `server/pushAgentes.test.ts` cobre o envio por aparelho, preferências e autenticação do cron. O botão **Testar push** envia apenas aos aparelhos da conta logada.
+`node scripts/test-push-agentes.mjs` verifica as permissões, a janela de Brasília, deduplicação, reserva, confirmação, retentativas e bloqueio de ex-membros e organizações suspensas num Postgres em memória. `server/pushAgentes.test.ts` cobre o envio por aparelho, preferências e autenticação do cron. O botão **Testar push** existe só no painel master (Master → Avisos) e envia apenas aos aparelhos da conta logada; clientes não veem teste nem contagem de aparelhos. Lembretes de pendências, rastreio de instalação/permissão e canal de reserva (e-mail/WhatsApp): Master → Notificações e lembretes (migração 20261127000010).
