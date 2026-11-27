@@ -10,6 +10,7 @@ import { Badge, Button, CabecalhoPagina, Card, Carregando, Input, Modal, Select,
 import { BadgeEtapa } from '@/components/Situacoes'
 import { ETAPAS, ETAPAS_ATIVAS, ETAPAS_FINAIS, MODALIDADES, type Etapa } from '@/lib/dominio'
 import { formatarDataHora, formatarMoeda } from '@/lib/format'
+import { resumoProcessos } from '@/lib/contagemProcessos'
 import { cn } from '@/lib/utils'
 import { useLista, useNomeEmpresa, useSalvar } from '@/hooks/useDados'
 import { useModulos, useRecursos } from '@/hooks/useModulos'
@@ -650,7 +651,8 @@ export default function Processos() {
                 >
                   {colunas.map((col) => {
                     const itens = lista.filter((p) => chaveDe(p) === col.chave)
-                    const total = itens.reduce((a, p) => a + (p.valor_estimado ?? 0), 0)
+                    // Arquivados aparecem (com "Mostrar arquivados"), mas não entram na quantidade nem no total da coluna.
+                    const { quantidade, total } = resumoProcessos(itens)
                     const cor = col.cor
                     const ativa = sobre === col.chave
                     return (
@@ -681,7 +683,7 @@ export default function Processos() {
                             <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: cor, boxShadow: `0 0 8px ${cor}` }} />
                             <span className="truncate">{col.nome}</span>
                             <span className="rounded-full px-2 text-xs tabular-nums" style={{ backgroundColor: `${cor}26`, color: cor }}>
-                              {itens.length}
+                              {quantidade}
                             </span>
                           </div>
                           <div className="flex shrink-0 items-center gap-1">

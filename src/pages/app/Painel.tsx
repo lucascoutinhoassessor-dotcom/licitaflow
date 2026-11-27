@@ -7,6 +7,7 @@ import { useOrg } from '@/providers/OrgProvider'
 import { useLista } from '@/hooks/useDados'
 import { COR_ETAPA, ETAPAS, ETAPAS_ATIVAS, situacaoPrazo, situacaoValidade } from '@/lib/dominio'
 import { formatarDataHora, formatarMoeda } from '@/lib/format'
+import { resumoProcessos, semArquivados } from '@/lib/contagemProcessos'
 import { cn } from '@/lib/utils'
 import { Badge, Card } from '@/components/ui'
 import { BadgePrazo, BadgeValidade } from '@/components/Situacoes'
@@ -34,10 +35,12 @@ export default function Painel() {
   })
 
   const nome = (user?.user_metadata?.nome as string | undefined)?.split(' ')[0]
-  const ativos = (processos.data ?? []).filter((p) => ETAPAS_ATIVAS.includes(p.etapa))
-  const emDisputa = ativos.reduce((a, p) => a + (p.valor_estimado ?? 0), 0)
-  const ganhos = (processos.data ?? []).filter((p) => p.etapa === 'homologado' || p.etapa === 'concluido').length
-  const finalizados = (processos.data ?? []).filter((p) => ['homologado', 'concluido', 'perdido'].includes(p.etapa)).length
+  // Arquivados ficam fora de todas as contagens e somas do painel (continuam no Kanban com "Mostrar arquivados").
+  const contaveis = semArquivados(processos.data ?? [])
+  const ativos = contaveis.filter((p) => ETAPAS_ATIVAS.includes(p.etapa))
+  const emDisputa = resumoProcessos(ativos).total
+  const ganhos = contaveis.filter((p) => p.etapa === 'homologado' || p.etapa === 'concluido').length
+  const finalizados = contaveis.filter((p) => ['homologado', 'concluido', 'perdido'].includes(p.etapa)).length
   const proximos = (prazos.data ?? []).filter((p) => ['atrasado', 'hoje', 'semana'].includes(situacaoPrazo(p.data_hora, false)))
   const atencaoDocs = (docs.data ?? []).filter((d) => ['vencido', 'vence_em_breve'].includes(situacaoValidade(d.validade)))
 
