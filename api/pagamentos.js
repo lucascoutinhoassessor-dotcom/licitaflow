@@ -213,6 +213,27 @@ export default async function handler(req,res) {
       if(!UUID.test(body.org ?? '')) return res.status(400).json({error:'Organização inválida'})
       const {cfg}=await carregarAsaas()
       if(!cfg?.ativo) return res.status(503).json({error:'Pagamentos ainda não ativados pela plataforma. Fale com o atendimento.'})
+      if(!admin && (await rpc('pode_gerir_cobranca',{p_org:body.org}))!==true) return res.status(403).json({error:'Somente o dono ou um administrador da organização contrata o plano'})
+      // Pedido ainda não pago: mesmo plano e ciclo reaproveita a cobrança; outro plano/ciclo substitui o pedido.
+      // Assim o cliente pode voltar, trocar de plano ou gerar de novo sem esbarrar em "assinatura em vigor".
+      const [existente]=await sv(`/rest/v1/assinaturas?select=*&org_id=eq.${body.org}&status=eq.pendente&pago_ate=is.null&gateway_assinatura_id=not.is.null`)
+      if(existente) {
+        const ciclo=body.ciclo==='anual'?'anual':'mensal'
+        const gidE=encodeURIComponent(existente.gateway_assinatura_id)
+        const lista=await asaas(cfg,`/subscriptions/${gidE}/payments?limit=100`).catch(e=>{ if(e.status===404) return {data:[]}; throw e })
+        const pagos=(lista.data ?? []).filter(p=>PAGOS.includes(p.status))
+        if(pagos.length) {
+          for(const p of lista.data) await rpc('processar_pagamento_asaas',{p_evento:'SYNC',p_pagamento:p},true)
+          return res.status(409).json({error:'O pagamento deste pedido já foi confirmado. Atualize a página.',pago:true})
+        }
+        if(existente.plano_id===String(body.plano ?? '') && existente.ciclo===ciclo && !String(body.cupom ?? '').trim()) {
+          return res.json({id:existente.id,url:existente.link_pagamento,valor_centavos:existente.valor_centavos,reaproveitada:true})
+        }
+        const [tentando]=await sv(`/rest/v1/assinatura_faturas?select=id&assinatura_id=eq.${existente.id}&pagamento_iniciado_em=gt.${encodeURIComponent(new Date(Date.now()-120000).toISOString())}`)
+        if(tentando) return res.status(409).json({error:'Há um pagamento com cartão em processamento neste pedido. Aguarde alguns instantes.'})
+        await asaas(cfg,`/subscriptions/${gidE}`,{method:'DELETE'}).catch(e=>{ if(e.status!==404) throw e })
+        await patchSv(`/rest/v1/assinaturas?id=eq.${existente.id}`,{status:'cancelada',cancelada_em:new Date().toISOString(),motivo_cancelamento:'Substituída por outro plano ou ciclo no checkout'})
+      }
       // Cupom de desconto: confere antes de preparar o pedido (código errado não deixa pedido pela metade).
       let cupom=null
       if(String(body.cupom ?? '').trim()) {
@@ -237,7 +258,8 @@ export default async function handler(req,res) {
         ])
         let cliente=anteriores[0]?.gateway_cliente_id
         if(!cliente) {
-          const c=await asaas(cfg,'/customers',{method:'POST',body:{name:org.nome,cpfCnpj:a.documento,email:usuario?.email || undefined,externalReference:a.org_id,notificationDisabled:false}})
+          const fone=String(body.telefone ?? '').replace(/\D/g,'')
+          const c=await asaas(cfg,'/customers',{method:'POST',body:{name:org.nome,cpfCnpj:a.documento,email:usuario?.email || undefined,mobilePhone:fone.length>=10 && fone.length<=11?fone:undefined,externalReference:a.org_id,notificationDisabled:false}})
           cliente=c.id
         }
         const retorno=`${(env.BILLING_PUBLIC_URL || URL_SITE).replace(/\/$/,'')}/obrigado?org=${a.org_id}`

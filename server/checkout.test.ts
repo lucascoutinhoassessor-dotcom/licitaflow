@@ -67,7 +67,7 @@ describe('provisionamento da compra', () => {
     vi.stubGlobal('fetch', fetch)
     const r = res()
     await iniciarCompra({ nome: 'Ana', email: 'ana@test.com', empresa: 'Empresa Ana', plano: 'essencial' }, { headers: {} }, r, env)
-    expect(r.json).toHaveBeenCalledWith({ org, access_token: 'sessao', refresh_token: 'renovar' })
+    expect(r.json).toHaveBeenCalledWith({ org, access_token: 'sessao', refresh_token: 'renovar', chave_pedido: expect.any(String) })
     expect(JSON.stringify(r.json.mock.calls)).not.toContain(senha)
   })
   it('limita tentativas antes de criar uma conta', async () => {

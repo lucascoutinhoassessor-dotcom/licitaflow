@@ -1,4 +1,5 @@
 import { CheckoutPagamento } from '@/components/CheckoutPagamento'
+import CheckoutPremium from '@/pages/checkout/CheckoutPremium'
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
@@ -12,41 +13,6 @@ import { carregarAssinatura, pagamentoAPI } from '@/lib/pagamentos'
 import { formatarMoeda } from '@/lib/format'
 import { AssinaturaPainel } from '@/components/AssinaturaPainel'
 import { Aviso, Button, Campo, Card, Carregando, Input, Logo, Select } from '@/components/ui'
-
-function NovaCompra() {
-  const catalogo = useCatalogoPlanos(true)
-  const [params] = useSearchParams()
-  const [f, setF] = useState({ nome: '', email: '', empresa: '', tipo: 'fornecedor', plano: params.get('plano') || '' })
-  const [ocupado, setOcupado] = useState(false)
-  const [erro, setErro] = useState('')
-  const navigate = useNavigate()
-  const planos = (catalogo.data || []).filter(p => !['trial', 'cancelado'].includes(p.id) && p.mensal_centavos >= 100)
-  async function iniciar(e: FormEvent) {
-    e.preventDefault(); setOcupado(true); setErro('')
-    try {
-      const r = await fetch('/api/usuarios', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ acao: 'iniciar_compra', ...f, plano: f.plano || planos[0]?.id }) })
-      const d = await r.json()
-      if (!r.ok) throw new Error(d.error || 'Não foi possível iniciar a compra.')
-      const { error } = await supabase.auth.setSession({ access_token: d.access_token, refresh_token: d.refresh_token })
-      if (error) throw error
-      navigate(`/checkout?org=${d.org}&plano=${encodeURIComponent(f.plano || planos[0]?.id || '')}`, { replace: true })
-    } catch (e) { setErro(mensagemErro(e)) } finally { setOcupado(false) }
-  }
-  return <Card className="mx-auto max-w-xl space-y-5 p-6 sm:p-8">
-    <h1 className="text-2xl font-semibold">Contrate o LicitaForce</h1>
-    <p className="text-sm text-muted-foreground">Escolha seu plano e informe os dados da conta. Após a confirmação do pagamento, você receberá seu login e senha por e-mail.</p>
-    {erro && <Aviso>{erro}</Aviso>}
-    {catalogo.isLoading ? <Carregando /> : catalogo.isError ? <Aviso>Não foi possível carregar os planos. <button onClick={() => catalogo.refetch()}>Tentar novamente</button></Aviso> : <form onSubmit={iniciar} className="space-y-4">
-      <Campo rotulo="Plano" htmlFor="compra-plano"><Select id="compra-plano" required value={f.plano || planos[0]?.id || ''} onChange={e => setF({ ...f, plano: e.target.value })}>{planos.map(p => <option key={p.id} value={p.id}>{p.nome} · {formatarMoeda(p.mensal_centavos / 100)}/mês</option>)}</Select></Campo>
-      <Campo rotulo="Seu nome" htmlFor="compra-nome"><Input id="compra-nome" required minLength={2} maxLength={120} autoComplete="name" value={f.nome} onChange={e => setF({ ...f, nome: e.target.value })} /></Campo>
-      <Campo rotulo="E-mail para receber seu acesso" htmlFor="compra-email"><Input id="compra-email" type="email" required autoComplete="email" value={f.email} onChange={e => setF({ ...f, email: e.target.value })} /></Campo>
-      <Campo rotulo="Nome da empresa ou assessoria" htmlFor="compra-empresa"><Input id="compra-empresa" required minLength={2} maxLength={120} value={f.empresa} onChange={e => setF({ ...f, empresa: e.target.value })} /></Campo>
-      <Campo rotulo="Tipo de conta" htmlFor="compra-tipo"><Select id="compra-tipo" value={f.tipo} onChange={e => setF({ ...f, tipo: e.target.value })}><option value="fornecedor">Fornecedor</option><option value="assessoria">Assessoria</option></Select></Campo>
-      <Button type="submit" className="w-full" carregando={ocupado} disabled={!planos.length}>Continuar para pagamento</Button>
-    </form>}
-    <p className="text-center text-sm">Já tem cadastro? <Link className="text-primary underline" to="/entrar?voltar=%2Fcheckout">Entre na sua conta</Link>.</p>
-  </Card>
-}
 
 function Pagamento({ org, obrigado }: { org: string; obrigado: boolean }) {
   const { user } = useAuth()
@@ -103,10 +69,16 @@ function CompraCliente({ obrigado }: { obrigado: boolean }) {
 }
 
 export default function Checkout({ obrigado = false }: { obrigado?: boolean }) {
+  if (!obrigado) return <CheckoutPremium />
+  return <Obrigado />
+}
+
+function Obrigado() {
+  const obrigado = true
   const { user, carregando, sair } = useAuth()
   if (carregando) return <Carregando telaCheia />
   return <div className="min-h-screen bg-muted/30 px-4 py-8"><div className="mx-auto max-w-3xl space-y-6">
     <div className="flex items-center justify-between"><Logo />{user && <button className="text-sm text-muted-foreground" onClick={sair}>Sair</button>}</div>
-    {user ? <OrgProvider><CompraCliente obrigado={obrigado} /></OrgProvider> : obrigado ? <Card className="space-y-4 p-6"><h1 className="text-xl font-semibold">Obrigado por escolher o LicitaForce!</h1><p>Após a confirmação do pagamento, seu acesso será enviado por e-mail.</p><Link className="text-primary underline" to="/entrar?voltar=%2Fcheckout">Entrar para acompanhar</Link></Card> : <NovaCompra />}
+    {user ? <OrgProvider><CompraCliente obrigado={obrigado} /></OrgProvider> : <Card className="space-y-4 p-6"><h1 className="text-xl font-semibold">Obrigado por escolher o LicitaForce!</h1><p>Após a confirmação do pagamento, seu acesso será enviado por e-mail.</p><Link className="text-primary underline" to="/entrar?voltar=%2Fcheckout">Entrar para acompanhar</Link></Card>}
   </div></div>
 }

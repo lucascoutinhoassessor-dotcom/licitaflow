@@ -91,10 +91,17 @@ function SeloItem({ texto, cor }: { texto: string; cor: string }) {
   return <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider', CORES_SELO[cor] ?? CORES_SELO.cinza)}>{texto}</span>
 }
 
+/** Sem teste grátis, os botões de cadastro levam direto ao checkout. */
+function destinoCompra(link: string, dias: number) {
+  if (dias === 0 && (!link || link.startsWith("/cadastro"))) return "/checkout"
+  return link || "/cadastro"
+}
+
 function BotaoPrincipal({ link, children, className, previa }: { link: string; children: ReactNode; className?: string; previa?: boolean }) {
+  const dias = useDiasTeste()
   return (
     <Destino
-      link={link || '/cadastro'}
+      link={destinoCompra(link, dias)}
       previa={previa}
       className={cn('group relative inline-flex items-center justify-center gap-2 overflow-hidden rounded-full px-7 py-3.5 text-base font-semibold text-white shadow-lg shadow-black/30 transition hover:brightness-110', className)}
     >
@@ -150,7 +157,7 @@ function Navbar({ c, previa }: { c: ConteudoSite; previa?: boolean }) {
           ) : (
             <>
               {c.menu.entrar && <Destino link="/entrar" previa={previa} className="text-sm text-slate-300 hover:text-white">{c.menu.entrar}</Destino>}
-              {cadastro && <Destino link={c.menu.cadastro.link || '/cadastro'} previa={previa} className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-slate-200">{cadastro}</Destino>}
+              {cadastro && <Destino link={destinoCompra(c.menu.cadastro.link, dias)} previa={previa} className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-slate-200">{cadastro}</Destino>}
             </>
           )}
         </div>
@@ -169,7 +176,7 @@ function Navbar({ c, previa }: { c: ConteudoSite; previa?: boolean }) {
                 <Link to="/app" className="mt-2 rounded-full bg-white px-4 py-3 text-center font-semibold text-slate-950">{c.menu.painel}</Link>
               ) : (
                 <>
-                  {cadastro && <Destino link={c.menu.cadastro.link || '/cadastro'} previa={previa} className="mt-2 rounded-full bg-white px-4 py-3 text-center font-semibold text-slate-950">{cadastro}</Destino>}
+                  {cadastro && <Destino link={destinoCompra(c.menu.cadastro.link, dias)} previa={previa} className="mt-2 rounded-full bg-white px-4 py-3 text-center font-semibold text-slate-950">{cadastro}</Destino>}
                   {c.menu.entrar && <Destino link="/entrar" previa={previa} className="px-4 py-2 text-center text-sm text-slate-300">{c.menu.entrar}</Destino>}
                 </>
               )}
@@ -381,7 +388,7 @@ function Precos({ s, dias, previa }: { s: SecaoSite; dias: number; previa?: bool
         id: p.id, nome: p.nome, mensal: p.mensal_centavos / 100, anual: p.anual_centavos / 1200, publico: comDias(s.destaque, dias), destaque: p.id === destaqueId,
         itens: [`${p.limite_empresas ?? 'Ilimitado'} empresa(s)`, `${p.limite_usuarios ?? 'Ilimitado'} usuário(s)`, `${p.limite_processos ?? 'Ilimitado'} processo(s) cadastrado(s)`, ...s.marcadores.map((m) => comDias(m, dias))],
       }))
-    : PLANOS.map((p) => ({ ...p, destaque: p.id === destaqueId }))
+    : catalogo.isLoading ? [] : PLANOS.map((p) => ({ ...p, destaque: p.id === destaqueId }))
   return (
     <Secao id={s.ancora}>
       <Titulo s={s} dias={dias} />
@@ -426,7 +433,7 @@ function Precos({ s, dias, previa }: { s: SecaoSite; dias: number; previa?: bool
                 ))}
               </ul>
               {s.botao.texto && (
-                <Destino link={dias === 0 ? `/checkout?plano=${encodeURIComponent(p.id)}` : s.botao.link || '/cadastro'} previa={previa} className={cn('mt-8 rounded-full px-5 py-3 text-center text-sm font-semibold transition', p.destaque ? 'bg-white text-slate-950 hover:bg-slate-200' : 'border border-white/15 text-white hover:bg-white/5')}>
+                <Destino link={dias === 0 ? `/checkout?plano=${encodeURIComponent(p.id)}&ciclo=${anual ? "anual" : "mensal"}` : s.botao.link || '/cadastro'} previa={previa} className={cn('mt-8 rounded-full px-5 py-3 text-center text-sm font-semibold transition', p.destaque ? 'bg-white text-slate-950 hover:bg-slate-200' : 'border border-white/15 text-white hover:bg-white/5')}>
                   {comDias(s.botao.texto, dias)}
                 </Destino>
               )}
