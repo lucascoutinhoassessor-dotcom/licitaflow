@@ -2,6 +2,8 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { useQuery,useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { useAuth } from '@/providers/AuthProvider'
+import { useOrgOpcional } from '@/providers/OrgProvider'
+import { avisoVisivel } from '@/lib/avisosVisiveis'
 import { supabase,mensagemErro } from '@/lib/supabase'
 import { formatarDataHora } from '@/lib/format'
 import { ativarPush,desativarPush,descreverAparelho,enviarPushAviso,estadoPush,explicarErroPush,precisaInstalar,testarPush,type EstadoPush } from '@/lib/push'
@@ -26,7 +28,10 @@ export default function Avisos({master=false}:{master?:boolean}) {
     const {data,error}=await supabase.from('plataforma_avisos').select('*').order('created_at',{ascending:false}).limit(100)
     if(error)throw error;return data as Comunicado[]
   }})
-  const ids=(q.data ?? []).map(a=>a.id)
+  // A conta master enxerga todos os avisos no banco; na visão de cliente valem só os desta organização, publicados e no prazo.
+  const org=useOrgOpcional()?.org
+  const lista=master?q.data:q.data?.filter(a=>avisoVisivel(a,org?.id))
+  const ids=(lista ?? []).map(a=>a.id)
   const leituras=useQuery({queryKey:['aviso-leituras',user?.id,ids],enabled:!master && ids.length>0,queryFn:async()=>{
     const {data,error}=await supabase.from('aviso_leituras').select('aviso_id').eq('user_id',user!.id).in('aviso_id',ids)
     if(error)throw error;return (data ?? []).map(r=>r.aviso_id)
@@ -105,7 +110,7 @@ export default function Avisos({master=false}:{master?:boolean}) {
     {!master && push && push!=='sem-suporte' && <Card className="mb-4 flex flex-wrap items-center gap-3 p-4"><div className="min-w-0 flex-1"><p className="font-medium">{push==='ativo'?'Notificações ativadas neste aparelho':'Receber os avisos na hora'}</p><p className="text-sm text-muted-foreground">{push==='negado'?'As notificações deste site estão bloqueadas. Libere nas configurações do navegador e toque em Ativar.':push==='ativo'?'Cada aviso novo chega como notificação, mesmo com o app fechado.':'Ative para receber cada aviso como notificação no celular ou no computador, mesmo com o app fechado.'}</p></div><Button tamanho="sm" variante={push==='ativo'?'contorno':'primario'} carregando={ocupado} onClick={alternarPush}>{push==='ativo'?'Desativar':'Ativar notificações'}</Button></Card>}
     {!master && push==='sem-suporte' && precisaInstalar() && <div className="mb-4"><Aviso>No iPhone, as notificações só funcionam com o LicitaForce instalado: toque em Compartilhar → Adicionar à Tela de Início e abra por lá.</Aviso></div>}
     {!master && <p className="mb-4 text-sm"><Link to="/app/agentes" className="font-medium text-primary hover:underline">Configurar notificações das IAs e resumo diário →</Link></p>}
-    <div className="space-y-4">{q.data?.map(a=>{
+    <div className="space-y-4">{lista?.map(a=>{
       const expirado=!!a.expira_em && new Date(a.expira_em)<new Date()
       const lido=leituras.data?.includes(a.id)
       const agendado=new Date(a.publicar_em)>new Date()
@@ -117,7 +122,7 @@ export default function Avisos({master=false}:{master?:boolean}) {
         <p className="text-xs text-muted-foreground">{master?`Criado ${formatarDataHora(a.created_at)}${!agendado && Math.abs(new Date(a.publicar_em).getTime()-new Date(a.created_at).getTime())>60000?` · publicado ${formatarDataHora(a.publicar_em)}`:''} · ${destinatarios(a)}`:formatarDataHora(a.publicar_em)}{a.expira_em?` · expira ${formatarDataHora(a.expira_em)}`:''}</p>
         {master && <div className="flex flex-wrap gap-2">{a.ativo && <Button tamanho="sm" variante="contorno" disabled={ocupado} onClick={()=>arquivar(a.id,agendado)}>{agendado?'Cancelar agendamento':'Arquivar'}</Button>}<Button tamanho="sm" variante="perigo" disabled={ocupado} onClick={()=>excluir(a.id)}>Excluir</Button></div>}
         {!master && !lido && <Button tamanho="sm" variante="contorno" disabled={ocupado||leituras.isError} onClick={()=>marcar(a.id)}>Marcar como lido</Button>}</Card>
-    })}</div>{!q.isLoading && !q.isError && !q.data?.length && <Card className="p-8 text-center text-sm text-muted-foreground">Nenhum aviso disponível.</Card>}
+    })}</div>{!q.isLoading && !q.isError && !lista?.length && <Card className="p-8 text-center text-sm text-muted-foreground">Nenhum aviso disponível.</Card>}
     {!master && <AtualizacoesPlataforma/>}
     <Modal aberto={novo} aoFechar={()=>{if(!ocupado)setNovo(false)}} titulo="Publicar aviso"><form onSubmit={publicar} className="space-y-4">
       <fieldset className="space-y-2"><legend className="mb-1 text-sm font-medium">Destinatários</legend>

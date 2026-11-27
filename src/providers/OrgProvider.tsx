@@ -130,3 +130,8 @@ export function useOrg() {
   if (!c) throw new Error('useOrg fora do OrgProvider')
   return c
 }
+
+/** Igual a useOrg, mas devolve null fora do OrgProvider (telas compartilhadas com o console master). */
+export function useOrgOpcional() {
+  return useContext(Ctx)
+}
