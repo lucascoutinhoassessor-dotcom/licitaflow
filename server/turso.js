@@ -748,19 +748,37 @@ export class CotaTurso extends Error {}
 /** Só agrega o dia atual pelo índice de publicação; não lê os documentos/itens individuais. */
 export async function resumoHoje(turso, agora = new Date()) {
   const data = diaSP(agora.toISOString())
-  const [[r], estado] = await turso.lote([
+  const de = inicioDiaSP(data), ate = fimDiaSP(data)
+  // Tipo e faixas usam as mesmas regras da busca (montarFiltros): o número do cartão bate com a lista ao clicar.
+  // Valor 0 ou ausente = não divulgado (fica fora das faixas, como no filtro de valor).
+  const tipo = "coalesce(nullif(tipo_itens, ''), tipo_objeto, '')"
+  const [[r], ufs, [abertura], estado] = await turso.lote([
     [`select count(*) as editais, coalesce(sum(quantidade_itens),0) as itens,
       coalesce(sum(itens_completos <> 0),0) as editaisComItens,
-      coalesce(sum(coalesce(tipo_itens,tipo_objeto) like '%S%'),0) as servicos,
-      coalesce(sum(coalesce(tipo_itens,tipo_objeto) like '%M%'),0) as materiais,
-      coalesce(sum(valor >= 0 and valor <= 50000),0) as ate50mil,
+      coalesce(sum(instr(${tipo}, 'S') > 0),0) as servicos,
+      coalesce(sum(instr(${tipo}, 'M') > 0),0) as materiais,
+      coalesce(sum(valor > 0 and valor <= 50000),0) as ate50mil,
       coalesce(sum(valor > 50000 and valor <= 250000),0) as ate250mil,
-      coalesce(sum(valor > 250000),0) as acima250mil
-      from editais where publicacao >= ? and publicacao < ?`, [inicioDiaSP(data), fimDiaSP(data)]],
+      coalesce(sum(valor > 250000),0) as acima250mil,
+      coalesce(sum(coalesce(valor, 0) = 0),0) as naoDivulgado,
+      coalesce(sum(case when valor > 0 then valor else 0 end),0) as valorTotal
+      from editais where publicacao >= ? and publicacao < ?`, [de, ate]],
+    ['select uf, count(*) as n from editais where publicacao >= ? and publicacao < ? and uf is not null and uf <> \'\' group by uf order by n desc limit 6', [de, ate]],
+    // Sessões que ainda abrem hoje (índice de encerramento, só o resto do dia).
+    ['select count(*) as n from editais where encerramento >= ? and encerramento < ? and coalesce(situacao, 1) = 1', [agora.toISOString(), ate]],
     ["select chave, valor from coleta_estado where chave in ('ultima_coleta_em','carga_completa_em','pausado_ate')"],
   ])
   const e = Object.fromEntries(estado.map(l => [l.chave, l.valor]))
-  return { ...r, data, atualizadoEm: e.ultima_coleta_em ?? null, cargaCompleta: !!e.carga_completa_em, pausadoAte: e.pausado_ate ?? null }
+  return { ...r, ufs: ufs.map(u => ({ uf: u.uf, n: u.n })), abremHoje: abertura?.n ?? 0, data, atualizadoEm: e.ultima_coleta_em ?? null, cargaCompleta: !!e.carga_completa_em, pausadoAte: e.pausado_ate ?? null }
+}
+
+/** Quantas licitações publicadas hoje citam as palavras-chave da empresa (mesma busca da tela; para em 1.000). */
+export async function perfilHoje(turso, termos, agora = new Date()) {
+  const data = diaSP(agora.toISOString())
+  const { onde, args } = montarFiltros({ busca: termos, situacao: 'publicacoes', inicio: data, fim: data })
+  const [r] = await turso.consultar(`select count(*) as n from (select 1 from editais e where ${onde.join(' and ')} limit ${LIMITE_CONTAGEM + 1})`, args)
+  const n = r?.n ?? 0
+  return { data, compativeis: Math.min(n, LIMITE_CONTAGEM), limitado: n > LIMITE_CONTAGEM }
 }
 
 const POR_FILTRO = new WeakMap(), NIVEL = new Map()

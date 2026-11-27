@@ -11,7 +11,7 @@ import { emCache, usuarioLogado, excedeuLimite } from './protecao.js'
 import { consultarLogs, registrarLogs } from './logs-uso.js'
 import { BloqueioTurso, buscarTurso, clienteTurso, coletarRodada, CotaTurso, FiltroInvalido, itensTurso, nivelConhecido, orgaosTurso, situacaoTurso } from './turso.js'
 import { peloMenos } from './turso-cota.js'
-import { resumoHoje } from './turso.js'
+import { perfilHoje, resumoHoje } from './turso.js'
 
 async function rpcServico(fetcher, base, chave, nome, corpo) {
   const r = await fetcher(`${base}/rest/v1/rpc/${nome}`, { method: 'POST', headers: { apikey: chave, Authorization: `Bearer ${chave}`, 'Content-Type': 'application/json' }, body: JSON.stringify(corpo), signal: AbortSignal.timeout(10000) })
@@ -36,14 +36,6 @@ export function criarHandler({ fetcher = fetch, env = process.env, validarSessao
     if (!base || !anon) return res.status(503).json({ error: 'Configuração Supabase ausente no servidor' })
     const turso = clienteTurso(env, fetcher)
     try {
-      // Dados públicos agregados, sem documentos ou informações dos clientes.
-      if (acao === 'turso-resumo-hoje') {
-        if (req.method !== 'GET') return res.status(405).json({ error: 'Método não permitido' })
-        if (!turso) return res.status(503).json({ error: 'Base de editais indisponível.' })
-        const r = await emCache('turso-resumo-hoje', `${env.TURSO_DATABASE_URL}:${new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })}`, 5 * 60_000, () => resumoHoje(turso), 2)
-        res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=300')
-        return res.status(200).json(r)
-      }
       if (acao === 'turso-coletar') {
         if (req.method !== 'POST') return res.status(405).json({ error: 'Método não permitido' })
         // O token mora no banco (licitaflow_turso.config): a Vercel só pergunta se o cabeçalho confere.
@@ -58,6 +50,25 @@ export function criarHandler({ fetcher = fetch, env = process.env, validarSessao
       if (!/^Bearer \S+$/.test(token ?? '')) return res.status(401).json({ error: 'Entre na sua conta' })
       // A sessão confirmada fica 5 minutos em memória: a busca não espera o Supabase a cada página.
       const sessao = emCache('sessao', token, 5 * 60_000, () => validarSessao(base, anon, token), 2000)
+
+      // Indicadores exclusivos do painel. O cache agregado no servidor evita recontagens;
+      // a resposta HTTP continua no-store e só é entregue depois de validar a sessão.
+      if (acao === 'turso-resumo-hoje') {
+        if (req.method !== 'GET') return res.status(405).json({ error: 'Método não permitido' })
+        const usuario = await sessao
+        if (!usuario) return res.status(401).json({ error: 'Entre na sua conta' })
+        if (!turso) return res.status(503).json({ error: 'Base de editais indisponível.' })
+        const dia = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
+        const r = await emCache('turso-resumo-hoje', `${env.TURSO_DATABASE_URL}:${dia}`, 5 * 60_000, () => resumoHoje(turso), 2)
+        // Palavras-chave da empresa ativa (separadas por ";"): conta as do dia que combinam. Opcional, com cache por termos.
+        const termos = String(req.query?.termos ?? '').trim().slice(0, 300)
+        let perfil = null
+        if (termos && !excedeuLimite('turso-resumo-perfil', usuario, 20)) {
+          perfil = await emCache('turso-resumo-perfil', `${env.TURSO_DATABASE_URL}:${dia}:${termos.toLowerCase()}`, 10 * 60_000, () => perfilHoje(turso, termos), 200)
+            .catch((e) => { if (e instanceof FiltroInvalido) return null; throw e })
+        }
+        return res.status(200).json(perfil ? { ...r, perfil } : r)
+      }
 
       const ehMaster = async () => {
         const r = await fetcher(`${base}/rest/v1/rpc/is_platform_admin`, { method: 'POST', headers: { apikey: anon, Authorization: token, 'Content-Type': 'application/json' }, body: '{}' })

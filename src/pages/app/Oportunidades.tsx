@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { diaBrasilia, filtrosResumoHoje } from '@/lib/resumoEditais'
 import BotaoInverterOrdem from '@/components/BotaoInverterOrdem'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Package, Radar, Search, X } from 'lucide-react'
@@ -63,9 +64,9 @@ export default function Oportunidades() {
   const [inicial]=useState(()=>{
     const hoje=new Date(),inicio=new Date();inicio.setDate(inicio.getDate()-30)
     const padraoFiltros:Filtros={...filtrosExtras,inicio:dataLocal(inicio),fim:dataLocal(hoje),situacao:'abertas',modalidade:'6',uf:'',...periodoAbertura(15)}
-    if(parametros.get('publicadas')==='hoje'){
-      const data=hoje.toLocaleDateString('en-CA',{timeZone:'America/Sao_Paulo'})
-      const hojeFiltros:Filtros={...padraoFiltros,inicio:data,fim:data,situacao:'publicacoes',aberturaDe:'',aberturaAte:'',diasUteis:false}
+    const resumo=filtrosResumoHoje(parametros,diaBrasilia(hoje))
+    if(resumo){
+      const hojeFiltros:Filtros={...padraoFiltros,...resumo}
       return {f:hojeFiltros,consulta:hojeFiltros,pagina:1}
     }
     const salvo=lerBuscaSalva()

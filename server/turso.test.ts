@@ -281,14 +281,30 @@ describe('carga contínua e documentos compactados', () => {
     const t=tursoLocal();await t.prepararEsquema()
     await gravarEditais(t as never,[
       edital(1,{dataPublicacaoPncp:'2026-11-24T23:59:59',valorTotalEstimado:50000}),
-      edital(2,{dataPublicacaoPncp:'2026-11-24T00:00:00',valorTotalEstimado:250000}),
-      edital(3,{dataPublicacaoPncp:'2026-11-24T11:00:00',valorTotalEstimado:250001}),
+      edital(2,{dataPublicacaoPncp:'2026-11-24T00:00:00',valorTotalEstimado:250000,objetoCompra:'Serviço de limpeza predial'}),
+      edital(3,{dataPublicacaoPncp:'2026-11-24T11:00:00',valorTotalEstimado:250001,unidadeOrgao:{ufSigla:'SP',municipioNome:'Campinas'}}),
       edital(4,{dataPublicacaoPncp:'2026-11-25T00:00:00',valorTotalEstimado:100}),
       edital(5,{dataPublicacaoPncp:'2026-11-24T10:00:00',valorTotalEstimado:null}),
     ])
     await t.pipeline([['update editais set quantidade_itens=10,itens_completos=1 where sequencial=1']])
     const s=await resumoHoje(t as never,new Date('2026-11-25T02:59:59Z'))
-    expect(s).toMatchObject({data:'2026-11-24',editais:4,itens:10,editaisComItens:1,ate50mil:1,ate250mil:1,acima250mil:1,cargaCompleta:false})
+    expect(s).toMatchObject({data:'2026-11-24',editais:4,itens:10,editaisComItens:1,ate50mil:1,ate250mil:1,acima250mil:1,naoDivulgado:1,valorTotal:550001,cargaCompleta:false})
+    // Faixas + não divulgados = total do dia; estados em ordem decrescente.
+    expect(s.ate50mil+s.ate250mil+s.acima250mil+s.naoDivulgado).toBe(s.editais)
+    expect(s.ufs).toEqual([{uf:'MG',n:3},{uf:'SP',n:1}])
+    expect(typeof s.abremHoje).toBe('number')
+  })
+  it('conta as licitações do dia que combinam com as palavras-chave da empresa', async () => {
+    const {gravarEditais,perfilHoje}=await import('./turso.js')
+    const t=tursoLocal();await t.prepararEsquema()
+    await gravarEditais(t as never,[
+      edital(1,{dataPublicacaoPncp:'2026-11-24T10:00:00',objetoCompra:'Serviço de limpeza predial'}),
+      edital(2,{dataPublicacaoPncp:'2026-11-24T11:00:00',objetoCompra:'Aquisição de pneus'}),
+      edital(3,{dataPublicacaoPncp:'2026-11-23T11:00:00',objetoCompra:'Limpeza urbana'}),
+    ])
+    const agora=new Date('2026-11-24T20:00:00Z')
+    expect(await perfilHoje(t as never,'limpeza',agora)).toEqual({data:'2026-11-24',compativeis:1,limitado:false})
+    expect((await perfilHoje(t as never,'limpeza;pneus',agora)).compativeis).toBe(2)
   })
 })
 
@@ -321,8 +337,9 @@ describe('endereço /api/oportunidades', () => {
     expect(r.json).toHaveBeenCalledWith(expect.objectContaining({catalogo:expect.objectContaining({carga_inicial_concluida:false,aviso:expect.stringContaining('parciais')})}))
     const publico=resposta()
     await h({method:'GET',headers:{},query:{acao:'turso-resumo-hoje'}},publico)
-    expect(publico.status).toHaveBeenCalledWith(200)
-    expect(publico.setHeader).toHaveBeenCalledWith('Cache-Control','public, max-age=60, s-maxage=300')
+    // O panorama do dia é exclusivo do painel: visitante sem sessão não recebe nada nem gera cache público.
+    expect(publico.status).toHaveBeenCalledWith(401)
+    expect(publico.setHeader).not.toHaveBeenCalledWith('Cache-Control','public, max-age=60, s-maxage=300')
   })
   it('a coleta exige o token do banco e o endereço antigo continua 410', async () => {
     const h = criarHandler({ env: { SUPABASE_URL: 'https://s', SUPABASE_ANON_KEY: 'a', SUPABASE_SERVICE_ROLE_KEY: 'k' }, fetcher: vi.fn(async () => new Response('false')) as unknown as typeof fetch })
