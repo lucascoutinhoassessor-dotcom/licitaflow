@@ -12,6 +12,8 @@ export interface FichaCompra {
   modo_disputa: string | null; amparo_legal: string | null; situacao: string | null; abertura: string | null; encerramento: string | null; link_origem: string | null
   /** Esfera do órgão (M, E, F…) e IBGE da unidade, para o Termômetro de Pagamento. Leituras antigas não têm. */
   esfera?: string | null; codigo_ibge?: string | null
+  /** Código da unidade (UASG); nos órgãos federais é a UG do SIAFI, usada no Termômetro federal. */
+  codigo_unidade?: string | null
 }
 export interface AvaliacaoLeitor { nivel: 'favoravel' | 'atencao' | 'critico'; resumo: string; pontos_decisivos: string[] }
 export interface CaracteristicasCompra {
@@ -55,7 +57,7 @@ export function fichaDaCompra(c: any): FichaCompra | null {
     amparo_legal: c.amparoLegal?.nome ?? null, situacao: c.situacaoCompraNome ?? null,
     abertura: c.dataAberturaProposta ?? null, encerramento: c.dataEncerramentoProposta ?? null,
     link_origem: typeof c.linkSistemaOrigem === 'string' && /^https?:\/\//.test(c.linkSistemaOrigem) ? c.linkSistemaOrigem : null,
-    esfera: c.orgaoEntidade?.esferaId ?? null, codigo_ibge: c.unidadeOrgao?.codigoIbge ?? null,
+    esfera: c.orgaoEntidade?.esferaId ?? null, codigo_ibge: c.unidadeOrgao?.codigoIbge ?? null, codigo_unidade: c.unidadeOrgao?.codigoUnidade ?? null,
   }
 }
 

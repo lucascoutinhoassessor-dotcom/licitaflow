@@ -3,7 +3,7 @@ import { supabase } from '@/lib/supabase'
 import { useOrg } from '@/providers/OrgProvider'
 import { useModulos } from '@/hooks/useModulos'
 import type { LimiteIA } from '@/lib/agentesIA'
-import type { AlvoCapag, CapagEnte } from '@/lib/termometro'
+import type { AlvoCapag, CapagEnte, UgFederal } from '@/lib/termometro'
 
 /** O Termômetro aparece com o módulo "agentes" liberado e o plano incluindo o agente (limite diferente de 0). */
 export function useTermometroLiberado() {
@@ -46,4 +46,26 @@ export function notaDe(lista: (CapagEnte & { nome_busca?: string })[] | undefine
   if (!lista || !alvo || alvo.tipo === 'federal') return undefined
   if (alvo.tipo === 'chave') return lista.find((l) => l.chave === alvo.chave) ?? null
   return lista.find((l) => l.esfera === 'M' && l.uf === alvo.uf && l.nome_busca === alvo.nome) ?? null
+}
+
+/** Resumo federal de várias UGs de uma vez (pagamentos medidos no Portal da Transparência). */
+export function useFederal(ugs: (string | null | undefined)[], habilitado = true) {
+  const lista = [...new Set(ugs.filter((u): u is string => !!u && /^\d{6}$/.test(u)))].sort()
+  return useQuery({
+    queryKey: ['termometro-federal', lista.join(',')],
+    enabled: habilitado && lista.length > 0,
+    staleTime: 3_600_000,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('termometro_federal_consulta', { p_ugs: lista })
+      if (error) throw error
+      return (data ?? []) as UgFederal[]
+    },
+  })
+}
+
+/** Último dia do Portal da Transparência já lido ("AAAAMMDD"). */
+export function usePosicaoFederal(habilitado = true) {
+  return useQuery({ queryKey: ['termometro-federal-posicao'], enabled: habilitado, staleTime: 3_600_000, queryFn: async () => {
+    const { data, error } = await supabase.rpc('termometro_federal_posicao'); if (error) throw error; return (data ?? null) as string | null
+  } })
 }

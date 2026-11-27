@@ -260,7 +260,7 @@ export default function LeitorEdital() {
       {(() => {
         const f = ficha.data ?? leitura?.resultado.ficha ?? null
         if (!f) return null
-        const alvoPncp = alvoPeloPncp(f.esfera, f.codigo_ibge, f.uf)
+        const alvoPncp = alvoPeloPncp(f.esfera, f.codigo_ibge, f.uf, f.codigo_unidade)
         return <CartaoTermometro alvo={alvoPncp ?? alvoPeloNome(f.orgao, f.uf, f.municipio)} peloNome={!alvoPncp} className="mb-5" />
       })()}
 

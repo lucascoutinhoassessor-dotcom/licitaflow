@@ -46,4 +46,27 @@ ok(await falha(U1, 'select public.termometro_estado($1)', [token]), 'cliente nã
 const planos = Object.fromEntries((await db.query('select id, limites_ia from public.plataforma_planos')).rows.map((x) => [x.id, x.limites_ia]))
 ok(planos.trial.termometro === null && planos.essencial.termometro === null && planos.assessoria.termometro === null && planos.cancelado.termometro === 0, 'Termômetro em todos os planos sem limite, exceto Cancelado')
 
+// Federal: liquidação → pagamento pelo empenho (FIFO), resumo por UG e pelo órgão.
+const E1 = '158129264042026NE000001', E2 = '158129264042026NE000002', E3 = '200360000012026NE000009'
+const ugs = [['158129', 'INST FED BAIANO', '26404', 'Instituto Federal Baiano', '26000', 'Ministério da Educação'], ['200360', 'SR/PF/SP', '30108', 'Polícia Federal', '30000', 'MJSP']]
+const dia = (d, liq, pag, u = []) => como('servico', 'select public.termometro_federal_dia($1, $2, $3, $4, $5) r', [token, d, JSON.stringify(liq), JSON.stringify(pag), JSON.stringify(u)])
+// 01/10: E1 liquida (serviço de agosto), E2 e E3 liquidam.
+ok((await dia('20261001', [[E1, '2026-10-01', '2026-08-31'], [E2, '2026-10-01', null], [E3, '2026-10-01', null]], [], ugs))[0].r.casados === 0, 'liquidação sem pagamento fica na fila')
+// 05/10: E1 pago (4 dias). E2 pago duas vezes no dia: só uma liquidação aberta, casa uma.
+ok((await dia('20261005', [], [[E1, '2026-10-05'], [E2, '2026-10-05'], [E2, '2026-10-05']]))[0].r.casados === 2, 'cada pagamento quita uma liquidação aberta do empenho')
+ok((await dia('20261005', [], [[E3, '2026-10-05']]))[0].r.situacao === 'já gravado', 'dia repetido não conta de novo')
+// 10/11: E2 liquida de novo e é pago no mesmo dia; E3 pago 40 dias depois.
+await dia('20261110', [[E2, '2026-11-10', null]], [[E2, '2026-11-10'], [E3, '2026-11-10']])
+const t = Object.fromEntries((await db.query(`select ug || ':' || to_char(mes, 'MM') k, n, soma_dias, ate5, acima30, nc, soma_c, c60 from public.termometro_federal`)).rows.map((x) => [x.k, x]))
+ok(t['158129:10'].n === 2 && t['158129:10'].soma_dias === 8 && t['158129:10'].ate5 === 2, 'resumo de outubro: 2 pagamentos, 4 dias cada')
+ok(t['158129:10'].nc === 1 && t['158129:10'].soma_c === 35 && t['158129:10'].c60 === 0, 'mês do serviço: 35 dias entre o fim de agosto e o pagamento')
+ok(t['158129:11'].n === 1 && t['158129:11'].soma_dias === 0, 'pago no mesmo dia da liquidação conta 0 dias')
+ok(t['200360:11'].acima30 === 1 && t['200360:11'].soma_dias === 40, 'pagamento com mais de 30 dias')
+ok((await db.query('select count(*)::int c from licitaflow_termometro.fed_pendente')).rows[0].c === 0, 'liquidações pagas saem da fila')
+ok(await falha(U1, 'select public.termometro_federal_dia($1, $2, $3, $4, $5)', [token, '20261201', '[]', '[]', '[]']), 'cliente não grava o federal')
+ok((await como(U1, 'select public.termometro_federal_posicao() r'))[0].r === '20261110', 'posição: último dia lido')
+ok((await como(U1, `select nome from public.termometro_federal_ug where nome_busca like '%baiano%'`)).length === 1, 'busca de UG pelo nome')
+const cons = (await como(U1, `select public.termometro_federal_consulta(array['158129', '999999']) r`))[0].r
+ok(cons.length === 1 && cons[0].orgao === 'Instituto Federal Baiano', 'consulta devolve só a UG conhecida')
+
 console.log(`\n${n} verificações do Termômetro ok`)
