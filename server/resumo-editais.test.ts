@@ -33,9 +33,19 @@ describe('contagem pelo perfil da empresa', () => {
     const turso = await import('./turso.js')
     const perfil = vi.spyOn(turso, 'perfilHoje')
     const res = response()
-    await criarHandler({ env: { ...env, TURSO_DATABASE_URL: 'https://perfil.test' }, validarSessao: async () => 'cliente' })({ method: 'GET', headers: { authorization: 'Bearer perfil' }, query: { acao: 'turso-resumo-hoje', termos: 'limpeza;pneus' } }, res)
+    await criarHandler({ env: { ...env, TURSO_DATABASE_URL: 'https://perfil.test' }, validarSessao: async () => 'cliente' })({ method: 'GET', headers: { authorization: 'Bearer perfil' }, query: { acao: 'turso-resumo-hoje', termos: 'limpeza;pneus', mods: '8,6,99,6' } }, res)
     expect(res.status).toHaveBeenCalledWith(200)
-    expect(perfil).toHaveBeenCalledWith(expect.anything(), 'limpeza;pneus')
+    // Modalidades do plano chegam limpas (sem inválidas nem repetidas) ao resumo e ao perfil.
+    expect(perfil).toHaveBeenCalledWith(expect.anything(), 'limpeza;pneus', expect.any(Date), [6, 8])
+    expect(resumoHoje).toHaveBeenCalledWith(expect.anything(), expect.any(Date), [6, 8])
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ editais: 304, perfil: { compativeis: 7 } }))
+  })
+})
+describe('modalidades do plano', async () => {
+  const { modalidadesResumo } = await vi.importActual<typeof import('./turso.js')>('./turso.js')
+  it('todas as modalidades ou nenhuma valem como sem filtro', () => {
+    expect(modalidadesResumo('')).toEqual([])
+    expect(modalidadesResumo('1,2,3,4,5,6,7,8,9,10,11,12,13')).toEqual([])
+    expect(modalidadesResumo('12,6,x,0,6')).toEqual([6, 12])
   })
 })

@@ -16,15 +16,21 @@ const foco = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring
  * Panorama do dia, exclusivo do painel autenticado (nunca na landing): o endpoint exige sessão.
  * `termos` = palavras-chave da empresa ativa (";"), para contar as licitações do dia que combinam com ela.
  */
-export default function ResumoEditaisHoje({ termos = '', className }: { termos?: string; className?: string }) {
+export default function ResumoEditaisHoje({ termos = '', modalidades = [], className }: {
+  termos?: string
+  /** Modalidades liberadas no plano (as mesmas que a busca usa); null enquanto carregam. Vazio = todas. */
+  modalidades?: string[] | null
+  className?: string
+}) {
   const { user } = useAuth()
   const dia = diaBrasilia()
-  const q = useQuery<ResumoEditais>({ queryKey: ['resumo-editais-hoje', user?.id, dia, termos], enabled: !!user,
+  const mods = (modalidades ?? []).map(Number).filter(Number.isInteger).sort((a, b) => a - b).join(',')
+  const q = useQuery<ResumoEditais>({ queryKey: ['resumo-editais-hoje', user?.id, dia, termos, mods], enabled: !!user && modalidades !== null,
     staleTime: 5 * 60_000, refetchInterval: 5 * 60_000, retry: 1, placeholderData: (anterior) => anterior,
     queryFn: async ({ signal }) => {
       const { data, error } = await supabase.auth.getSession()
       if (error || !data.session) throw new Error('Entre na sua conta para consultar as oportunidades.')
-      const r = await fetch(`/api/oportunidades?acao=turso-resumo-hoje${termos ? `&termos=${encodeURIComponent(termos)}` : ''}`, {
+      const r = await fetch(`/api/oportunidades?acao=turso-resumo-hoje${termos ? `&termos=${encodeURIComponent(termos)}` : ''}${mods ? `&mods=${mods}` : ''}`, {
         headers: { Authorization: `Bearer ${data.session.access_token}` },
         signal: AbortSignal.any([signal, AbortSignal.timeout(15_000)]),
       })

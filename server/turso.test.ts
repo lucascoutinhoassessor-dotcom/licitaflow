@@ -293,6 +293,10 @@ describe('carga contínua e documentos compactados', () => {
     expect(s.ate50mil+s.ate250mil+s.acima250mil+s.naoDivulgado).toBe(s.editais)
     expect(s.ufs).toEqual([{uf:'MG',n:3},{uf:'SP',n:1}])
     expect(typeof s.abremHoje).toBe('number')
+    // Plano sem pregão eletrônico (todos os editais do teste são modalidade 6): nada entra na conta.
+    const semPregao=await resumoHoje(t as never,new Date('2026-11-25T02:59:59Z'),[8])
+    expect(semPregao).toMatchObject({editais:0,ufs:[]})
+    expect((await resumoHoje(t as never,new Date('2026-11-25T02:59:59Z'),[6,8])).editais).toBe(4)
   })
   it('conta as licitações do dia que combinam com as palavras-chave da empresa', async () => {
     const {gravarEditais,perfilHoje}=await import('./turso.js')
