@@ -10,7 +10,7 @@ afterEach(() => { auth.user = { id: 'cliente' } })
 const resumo: ResumoEditais = { data: diaBrasilia(), editais: 304, itens: 1206, editaisComItens: 93, servicos: 143, materiais: 125, ate50mil: 96, ate250mil: 50, acima250mil: 126, atualizadoEm: new Date().toISOString(), cargaCompleta: true, pausadoAte: null }
 function render(dados?: ResumoEditais, termos = '') {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  if (dados) qc.setQueryData(['resumo-editais-hoje', auth.user?.id, diaBrasilia(), termos], dados)
+  if (dados) qc.setQueryData(['resumo-editais-hoje', auth.user?.id, diaBrasilia(), termos, ''], dados)
   const html = renderToStaticMarkup(<StaticRouter location="/app"><QueryClientProvider client={qc}><ResumoEditaisHoje termos={termos} /></QueryClientProvider></StaticRouter>)
   qc.clear(); return html
 }

@@ -11,7 +11,7 @@ import { emCache, usuarioLogado, excedeuLimite } from './protecao.js'
 import { consultarLogs, registrarLogs } from './logs-uso.js'
 import { BloqueioTurso, buscarTurso, clienteTurso, coletarRodada, CotaTurso, FiltroInvalido, itensTurso, nivelConhecido, orgaosTurso, situacaoTurso } from './turso.js'
 import { peloMenos } from './turso-cota.js'
-import { perfilHoje, resumoHoje } from './turso.js'
+import { modalidadesResumo, perfilHoje, resumoHoje } from './turso.js'
 
 async function rpcServico(fetcher, base, chave, nome, corpo) {
   const r = await fetcher(`${base}/rest/v1/rpc/${nome}`, { method: 'POST', headers: { apikey: chave, Authorization: `Bearer ${chave}`, 'Content-Type': 'application/json' }, body: JSON.stringify(corpo), signal: AbortSignal.timeout(10000) })
@@ -59,12 +59,14 @@ export function criarHandler({ fetcher = fetch, env = process.env, validarSessao
         if (!usuario) return res.status(401).json({ error: 'Entre na sua conta' })
         if (!turso) return res.status(503).json({ error: 'Base de editais indisponível.' })
         const dia = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
-        const r = await emCache('turso-resumo-hoje', `${env.TURSO_DATABASE_URL}:${dia}`, 5 * 60_000, () => resumoHoje(turso), 2)
+        // Modalidades liberadas no plano do cliente: poucos conjuntos diferentes, então o cache por conjunto segue barato.
+        const mods = modalidadesResumo(req.query?.mods)
+        const r = await emCache('turso-resumo-hoje', `${env.TURSO_DATABASE_URL}:${dia}:${mods.join(',')}`, 5 * 60_000, () => resumoHoje(turso, new Date(), mods), 20)
         // Palavras-chave da empresa ativa (separadas por ";"): conta as do dia que combinam. Opcional, com cache por termos.
         const termos = String(req.query?.termos ?? '').trim().slice(0, 300)
         let perfil = null
         if (termos && !excedeuLimite('turso-resumo-perfil', usuario, 20)) {
-          perfil = await emCache('turso-resumo-perfil', `${env.TURSO_DATABASE_URL}:${dia}:${termos.toLowerCase()}`, 10 * 60_000, () => perfilHoje(turso, termos), 200)
+          perfil = await emCache('turso-resumo-perfil', `${env.TURSO_DATABASE_URL}:${dia}:${mods.join(',')}:${termos.toLowerCase()}`, 10 * 60_000, () => perfilHoje(turso, termos, new Date(), mods), 200)
             .catch((e) => { if (e instanceof FiltroInvalido) return null; throw e })
         }
         return res.status(200).json(perfil ? { ...r, perfil } : r)

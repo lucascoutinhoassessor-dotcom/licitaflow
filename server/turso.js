@@ -745,13 +745,23 @@ export async function situacaoTurso(turso, { recontar = false } = {}) {
 /** A cota do mês está no fim: a busca responde pelo Postgres (o app já sabe voltar para lá). */
 export class CotaTurso extends Error {}
 
-/** Só agrega o dia atual pelo índice de publicação; não lê os documentos/itens individuais. */
-export async function resumoHoje(turso, agora = new Date()) {
+/** Modalidades válidas (1 a 13), sem repetição e em ordem; vazio = todas. Também serve de chave de cache. */
+export function modalidadesResumo(valor) {
+  const lista = [...new Set(String(valor ?? '').split(',').map(Number).filter((m) => TODAS_MODALIDADES.includes(m)))].sort((a, b) => a - b)
+  return lista.length === TODAS_MODALIDADES.length ? [] : lista
+}
+
+/**
+ * Só agrega o dia atual pelo índice de publicação; não lê os documentos/itens individuais.
+ * `mods` = modalidades liberadas no plano do cliente (a busca esconde as outras): os números batem com a lista.
+ */
+export async function resumoHoje(turso, agora = new Date(), mods = []) {
   const data = diaSP(agora.toISOString())
   const de = inicioDiaSP(data), ate = fimDiaSP(data)
   // Tipo e faixas usam as mesmas regras da busca (montarFiltros): o número do cartão bate com a lista ao clicar.
   // Valor 0 ou ausente = não divulgado (fica fora das faixas, como no filtro de valor).
   const tipo = "coalesce(nullif(tipo_itens, ''), tipo_objeto, '')"
+  const porMod = mods.length ? ` and modalidade in (${mods.map(() => '?').join(',')})` : ''
   const [[r], ufs, [abertura], estado] = await turso.lote([
     [`select count(*) as editais, coalesce(sum(quantidade_itens),0) as itens,
       coalesce(sum(itens_completos <> 0),0) as editaisComItens,
@@ -762,10 +772,10 @@ export async function resumoHoje(turso, agora = new Date()) {
       coalesce(sum(valor > 250000),0) as acima250mil,
       coalesce(sum(coalesce(valor, 0) = 0),0) as naoDivulgado,
       coalesce(sum(case when valor > 0 then valor else 0 end),0) as valorTotal
-      from editais where publicacao >= ? and publicacao < ?`, [de, ate]],
-    ['select uf, count(*) as n from editais where publicacao >= ? and publicacao < ? and uf is not null and uf <> \'\' group by uf order by n desc limit 6', [de, ate]],
+      from editais where publicacao >= ? and publicacao < ?${porMod}`, [de, ate, ...mods]],
+    [`select uf, count(*) as n from editais where publicacao >= ? and publicacao < ?${porMod} and uf is not null and uf <> '' group by uf order by n desc limit 6`, [de, ate, ...mods]],
     // Sessões que ainda abrem hoje (índice de encerramento, só o resto do dia).
-    ['select count(*) as n from editais where encerramento >= ? and encerramento < ? and coalesce(situacao, 1) = 1', [agora.toISOString(), ate]],
+    [`select count(*) as n from editais where encerramento >= ? and encerramento < ? and coalesce(situacao, 1) = 1${porMod}`, [agora.toISOString(), ate, ...mods]],
     ["select chave, valor from coleta_estado where chave in ('ultima_coleta_em','carga_completa_em','pausado_ate')"],
   ])
   const e = Object.fromEntries(estado.map(l => [l.chave, l.valor]))
@@ -773,9 +783,9 @@ export async function resumoHoje(turso, agora = new Date()) {
 }
 
 /** Quantas licitações publicadas hoje citam as palavras-chave da empresa (mesma busca da tela; para em 1.000). */
-export async function perfilHoje(turso, termos, agora = new Date()) {
+export async function perfilHoje(turso, termos, agora = new Date(), mods = []) {
   const data = diaSP(agora.toISOString())
-  const { onde, args } = montarFiltros({ busca: termos, situacao: 'publicacoes', inicio: data, fim: data })
+  const { onde, args } = montarFiltros({ busca: termos, situacao: 'publicacoes', inicio: data, fim: data, ...(mods.length ? { modalidades: mods } : {}) })
   const [r] = await turso.consultar(`select count(*) as n from (select 1 from editais e where ${onde.join(' and ')} limit ${LIMITE_CONTAGEM + 1})`, args)
   const n = r?.n ?? 0
   return { data, compativeis: Math.min(n, LIMITE_CONTAGEM), limitado: n > LIMITE_CONTAGEM }

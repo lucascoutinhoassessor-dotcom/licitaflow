@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom'
 import ResumoEditaisHoje from '@/components/ResumoEditaisHoje'
 import AgendaSemana from '@/components/AgendaSemana'
 import { termosPerfil } from '@/lib/resumoEditais'
+import { useFiltrosLiberados } from '@/hooks/useModulos'
+import { modalidadesLiberadas } from '@/lib/filtrosLiberacao'
 import { ArrowRight, ArrowUpRight, Briefcase, CalendarClock, CheckCircle2, Circle, FileCheck2, Gavel, Radar, Search } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
@@ -25,6 +27,8 @@ function saudacao() {
 export default function Painel() {
   const { user } = useAuth()
   const { org, empresas, empresa } = useOrg()
+  // As mesmas modalidades que a busca usa: o número do quadro bate com a lista ao clicar.
+  const { estados } = useFiltrosLiberados()
   const processos = useLista<Processo>('processos')
   const prazos = useLista<Prazo>('prazos', { filtro: (q) => q.eq('concluido', false), chave: ['abertos'], ordem: ['data_hora', true] })
   const docs = useLista<Documento>('documentos', { filtro: (q) => q.not('validade', 'is', null), chave: ['com-validade'], ordem: ['validade', true] })
@@ -87,7 +91,7 @@ export default function Painel() {
 
       {/* Panorama do dia (só para quem está logado) e agenda da equipe lado a lado. */}
       <div className="mb-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_24rem]">
-        <ResumoEditaisHoje termos={termosPerfil(empresa?.palavras_chave)} />
+        <ResumoEditaisHoje termos={termosPerfil(empresa?.palavras_chave)} modalidades={estados === null ? null : modalidadesLiberadas(estados)} />
         <AgendaSemana prazos={prazos.data ?? []} processos={ativos} carregando={prazos.isPending || processos.isPending} />
       </div>
 
