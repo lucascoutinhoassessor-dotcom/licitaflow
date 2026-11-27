@@ -4,6 +4,7 @@ import { excedeuLimite } from './protecao.js'
 import { rodadaSentinela } from './sentinela.js'
 import { avisarRadar } from './radar.js'
 import { atualizarCapag } from './termometro.js'
+import { atenderJuridico } from './juridicoIA.js'
 import { atualizarFederal } from './termometroFederal.js'
 // Agentes de IA (Claude API). Uma rota só para todos os agentes, por causa do limite de funções da Vercel.
 //
@@ -322,11 +323,11 @@ export function criarHandler({ fetcher = fetch, cliente, webpush } = {}) {
     }
 
     if (!/^Bearer \S+$/.test(token ?? '')) return res.status(401).json({ error: 'Entre na sua conta' })
-    if (q.agente !== 'leitor') return res.status(400).json({ error: 'Agente inválido' })
+    if (q.agente !== 'leitor' && q.agente !== 'juridico') return res.status(400).json({ error: 'Agente inválido' })
     const org = String(q.org ?? '')
     const controle = String(q.controle ?? '').trim()
     if (!/^[0-9a-f-]{36}$/i.test(org)) return res.status(400).json({ error: 'Organização inválida' })
-    if (!CONTROLE.test(controle)) return res.status(400).json({ error: 'Informe o número de controle PNCP (ex.: 12345678000190-1-000123/2026).' })
+    if (q.agente === 'leitor' && !CONTROLE.test(controle)) return res.status(400).json({ error: 'Informe o número de controle PNCP (ex.: 12345678000190-1-000123/2026).' })
 
     const banco = async (caminho, { metodo = 'GET', corpo, prefer } = {}) => {
       const r = await fetcher(`${base}/rest/v1/${caminho}`, {
@@ -348,6 +349,15 @@ export function criarHandler({ fetcher = fetch, cliente, webpush } = {}) {
       if (!mod.ok) return res.status(403).json({ error: 'Sem acesso a esta organização.' })
       const estados = await mod.json().catch(() => ({}))
       if (estados?.agentes !== 'liberado') return res.status(403).json({ error: 'Os agentes de IA ainda não estão liberados para a sua conta.' })
+
+      if (q.agente === 'juridico') {
+        // Leituras com o login do cliente (respeitam o RLS da organização).
+        const comoUsuario = (caminho, { metodo = 'GET', corpo } = {}) => fetcher(`${base}/rest/v1/${caminho}`, {
+          method: metodo, headers: { apikey: anon, Authorization: token, 'Content-Type': 'application/json' },
+          body: corpo ? JSON.stringify(corpo) : undefined, signal: AbortSignal.timeout(15000),
+        })
+        return await atenderJuridico({ req, res, org, usuario, banco, comoUsuario, env, cliente, modelo: MODELOS.juridico })
+      }
 
       // Limite do plano (ou exceção do cliente, definida no master) e usos novos do mês. limite null = sem limite.
       const usoMes = async () => {
@@ -389,9 +399,10 @@ export function criarHandler({ fetcher = fetch, cliente, webpush } = {}) {
     } catch (e) {
       if (e instanceof Anthropic.RateLimitError) return res.status(429).json({ error: 'A IA está com muita demanda agora. Tente de novo em alguns minutos.' })
       if (e instanceof Anthropic.AuthenticationError) return res.status(503).json({ error: 'A chave da IA no servidor é inválida.' })
-      if (e instanceof Anthropic.APIConnectionTimeoutError) return res.status(504).json({ error: 'A leitura demorou demais. Tente de novo.' })
+      if (e instanceof Anthropic.APIConnectionTimeoutError) return res.status(504).json({ error: q.agente === 'juridico' ? 'A redação demorou demais. Tente de novo.' : 'A leitura demorou demais. Tente de novo.' })
       if (e instanceof Anthropic.APIError) return res.status(502).json({ error: 'A IA não respondeu agora. Tente de novo em instantes.' })
-      return res.status(e.status ?? 500).json({ error: e.status ? e.message : 'Não foi possível ler o edital agora.', ...(e.documentos ? { documentos: e.documentos.map(({ texto: _t, ...d }) => d) } : {}) })
+      const generico = q.agente === 'juridico' ? 'Não foi possível redigir a peça agora.' : 'Não foi possível ler o edital agora.'
+      return res.status(e.status ?? 500).json({ error: e.status ? e.message : generico, ...(e.documentos ? { documentos: e.documentos.map(({ texto: _t, ...d }) => d) } : {}) })
     }
   }
 }

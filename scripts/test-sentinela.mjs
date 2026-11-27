@@ -62,7 +62,7 @@ const avisos = (await como('servico', 'select public.sentinela_gravar($1, $2) r'
   { controle: C(4), erro: 'PNCP fora do ar', proxima_em: futuro },
 ])]))[0].r
 ok(avisos.length === 2 && avisos.every((a) => a.titulo === 'Compra suspensa pelo órgão'), 'evento vira aviso para cada processo que acompanha o edital (duas orgs)')
-const linhas = (await db.query(`select org_id, tipo, origem, titulo from public.processo_eventos where tipo = 'sentinela'`)).rows
+const linhas = (await db.query(`select org_id, tipo, origem, titulo from public.processo_eventos where tipo = 'sentinela' and dados->>'tipo' <> 'inicio'`)).rows
 ok(linhas.length === 2 && linhas.every((l) => l.origem === 'agente' && l.titulo.startsWith('Sentinela:')), 'evento entra na linha do tempo dos dois processos')
 ok(avisos.every((a) => a.controle === C(1)), 'aviso traz o número de controle do edital (para o push identificar a compra)')
 ok((await db.query(`select descricao from public.processo_eventos where tipo = 'sentinela' limit 1`)).rows[0].descricao === 'A sessão não acontece na data prevista.', 'orientação vai para a descrição do histórico do processo')
@@ -88,7 +88,7 @@ const idDe = async (i) => (await db.query('select id from public.processos where
 const estados = async (uid = U1, org = o1) => (await como(uid, 'select public.agentes_estado_processos($1) r', [org]))[0].r
 let est = await estados()
 ok(est[p1].sentinela.estado === 'ativo' && est[p1].sentinela.verificado_em, 'edital já verificado: Sentinela ativa, com a hora da verificação')
-ok(est[await idDe(4)].sentinela.estado === 'na_fila', 'ligado mas ainda sem verificação: na fila')
+ok(est[await idDe(4)].sentinela.estado === 'falha', 'falha na primeira consulta aparece imediatamente, sem selo de fila')
 ok(est[await idDe(2)].sentinela.estado === 'indisponivel' && est[await idDe(2)].sentinela.motivo === 'Processo encerrado', 'processo perdido: indisponível (encerrado)')
 ok(!est[p1]['leitor-editais'], 'sem leitura guardada, o Leitor não aparece no processo')
 await db.exec(`insert into public.ia_leituras_edital (controle, resultado, modelo) values ('${C(1)}', '{}', 'claude-opus-5-5')`)
@@ -96,6 +96,17 @@ await db.exec(`update public.processos set monitorar = false where id = '${await
 est = await estados()
 ok(est[p1]['leitor-editais'].estado === 'ativo', 'edital lido pela IA aparece no processo')
 ok(est[await idDe(3)].sentinela.estado === 'desligado', 'desligado pelo cliente no processo')
+const detalhes = resumo.vigiados.find(v => v.processo_id === p1)
+ok(detalhes.empresa_cnpj === '12345678000190' && detalhes.proxima_em, 'resumo identifica CNPJ da empresa do processo e próxima consulta')
+const resultados = [{ item: 1, cnpj: '12345678000190', situacao_id: 1 }, { item: 2, cnpj: '98765432000110', situacao_id: 1 }]
+await db.query(`update licitaflow_sentinela.editais set estado = estado || jsonb_build_object('resultados', $1::jsonb) where controle = $2`, [JSON.stringify(resultados), C(1)])
+const personalizado = (await como(U1, 'select public.sentinela_resumo($1) r', [o1]))[0].r.vigiados.find(v => v.processo_id === p1)
+ok(personalizado.resultados_cliente.length === 1 && personalizado.resultados_cliente[0].item === 1, 'cruzamento por CNPJ não confunde resultado de outro cliente')
+await db.query(`update licitaflow_sentinela.editais set proxima_em = now() - interval '1 hour' where controle = $1`, [C(1)])
+ok((await estados())[p1].sentinela.estado === 'parado', 'agendador atrasado não aparece como monitoramento ativo')
+await db.query(`update licitaflow_sentinela.editais set proxima_em = now() + interval '1 hour' where controle = $1`, [C(1)])
+const inicios = (await db.query(`select count(*)::int n from public.processo_eventos where processo_id = $1 and dados->>'tipo' = 'inicio'`, [p1])).rows[0].n
+ok(inicios === 1, 'primeira consulta aparece uma vez no histórico, mesmo sem mudanças')
 await db.exec(`update public.organizations set plano = 'trial' where id = '${o1}'`)
 est = await estados()
 const parados = Object.values(est).filter((x) => x.sentinela?.estado === 'parado')

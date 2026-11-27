@@ -9,7 +9,7 @@ export type EstadosAgentes = Record<string, Record<string, StatusAgente>>
 
 /** Como cada agente aparece no cartão. Para um agente novo, acrescente aqui o rótulo de cada estado. */
 export const ROTULOS: Record<string, Partial<Record<EstadoAgente, string>>> = {
-  sentinela: { ativo: 'Monitorando com IA', na_fila: 'Monitoramento ligado', falha: 'Monitoramento com falha', parado: 'Monitoramento parado' },
+  sentinela: { ativo: 'PNCP monitorado', na_fila: 'Primeira consulta na fila', falha: 'Monitoramento com falha', parado: 'Monitoramento parado' },
   'leitor-editais': { ativo: 'Edital lido pela IA' },
   radar: { ativo: 'Encontrado pelo Radar' },
   cotador: { ativo: 'Cotação em andamento' },

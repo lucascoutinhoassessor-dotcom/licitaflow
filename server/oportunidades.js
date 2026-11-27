@@ -11,6 +11,7 @@ import { emCache, usuarioLogado, excedeuLimite } from './protecao.js'
 import { consultarLogs, registrarLogs } from './logs-uso.js'
 import { BloqueioTurso, buscarTurso, clienteTurso, coletarRodada, CotaTurso, FiltroInvalido, itensTurso, nivelConhecido, orgaosTurso, situacaoTurso } from './turso.js'
 import { peloMenos } from './turso-cota.js'
+import { perfilHoje, resumoHoje } from './turso.js'
 
 async function rpcServico(fetcher, base, chave, nome, corpo) {
   const r = await fetcher(`${base}/rest/v1/rpc/${nome}`, { method: 'POST', headers: { apikey: chave, Authorization: `Bearer ${chave}`, 'Content-Type': 'application/json' }, body: JSON.stringify(corpo), signal: AbortSignal.timeout(10000) })
@@ -49,6 +50,25 @@ export function criarHandler({ fetcher = fetch, env = process.env, validarSessao
       if (!/^Bearer \S+$/.test(token ?? '')) return res.status(401).json({ error: 'Entre na sua conta' })
       // A sessão confirmada fica 5 minutos em memória: a busca não espera o Supabase a cada página.
       const sessao = emCache('sessao', token, 5 * 60_000, () => validarSessao(base, anon, token), 2000)
+
+      // Indicadores exclusivos do painel. O cache agregado no servidor evita recontagens;
+      // a resposta HTTP continua no-store e só é entregue depois de validar a sessão.
+      if (acao === 'turso-resumo-hoje') {
+        if (req.method !== 'GET') return res.status(405).json({ error: 'Método não permitido' })
+        const usuario = await sessao
+        if (!usuario) return res.status(401).json({ error: 'Entre na sua conta' })
+        if (!turso) return res.status(503).json({ error: 'Base de editais indisponível.' })
+        const dia = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
+        const r = await emCache('turso-resumo-hoje', `${env.TURSO_DATABASE_URL}:${dia}`, 5 * 60_000, () => resumoHoje(turso), 2)
+        // Palavras-chave da empresa ativa (separadas por ";"): conta as do dia que combinam. Opcional, com cache por termos.
+        const termos = String(req.query?.termos ?? '').trim().slice(0, 300)
+        let perfil = null
+        if (termos && !excedeuLimite('turso-resumo-perfil', usuario, 20)) {
+          perfil = await emCache('turso-resumo-perfil', `${env.TURSO_DATABASE_URL}:${dia}:${termos.toLowerCase()}`, 10 * 60_000, () => perfilHoje(turso, termos), 200)
+            .catch((e) => { if (e instanceof FiltroInvalido) return null; throw e })
+        }
+        return res.status(200).json(perfil ? { ...r, perfil } : r)
+      }
 
       const ehMaster = async () => {
         const r = await fetcher(`${base}/rest/v1/rpc/is_platform_admin`, { method: 'POST', headers: { apikey: anon, Authorization: token, 'Content-Type': 'application/json' }, body: '{}' })
@@ -101,16 +121,17 @@ export function criarHandler({ fetcher = fetch, env = process.env, validarSessao
         if (!usuario) return res.status(401).json({ error: 'Entre na sua conta' })
         if (excedeuLimite('turso-buscar', usuario, 90)) return res.status(429).json({ error: 'Muitas consultas em pouco tempo. Aguarde um minuto.' })
         const r = await consulta
-        // Enquanto a carga completa não terminou (ou os itens estão atrasados), quem responde é o Postgres.
-        if (!r.catalogo.carga_inicial_concluida) return res.status(409).json({ error: 'A base rápida ainda está carregando.', codigo: 'turso_carregando' })
+        // A carga incompleta já pode responder; informa a cobertura em vez de descartar resultados.
+        const avisos = []
+        if (!r.catalogo.carga_inicial_concluida) avisos.push('A carga inicial está em andamento; os resultados ainda são parciais.')
         // Encerrados (data passada ou busca por publicação) só existem no Turso: o Postgres não teria como responder.
         // Os itens dos encerrados não são guardados, então a cobertura de itens não vale aqui.
-        if (r.historico) { const { coberturaItens, comTermo, ...resposta } = r; return res.status(200).json(resposta) }
-        if (r.detalhesPendentes > Math.max(20, r.totalRegistros * 0.1)) return res.status(409).json({ error: 'Itens ainda em coleta na base rápida.', codigo: 'turso_itens' })
-        // Palavra-chave também procura nos itens: até os itens cobrirem 90% dos editais, o Postgres responde.
-        if (r.comTermo && r.coberturaItens < 0.9) return res.status(409).json({ error: 'Itens ainda em coleta na base rápida.', codigo: 'turso_itens' })
+        if (r.historico) { const { coberturaItens, comTermo, ...resposta } = r; return res.status(200).json({ ...resposta, catalogo: { ...resposta.catalogo, aviso: avisos.join(' ') || null } }) }
+        if (r.detalhesPendentes > Math.max(20, r.totalRegistros * 0.1)) avisos.push('Há itens em coleta; os filtros por item podem retornar resultados parciais.')
+        // Palavra-chave também procura nos itens: comunica quando essa parte da cobertura ainda é parcial.
+        if (r.comTermo && r.coberturaItens < 0.9) avisos.push('A busca já consulta os objetos dos editais; a pesquisa nos itens será ampliada conforme a coleta avança.')
         const { coberturaItens, comTermo, ...resposta } = r
-        return res.status(200).json({ ...resposta, catalogo: { ...resposta.catalogo, cobertura_itens: Math.round(coberturaItens * 100) } })
+        return res.status(200).json({ ...resposta, catalogo: { ...resposta.catalogo, aviso: avisos.join(' ') || null, cobertura_itens: Math.round(coberturaItens * 100) } })
       }
       if (acao === 'turso-orgaos') {
         if (req.method !== 'POST') return res.status(405).json({ error: 'Método não permitido' })

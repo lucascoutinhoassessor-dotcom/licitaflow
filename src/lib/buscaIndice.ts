@@ -42,29 +42,42 @@ async function pesquisarTurso(f:FiltrosOportunidades,pagina:number,token:string,
  const historico=buscaHistorica(f)
  if(!historico&&(f.situacao!=='abertas'||Date.now()<tursoPausadoAte))return null
  try{
-  const r=await fetch('/api/oportunidades?acao=turso-buscar',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${token}`},body:JSON.stringify({filtros:f,pagina}),signal})
+  const limite=AbortSignal.timeout(12_000)
+  const r=await fetch('/api/oportunidades?acao=turso-buscar',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${token}`},body:JSON.stringify({filtros:f,pagina}),signal:signal?AbortSignal.any([signal,limite]):limite})
   const corpo=await r.json().catch(()=>null)
   if(r.ok&&valido(corpo))return corpo
   if(r.status===400&&corpo?.error)throw new Error(corpo.error)
-  if(historico&&f.situacao==='abertas')throw new Error(r.status===429&&corpo?.error?corpo.error:ERRO_HISTORICO)
+  if(historico)throw new Error(r.status===429&&corpo?.error?corpo.error:ERRO_HISTORICO)
   if(r.status===409&&corpo?.codigo!=='turso_itens')tursoPausadoAte=Date.now()+3*60_000
   // Turso fora (ex.: cota do plano estourada): 10 min só no Postgres, sem esperar a ida ao Turso em cada busca.
   if(r.status>=500)tursoPausadoAte=Date.now()+10*60_000
   return null
  }catch(e){
   if(signal?.aborted)throw e
-  if(e instanceof Error&&!(e instanceof TypeError))throw e
-  if(historico&&f.situacao==='abertas')throw new Error(ERRO_HISTORICO)
+  if(historico)throw new Error(ERRO_HISTORICO)
+  if(e instanceof Error&&!(e instanceof TypeError)&&e.name!=='TimeoutError')throw e
   tursoPausadoAte=Date.now()+10*60_000
   return null
  }
 }
 
 export async function pesquisarIndice(f: FiltrosOportunidades,pagina:number,signal?:AbortSignal):Promise<ResultadoIndice>{
+ const limite=AbortSignal.timeout(30_000)
+ const combinado=signal?AbortSignal.any([signal,limite]):limite
+ // Inclui a espera pela sessão e pelo Postgres: a tela sempre sai do carregamento.
+ let aoAbortar:()=>void=()=>undefined
+ const interrompida=new Promise<never>((_,reject)=>{
+  aoAbortar=()=>reject(signal?.aborted?signal.reason:new Error('A pesquisa demorou mais que o esperado. Tente novamente.'))
+  if(combinado.aborted)aoAbortar();else combinado.addEventListener('abort',aoAbortar,{once:true})
+ })
+ try{return await Promise.race([consultarIndice(f,pagina,combinado),interrompida])}
+ finally{combinado.removeEventListener('abort',aoAbortar)}
+}
+async function consultarIndice(f: FiltrosOportunidades,pagina:number,signal:AbortSignal):Promise<ResultadoIndice>{
  const {data:s}=await supabase.auth.getSession()
  if(s.session){const rapido=await pesquisarTurso(f,pagina,s.session.access_token,signal);if(rapido)return rapido}
  const pedido=supabase.rpc('buscar_oportunidades',{p_filtros:f,p_pagina:pagina,p_tamanho:20})
- const {data,error}=await(signal?pedido.abortSignal(signal):pedido)
+ const {data,error}=await pedido.abortSignal(signal)
  if(error){
   if(signal?.aborted)throw signal.reason
   if(['PGRST202','PGRST205','42883'].includes(error.code))throw new Error('O catálogo de pesquisa está sendo preparado. Tente novamente em instantes.')

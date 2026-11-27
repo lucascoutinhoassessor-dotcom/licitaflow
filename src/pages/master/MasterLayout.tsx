@@ -2,7 +2,7 @@ import { Suspense, useEffect, type ReactNode } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { LimiteDeErro } from '@/components/LimiteDeErro'
 import { Carregando } from '@/components/ui'
-import { Settings, Wallet, Plug, CreditCard, Headphones, Megaphone, BarChart3, Activity, FileText, History, Building2, LayoutDashboard, LogOut, ShieldCheck, Users, Repeat, Receipt, Trophy, ExternalLink, Download, ToggleRight, Bot, Ticket, ScrollText, Volume2, BellRing } from 'lucide-react'
+import { Settings, Wallet, Plug, CreditCard, Headphones, Megaphone, BarChart3, Activity, FileText, History, Building2, LayoutDashboard, LogOut, ShieldCheck, Users, Repeat, Receipt, Trophy, ExternalLink, Download, ToggleRight, Bot, Ticket, ScrollText, Volume2, BellRing, Lightbulb, BookOpen } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { useFinanceiro } from './Financeiro'
@@ -37,6 +37,8 @@ const grupos: { titulo: string; abas: { rota: string; rotulo: string; icone: typ
   ] },
   { titulo: 'Relacionamento', abas: [
     { rota: '/master/suporte', rotulo: 'Suporte e sugestões', icone: Headphones },
+    { rota: '/master/quadro', rotulo: 'Quadro informativo', icone: BookOpen },
+    { rota: '/master/sugestoes', rotulo: 'Sugestões para usuários', icone: Lightbulb },
     { rota: '/master/avisos', rotulo: 'Avisos aos clientes', icone: Megaphone },
     { rota: '/master/notificacoes', rotulo: 'Notificações e lembretes', icone: BellRing },
     { rota: '/master/som-aviso', rotulo: 'Som do aviso', icone: Volume2 },
@@ -66,10 +68,19 @@ export default function MasterLayout() {
     },
     refetchInterval: 60_000,
   })
+  const quadro = useQuery({
+    queryKey: ['quadro-pendencias', user?.id], enabled: !!user,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('admin_quadro_pendencias')
+      if (error) throw error
+      return data as { recomendacoes: number; usuarios: number }
+    }, refetchInterval: 60_000,
+  })
   // Contadores de pendência ao lado dos itens do menu.
   const pendencias: Record<string, number> = {
     '/master/assinaturas': (fin.data?.assinaturas.atrasadas ?? 0),
     '/master/suporte': chamados.data ?? 0,
+    '/master/sugestoes': (quadro.data?.recomendacoes ?? 0) + (quadro.data?.usuarios ?? 0),
     '/master/integracoes': fin.data?.gateway && !fin.data.gateway.ativo ? 1 : 0,
   }
   const inicial = (user?.email ?? '?').slice(0, 1).toUpperCase()
@@ -111,6 +122,7 @@ export default function MasterLayout() {
       </header>
       <main id="conteudo-principal" className="min-h-0 min-w-0 flex-1 overflow-y-auto">
         <AvisoAppAntigo master />
+        {!!((quadro.data?.recomendacoes ?? 0) + (quadro.data?.usuarios ?? 0)) && <div className="border-b border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-200" role="status"><Link to="/master/sugestoes" className="hover:underline">{quadro.data?.usuarios ?? 0} sugestão(ões) dos usuários e {quadro.data?.recomendacoes ?? 0} recomendação(ões) aguardando sua revisão. Abrir sugestões →</Link></div>}
         <div className="painel-conteudo mx-auto w-full min-w-0 max-w-7xl p-4 lg:p-8"><LimiteDeErroMaster><Outlet /></LimiteDeErroMaster></div>
       </main>
     </div>

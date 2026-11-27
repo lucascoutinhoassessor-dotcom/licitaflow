@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { diaBrasilia, filtrosResumoHoje } from '@/lib/resumoEditais'
 import BotaoInverterOrdem from '@/components/BotaoInverterOrdem'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Package, Radar, Search, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Badge, Button, CabecalhoPagina, Campo, Card, Input, Select, Vazio } from '@/components/ui'
@@ -54,6 +55,7 @@ function lerResultadoSalvo(chave:string):{em:number;data:ResultadoIndice}|undefi
   }catch{return undefined}
 }
 export default function Oportunidades() {
+  const [parametros]=useSearchParams()
   const { podeEditar }=useOrg(),padrao=useEmpresaPadrao()
   const [empresaId,setEmpresaId]=useState(padrao)
   useEffect(()=>setEmpresaId(padrao),[padrao])
@@ -62,13 +64,18 @@ export default function Oportunidades() {
   const [inicial]=useState(()=>{
     const hoje=new Date(),inicio=new Date();inicio.setDate(inicio.getDate()-30)
     const padraoFiltros:Filtros={...filtrosExtras,inicio:dataLocal(inicio),fim:dataLocal(hoje),situacao:'abertas',modalidade:'6',uf:'',...periodoAbertura(15)}
+    const resumo=filtrosResumoHoje(parametros,diaBrasilia(hoje))
+    if(resumo){
+      const hojeFiltros:Filtros={...padraoFiltros,...resumo}
+      return {f:hojeFiltros,consulta:hojeFiltros,pagina:1}
+    }
     const salvo=lerBuscaSalva()
     return salvo?{f:{...padraoFiltros,...salvo.f},consulta:salvo.consulta&&{...padraoFiltros,...salvo.consulta},pagina:salvo.pagina}:{f:padraoFiltros,consulta:padraoFiltros,pagina:1}
   })
   const [f,setF]=useState<Filtros>(inicial.f)
   const [consulta,setConsulta]=useState<Filtros|null>(inicial.consulta)
   const [pagina,setPagina]=useState(inicial.pagina)
-  const [abaEscolhida,setAba]=useState<Aba>(lerAba),[atalho,setAtalho]=useState<{portal:string;vez:number}>()
+  const [abaEscolhida,setAba]=useState<Aba>(()=>parametros.get('publicadas')==='hoje'?'abertas':lerAba()),[atalho,setAtalho]=useState<{portal:string;vez:number}>()
   const recursos=useRecursos()
   const abas=ABAS.filter(([,,r])=>!r||recursos.estado(r)==='liberado')
   // Aba que o master deixou de liberar volta para os editais abertos.
@@ -92,7 +99,7 @@ export default function Oportunidades() {
   const efetiva=useMemo(()=>consulta&&aplicarLiberacao(consulta,estados),[consulta,estados])
   const chaveResultado=JSON.stringify([efetiva,pagina]),salvo=lerResultadoSalvo(chaveResultado)
   const q=useQuery({
-    queryKey:['oportunidades-indexadas',efetiva,pagina],enabled:!!efetiva&&estados!==null&&aba==='abertas',retry:1,staleTime:VALIDADE_BUSCA,gcTime:30*60_000,
+    queryKey:['oportunidades-indexadas',efetiva,pagina],enabled:!!efetiva&&estados!==null&&aba==='abertas',retry:false,staleTime:VALIDADE_BUSCA,gcTime:30*60_000,
     initialData:salvo?.data,initialDataUpdatedAt:salvo?.em,
     queryFn:async({signal})=>{
       const r=await pesquisarIndice(efetiva!,pagina,signal)
@@ -151,6 +158,7 @@ export default function Oportunidades() {
     <Card className="mb-5 p-4">
       <form onSubmit={pesquisar} className="space-y-3">
         <div className="flex flex-col gap-2 sm:flex-row"><div className="relative min-w-0 flex-1"><Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input className="pl-9" aria-label="Pesquisar oportunidades" placeholder="O que sua empresa vende? Ex.: notebook; computador" value={f.busca} onChange={set('busca')} maxLength={300} /></div><Button type="submit" carregando={q.isFetching}>Buscar oportunidades</Button></div>
+        <p className="text-xs text-muted-foreground">Busque pelo produto ou serviço. Use palavras juntas para combinar os termos ou separe por “;” para buscar alternativas. Os resultados respeitam os filtros selecionados.</p>
         <div className="flex flex-col gap-2 sm:flex-row"><FiltroLiberado id="filtro-publicacao" className="min-w-0 flex-1"><Select aria-label="Situação dos editais" value={fv.situacao} onChange={set('situacao')}><option value="abertas">Por data de abertura</option><option value="publicacoes">Por data de publicação</option></Select></FiltroLiberado><FiltroLiberado id="filtro-uf" className="min-w-0 flex-1"><SeletorEstados className="min-w-0" valor={ufsDe(fv)} aoMudar={ufs=>setF(x=>({...x,...comUfs(ufs)}))} aoAplicar={()=>pesquisar()} carregando={q.isFetching} /></FiltroLiberado><MenuFiltros ativos={extras} colunas={2} aoLimpar={()=>setF(x=>({...x,...filtrosExtras,busca:x.busca,aberturaDe:x.aberturaDe,aberturaAte:x.aberturaAte,diasUteis:x.diasUteis,inverter:x.inverter}))}
           rodape={fechar=><Button type="button" carregando={q.isFetching} onClick={()=>{fechar();pesquisar()}}>Aplicar e buscar</Button>}>
           <FiltrosOportunidades f={f} mudar={setF} compras={[]} orgaos={q.data?.orgaosSobDemanda?orgaosQ.data??[]:q.data?.orgaos??[]} aoAbrirOrgaos={()=>setOrgaosDe(efetiva)} carregandoOrgaos={orgaosQ.isFetching} />

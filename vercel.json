@@ -9,11 +9,17 @@
       "destination": "https://pncp.gov.br/pncp-api/v1/:caminho*"
     },
     {
-      "source": "/((?!assets/|api/|pncp-arquivos/|icons/|manifest.webmanifest|master.webmanifest|pwa.js|coletor-propostas.js|sw.js|offline.html|favicon.svg|tema.js|versoes-assets.json).*)",
+      "source": "/((?!assets/|api/|pncp-arquivos/|icons/|social/|manifest.webmanifest|master.webmanifest|pwa.js|recuperar-acesso.js|coletor-propostas.js|sw.js|offline.html|offline.js|favicon.svg|tema.js|versoes-assets.json).*)",
       "destination": "/index.html"
     }
   ],
   "headers": [
+    {
+      "source": "/((?!assets/|api/|pncp-arquivos/|icons/|social/).*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-cache, max-age=0, must-revalidate" }
+      ]
+    },
     {
       "source": "/(.*)",
       "headers": [

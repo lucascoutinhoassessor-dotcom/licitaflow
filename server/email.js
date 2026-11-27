@@ -44,12 +44,12 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 const data = (d) => (d ? new Date(`${d}T12:00:00`).toLocaleDateString('pt-BR') : '')
 const ola = (nome) => (nome ? `Olá, ${String(nome).trim().split(/\s+/)[0]}!` : 'Olá!')
 
-function layout(titulo, corpo) {
+function layout(titulo, corpo, site = URL_SITE) {
   return `<!doctype html><html><body style="margin:0;background:#f4f4f5;font-family:Arial,Helvetica,sans-serif;color:#18181b">
 <div style="max-width:520px;margin:24px auto;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e4e4e7">
 <div style="background:${COR};color:#ffffff;padding:18px 24px;font-size:18px;font-weight:bold"><img src="cid:licitaflow-logo" width="40" height="40" alt="LicitaForce" style="vertical-align:middle;margin-right:12px;border-radius:8px">LicitaForce</div>
 <div style="padding:24px"><h1 style="font-size:20px;margin:0 0 16px">${esc(titulo)}</h1>${corpo}</div>
-<div style="padding:16px 24px;font-size:12px;color:#71717a;border-top:1px solid #e4e4e7">Você recebeu este e-mail porque tem uma conta no LicitaForce. <a href="${URL_SITE}" style="color:${COR}">${URL_SITE.replace(/^https?:\/\//, '')}</a></div>
+<div style="padding:16px 24px;font-size:12px;color:#71717a;border-top:1px solid #e4e4e7">Você recebeu este e-mail porque tem uma conta no LicitaForce. <a href="${site}" style="color:${COR}">${site.replace(/^https?:\/\//, '')}</a></div>
 </div></body></html>`
 }
 const botao = (url, rotulo) =>
@@ -76,11 +76,11 @@ export function emailAcessoLiberado(d) {
   const ate = data(d.pago_ate)
   const html = layout('Seu acesso ao LicitaForce está liberado', `<p>${esc(ola(d.nome))}</p>
 <p>O pagamento da empresa <b>${esc(d.organizacao)}</b> foi confirmado e o plano <b>${esc(d.plano)}</b> (${esc(d.ciclo)}) já está liberado${ate ? `, com acesso pago até <b>${ate}</b>` : ''}.</p>
-<p><b>Seus dados de acesso:</b><br>Endereço: <a href="${login}" style="color:${COR}">${esc(login)}</a><br>E-mail: <b>${esc(d.email)}</b><br>Senha: a definida no cadastro.</p>
+<p><b>Seus dados de acesso:</b><br>Endereço: <a href="${login}" style="color:${COR}">${esc(login)}</a><br>E-mail: <b>${esc(d.email)}</b><br>Senha: ${d.senha ? `<b>${esc(d.senha)}</b>` : 'a definida no cadastro'}.</p>
 ${botao(login, 'Entrar no LicitaForce')}
 ${nota(`Esqueceu a senha? <a href="${URL_SITE}/recuperar-senha" style="color:${COR}">Crie uma nova aqui</a>. O recibo e as próximas faturas chegam pelo Asaas, nosso parceiro de pagamentos.`)}
 <p>Dica: no celular, abra o LicitaForce e toque em “Instalar o app” para usar como aplicativo e receber avisos.</p>`)
-  const texto = `${ola(d.nome)}\n\nO pagamento da empresa ${d.organizacao} foi confirmado e o plano ${d.plano} já está liberado${ate ? ` (pago até ${ate})` : ''}.\n\nEndereço: ${login}\nE-mail: ${d.email}\nSenha: a definida no cadastro.\n\nEsqueceu a senha? ${URL_SITE}/recuperar-senha`
+  const texto = `${ola(d.nome)}\n\nO pagamento da empresa ${d.organizacao} foi confirmado e o plano ${d.plano} já está liberado${ate ? ` (pago até ${ate})` : ''}.\n\nEndereço: ${login}\nE-mail: ${d.email}\nSenha: ${d.senha || 'a definida no cadastro'}.\n\nEsqueceu a senha? ${URL_SITE}/recuperar-senha`
   return { assunto: 'Seu acesso ao LicitaForce está liberado', html, texto }
 }
 
@@ -110,6 +110,31 @@ ${nota(`Esqueceu a senha depois? <a href="${URL_SITE}/recuperar-senha" style="co
   return { assunto: 'Sua conta no LicitaForce está liberada', html, texto }
 }
 
+/** Resumo das oportunidades novas, com acesso ao Radar para decidir a participação. */
+export function emailRadar({ nome, empresa, org_id, empresa_id, oportunidades }) {
+  const site = 'https://licitaflow.com.br'
+  const urlRadar = `${site}/app/agentes/radar?org=${encodeURIComponent(org_id)}&empresa=${encodeURIComponent(empresa_id)}`
+  const quantidade = oportunidades.length
+  const titulo = `${quantidade} ${quantidade === 1 ? 'oportunidade nova' : 'oportunidades novas'} para ${empresa}`
+  const fichas = oportunidades.map((o) => {
+    const prazo = o.encerramento && Number.isFinite(Date.parse(o.encerramento))
+      ? new Date(o.encerramento).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'short', timeStyle: 'short' }) + ' (Brasília)' : 'Não informado'
+    const valor = o.valor != null && Number.isFinite(Number(o.valor))
+      ? Number(o.valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'Não informado'
+    const url = `${urlRadar}&sugestao=${encodeURIComponent(o.id)}`
+    const motivos = Array.isArray(o.motivos) ? o.motivos : []
+    return {
+      html: `<div style="border:1px solid #e4e4e7;border-radius:8px;padding:16px;margin:16px 0"><h2 style="font-size:16px;margin:0 0 12px">${esc(o.objeto || 'Objeto não informado')}</h2><p>Órgão: ${esc(o.orgao || 'Não informado')}${o.uf ? ` / ${esc(o.uf)}` : ''}<br>Valor estimado: <b>${esc(valor)}</b><br>Prazo das propostas: <b>${esc(prazo)}</b></p>${motivos.length ? nota(motivos.map(esc).join('<br>')) : ''}${botao(url, 'Avaliar oportunidade')}</div>`,
+      texto: `${o.objeto || 'Objeto não informado'}\nÓrgão: ${o.orgao || 'Não informado'} / ${o.uf || ''}\nValor estimado: ${valor}\nPrazo das propostas: ${prazo}\n${motivos.join('\n')}\nAvaliar oportunidade: ${url}`,
+    }
+  })
+  return {
+    assunto: `Radar LicitaForce · ${titulo}`.replace(/[\r\n]/g, ' '),
+    html: layout(titulo, `<p>${esc(ola(nome))}</p><p>O Radar encontrou editais que combinam com o perfil da empresa <b>${esc(empresa)}</b>. Confira as oportunidades e escolha quais deseja adicionar ao funil para participar.</p>${fichas.map((f) => f.html).join('')}${botao(urlRadar, 'Ver oportunidades no Radar')}${nota('Entre com sua conta LicitaForce para ver os detalhes, adicionar ao funil ou descartar. Confira o edital antes de decidir participar.')}`, site),
+    texto: `${ola(nome)}\n\n${titulo}\nEscolha no Radar quais oportunidades deseja adicionar ao funil para participar.\n\n${fichas.map((f) => f.texto).join('\n\n')}\n\nVer oportunidades no Radar: ${urlRadar}\nEntre com sua conta LicitaForce. Confira o edital antes de decidir participar.`,
+  }
+}
+
 export function emailTeste() {
   return { assunto: 'Teste de e-mail do LicitaForce', html: layout('Envio funcionando', '<p>Este é um e-mail de teste enviado pelo Painel Master. Se chegou com o nome e o logo do LicitaForce, está tudo certo.</p>'), texto: 'Este é um e-mail de teste enviado pelo Painel Master.' }
 }
@@ -120,4 +145,15 @@ export function emailNotificacao({ nome, titulo, texto, link }) {
   const paragrafos = String(texto ?? '').split('\n').filter(Boolean).map((l) => `<p style="margin:0 0 8px">${esc(l)}</p>`).join('')
   const html = layout(titulo, `<p>${esc(ola(nome))}</p>${paragrafos}${botao(url, 'Abrir o LicitaForce')}${nota('Para não receber estes e-mails, desmarque “Lembretes de pendências” ou “E-mail e WhatsApp” em Configurações, no LicitaForce.')}`)
   return { assunto: `${titulo} · LicitaForce`, html, texto: `${ola(nome)}\n\n${texto}\n\nAbrir: ${url}` }
+}
+
+/** Ticket e atualizações: o conteúdo é escapado antes de entrar no HTML. */
+export function emailChamado({ id, assunto, organizacao, tipo, texto, evento, master = false }) {
+  const titulo = evento === 'abrir' ? 'Solicitação aberta' : evento === 'responder' ? 'Nova resposta no atendimento' : 'Atendimento atualizado'
+  const url = `${URL_SITE}/${master ? 'master/suporte' : 'suporte'}`
+  return {
+    assunto: `[Ticket ${id}] ${titulo}: ${String(assunto).replace(/[\r\n]/g, ' ')}`,
+    html: layout(titulo, `<p><b>${esc(assunto)}</b></p><p>Protocolo: ${esc(id)}<br>Organização: ${esc(organizacao)}<br>Tipo: ${esc(tipo)}</p><p style="white-space:pre-wrap">${esc(texto)}</p>${botao(url, 'Acompanhar ticket')}${nota('Acesse o ticket no painel para responder e acompanhar o histórico.')}`),
+    texto: `${titulo}: ${assunto}\nProtocolo: ${id}\nOrganização: ${organizacao}\nTipo: ${tipo}\n\n${texto}\n\nAcompanhe e responda pelo painel: ${url}`,
+  }
 }

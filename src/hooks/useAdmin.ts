@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/providers/AuthProvider'
+import { consultarComLimite } from '@/lib/conexao'
 
 /**
  * true quando o usuário logado é administrador da plataforma (painel master).
@@ -15,16 +16,17 @@ export function useEhAdmin() {
     staleTime: 5 * 60_000,
     retry: 2,
     retryDelay: (n) => 800 * (n + 1),
-    queryFn: async () => {
-      const { data, error } = await supabase.rpc('is_platform_admin')
+    refetchOnWindowFocus: true,
+    queryFn: async ({ signal }) => {
+      const { data, error } = await consultarComLimite(sinal => supabase.rpc('is_platform_admin').abortSignal(sinal), signal)
       if (error) throw error
       return data === true
     },
   })
   return {
     ehAdmin: q.data === true,
-    carregando: q.isLoading,
-    erro: q.isError && q.data === undefined ? q.error : null,
+    carregando: q.isPending && q.fetchStatus !== 'paused',
+    erro: q.data === undefined && (q.isError || q.fetchStatus === 'paused') ? (q.error ?? new Error('Sem conexão')) : null,
     tentarDeNovo: () => q.refetch(),
   }
 }

@@ -44,8 +44,13 @@ Para desligar: `update licitaflow_turso.config set ativo = false where id;`
 4. **Itens:** coleta os itens dos editais que abrem em até 30 dias, os mais próximos primeiro, 3 por vez.
 5. **Limpeza:** encerrados há mais de 2 dias perdem os itens, mas o edital fica no histórico. Saem de vez as dispensas
    e inexigibilidades encerradas e tudo o que passou dos 12 meses. Também apaga as contagens vencidas do cache da busca.
-6. **Contagens guardadas:** a cobertura dos itens é contada a cada hora e o tamanho da base a cada 6 h (o total vem
-   de `max(rowid)`, aproximado). Os números ficam em `coleta_estado`, e a busca e o cartão do master só leem o resultado.
+6. **Contagens guardadas:** a cobertura dos itens é contada a cada hora e o tamanho real da base a cada 6 h
+   (`count(*)`, preservando a precisão após exclusões). Os números ficam em `coleta_estado`; as buscas só leem o resultado.
+7. **Compactação gradual:** documentos novos usam gzip em base64 quando isso reduz o tamanho. Os antigos são
+   convertidos em lotes de até 50 por rodada, apenas com cota normal e tempo disponível. Filtros, itens e FTS
+   continuam separados e pesquisáveis. A leitura aceita JSON antigo e gzip. A conversão mantém o rowid do edital.
+
+A carga pendente continua do mesmo cursor quando muda o dia. Uma carga nova só começa após a anterior terminar.
 
 Se o PNCP responder 429 (pedido para esperar), a coleta pausa por 5 minutos.
 
@@ -55,10 +60,9 @@ Se o PNCP responder 429 (pedido para esperar), a coleta pausa por 5 minutos.
 `buscar_oportunidades` do Postgres, só no modo "por data de abertura". Os resultados ficam guardados em cache por
 60 s para cada combinação de filtros.
 
-O app tenta o Turso primeiro e volta para o Postgres quando:
-- a primeira carga completa ainda não terminou (resposta 409 `turso_carregando`);
-- os filtros por item esbarram em mais de 10% de editais sem itens (resposta 409 `turso_itens`);
-- o Turso falha.
+O app tenta o Turso primeiro. Durante a carga inicial ou enquanto faltam itens, entrega os resultados disponíveis
+com aviso de cobertura parcial. Falhas de rede ou cota permitem recorrer ao Postgres nas buscas de abertos.
+A tentativa do Turso tem limite de 12 s e a busca inteira, incluindo sessão e Postgres, de 30 s.
 
 **Histórico (encerrados):** quando a abertura começa num dia passado, ou a busca é "por data de publicação", a
 resposta traz `historico: true` e inclui os encerrados. O Postgres não tem esses editais, então não há volta para
@@ -73,6 +77,27 @@ Depois que a busca no Turso estiver conferida, enxugar no Supabase `oportunidade
 `oportunidades_itens_indice` e a fila de itens, medindo `pg_database_size` antes e depois.
 
 ## Cota do mês (para o Turso não bloquear o banco)
+
+Esta instalação usa **Developer** por padrão: 2,5 bilhões de linhas lidas e 25 milhões escritas por ciclo.
+`TURSO_PLANO` explícito na Vercel continua prevalecendo: se estiver `gratis`, atualize para `developer` e publique
+novamente. A contratação do plano no Turso não altera as variáveis da Vercel automaticamente.
+Limites conferidos em https://turso.tech/pricing em 25/11/2026. `TURSO_LIMITE_*` também prevalece sobre o plano.
+
+Gzip economiza o conteúdo armazenado e transferido, mas não reduz por si só a cobrança por linhas lidas/escritas.
+A migração tem custo de leitura e escrita único, limitado por rodada; não arquiva ou exclui editais adicionais.
+O histórico mantém a política existente de 12 meses, sem dispensa e inexigibilidade encerradas.
+
+## Indicadores da página inicial
+
+`GET /api/oportunidades?acao=turso-resumo-hoje` expõe somente totais públicos do dia em Brasília, com cache de
+5 minutos no servidor/CDN. A agregação usa o índice de publicação, sem descompactar documentos nem percorrer
+itens individuais. É usada pela página pública e pelo painel autenticado, com data da última coleta e aviso de
+cobertura parcial. Os números são da base coletada, não uma garantia do total nacional publicado no PNCP.
+
+Itens mostram a soma conhecida e quantos editais já têm itens coletados. Materiais/serviços usam os tipos dos itens
+ou a estimativa pelo objeto (editais mistos podem aparecer nos dois). As faixas são exclusivas: até R$ 50 mil,
+acima de R$ 50 mil até R$ 250 mil e acima de R$ 250 mil; valores não divulgados ficam fora.
+O link abre `/app/oportunidades?publicadas=hoje`, sujeito às modalidades/filtros liberados para a organização.
 
 O plano grátis bloqueia o banco quando o mês passa de 500 milhões de linhas lidas ou 10 milhões de linhas escritas.
 O app mede o próprio consumo e freia sozinho antes disso.

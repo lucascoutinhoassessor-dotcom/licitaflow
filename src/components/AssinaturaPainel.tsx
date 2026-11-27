@@ -9,7 +9,7 @@ import { carregarAssinatura, pagamentoAPI, FORMAS, STATUS_ASSINATURA, STATUS_FAT
 import { Aviso, Badge, Button, Campo, Card, Carregando, Input, Modal, Select } from '@/components/ui'
 
 /** Assinatura recorrente (Asaas) da organização: contratar, trocar de plano, cancelar e faturas. */
-export function AssinaturaPainel({ org, master = false }: { org: string; master?: boolean }) {
+export function AssinaturaPainel({ org, master = false, planoInicial }: { org: string; master?: boolean; planoInicial?: string }) {
   const qc = useQueryClient()
   const catalogo = useCatalogoPlanos()
   const q = useQuery({ queryKey: ['assinatura', org], queryFn: () => carregarAssinatura(org) })
@@ -28,7 +28,7 @@ export function AssinaturaPainel({ org, master = false }: { org: string; master?
   const economia = plano && plano.mensal_centavos * 12 > plano.anual_centavos ? plano.mensal_centavos * 12 - plano.anual_centavos : 0
 
   function abrir(tipo: 'assinar' | 'trocar', a?: Assinatura | null) {
-    setF({ plano: a?.plano_id ?? planos[0]?.id ?? '', ciclo: a?.ciclo ?? 'mensal', forma: a?.forma ?? 'UNDEFINED', documento: '', cupom: '' })
+    setF({ plano: a?.plano_id ?? planoInicial ?? planos[0]?.id ?? '', ciclo: a?.ciclo ?? 'mensal', forma: a?.forma ?? 'UNDEFINED', documento: '', cupom: '' })
     setModal(tipo)
   }
   async function enviar(e: FormEvent) {
@@ -73,6 +73,7 @@ export function AssinaturaPainel({ org, master = false }: { org: string; master?
     </div>
     {!a && <>
       <p className="text-sm text-muted-foreground">{master ? 'Este cliente ainda não tem assinatura recorrente.' : 'Contrate um plano com cobrança recorrente por Pix, boleto ou cartão. O acesso é liberado assim que o pagamento é confirmado.'}</p>
+      {!master && <div className="grid gap-3 sm:grid-cols-2">{planos.map(p => <div key={p.id} className="space-y-2 rounded-lg border p-4"><h3 className="font-semibold">{p.nome}</h3><p>{formatarMoeda(p.mensal_centavos / 100)}/mês</p><p className="text-xs text-muted-foreground">{p.limite_empresas ?? 'Ilimitadas'} empresa(s) · {p.limite_usuarios ?? 'Ilimitados'} usuário(s)</p><Button variante="contorno" onClick={() => { abrir('assinar'); setF(v => ({ ...v, plano: p.id })) }}>Escolher {p.nome}</Button></div>)}</div>}
       <Button onClick={() => abrir('assinar')} disabled={!planos.length}>{master ? 'Criar assinatura para o cliente' : 'Contratar plano'}</Button>
     </>}
     {a && <>

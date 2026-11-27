@@ -16,7 +16,7 @@ const vazio = () => ({ nome: '', numero: '', mes: '', ano: '', cvv: '' })
 const titularVazio = () => ({ nome: '', email: '', documento: '', cep: '', numero: '', telefone: '' })
 
 /** O pagamento é concluído aqui; dados do cartão não são persistidos no navegador. */
-export function CheckoutPagamento({ assinatura, fatura, aoFechar }: { assinatura: string; fatura?: string; aoFechar: () => void }) {
+export function CheckoutPagamento({ assinatura, fatura, aoFechar, embutido = false }: { assinatura: string; fatura?: string; aoFechar: () => void; embutido?: boolean }) {
   const qc = useQueryClient()
   const [ocupado, setOcupado] = useState(false)
   const [erro, setErro] = useState('')
@@ -37,7 +37,7 @@ export function CheckoutPagamento({ assinatura, fatura, aoFechar }: { assinatura
     confirmado.current = true
     setCartao(vazio()); setTitular(titularVazio())
     toast.success('Pagamento confirmado. Seu acesso foi atualizado.')
-    for (const key of ['assinatura','organizacoes','empresas','plano-cliente','admin-assinaturas','admin-financeiro']) {
+    for (const key of ['assinatura','organizacoes','empresas','plano-cliente','admin-assinaturas','admin-financeiro','checkout-cliente']) {
       void qc.invalidateQueries({ queryKey: [key] })
     }
   }, [p?.pago, qc])
@@ -68,8 +68,7 @@ export function CheckoutPagamento({ assinatura, fatura, aoFechar }: { assinatura
   const formas = p?.forma === 'UNDEFINED' ? ['PIX','BOLETO','CREDIT_CARD'] : [p?.forma ?? 'PIX']
   const escolhida = formas.includes(forma) ? forma : formas[0]
 
-  return <Modal aberto aoFechar={() => { if (!ocupado) aoFechar() }} titulo="Checkout LicitaForce">
-    <div className="space-y-4">
+  const conteudo = <div className="space-y-4">
       {q.isLoading && <Carregando />}
       {q.isError && <Aviso>{mensagemErro(q.error)}</Aviso>}
       {p && <>
@@ -120,5 +119,5 @@ export function CheckoutPagamento({ assinatura, fatura, aoFechar }: { assinatura
       {!p?.pago && <Button variante="contorno" carregando={q.isFetching} disabled={ocupado} onClick={conferir}>Atualizar pagamento</Button>}
       <p className="text-xs text-muted-foreground">O pagamento é confirmado pelo provedor. Pix e boleto são pagos no aplicativo do seu banco.</p>
     </div>
-  </Modal>
+  return embutido ? conteudo : <Modal aberto aoFechar={() => { if (!ocupado) aoFechar() }} titulo="Checkout LicitaForce">{conteudo}</Modal>
 }

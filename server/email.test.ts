@@ -31,7 +31,7 @@ describe('e-mail da plataforma', () => {
 describe('webhook: e-mail de acesso liberado', () => {
   function res() { return { setHeader: vi.fn(), status: vi.fn().mockReturnThis(), json: vi.fn() } }
   const tokenLinha = () => [{ webhook_token_cifrado: cifrar('token-certo-1234567890', env) }]
-  const reserva = { assinatura: '11111111-1111-1111-1111-111111111111', email: 'cliente@x.com', nome: 'Ana', organizacao: 'Org', plano: 'Profissional', ciclo: 'mensal', pago_ate: '2026-12-21' }
+  const reserva = { assinatura: '11111111-1111-1111-1111-111111111111', org_id: '22222222-2222-2222-2222-222222222222', email: 'cliente@x.com', nome: 'Ana', organizacao: 'Org', plano: 'Profissional', ciclo: 'mensal', pago_ate: '2026-12-21' }
   async function rodar(enviar: ReturnType<typeof vi.fn>, respostas: Response[]) {
     vi.stubEnv('SUPABASE_URL', 'https://teste.supabase.co'); vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', 'privada')
     vi.doMock('./email.js', async (orig) => ({ ...(await orig<typeof import('./email.js')>()), enviarEmail: enviar }))
@@ -44,7 +44,7 @@ describe('webhook: e-mail de acesso liberado', () => {
   }
   it('envia ao cliente no primeiro pagamento', async () => {
     const enviar = vi.fn().mockResolvedValue({})
-    const { r } = await rodar(enviar, [Response.json(tokenLinha()), Response.json([{ id: 'evt_9' }]), Response.json('acesso liberado'), Response.json(reserva), Response.json([linha()])])
+    const { r } = await rodar(enviar, [Response.json(tokenLinha()), Response.json([{ id: 'evt_9' }]), Response.json('acesso liberado'), Response.json(reserva), Response.json([linha()]), Response.json([])])
     expect(enviar).toHaveBeenCalledWith(expect.objectContaining({ host: 'smtp.gmail.com' }), expect.objectContaining({ para: 'cliente@x.com' }))
     expect(r.json).toHaveBeenCalledWith({ recebido: true, resultado: 'acesso liberado; e-mail enviado' })
   })
@@ -54,9 +54,16 @@ describe('webhook: e-mail de acesso liberado', () => {
     expect(enviar).not.toHaveBeenCalled()
     expect(r.json).toHaveBeenCalledWith({ recebido: true, resultado: 'acesso liberado' })
   })
+  it('envia a senha gerada na compra e remove a cópia cifrada após o envio', async () => {
+    const enviar = vi.fn().mockResolvedValue({})
+    const senha = 'senha-aleatoria-da-compra'
+    const { fetch } = await rodar(enviar, [Response.json(tokenLinha()), Response.json([{ id: 'evt_9' }]), Response.json('acesso liberado'), Response.json(reserva), Response.json([linha()]), Response.json([{ senha_cifrada: cifrar(senha, env) }])])
+    expect(enviar.mock.calls[0][1].texto).toContain(`Senha: ${senha}`)
+    expect(fetch.mock.calls.some(c => String(c[0]).includes('/checkout_acessos?org_id=eq.') && c[1]?.method === 'DELETE')).toBe(true)
+  })
   it('falha no SMTP não derruba o webhook e libera nova tentativa', async () => {
     const enviar = vi.fn().mockRejectedValue(new Error('535 auth'))
-    const { r, fetch } = await rodar(enviar, [Response.json(tokenLinha()), Response.json([{ id: 'evt_9' }]), Response.json('acesso liberado'), Response.json(reserva), Response.json([linha()])])
+    const { r, fetch } = await rodar(enviar, [Response.json(tokenLinha()), Response.json([{ id: 'evt_9' }]), Response.json('acesso liberado'), Response.json(reserva), Response.json([linha()]), Response.json([])])
     expect(r.json).toHaveBeenCalledWith({ recebido: true, resultado: 'acesso liberado; e-mail falhou' })
     const desfaz = fetch.mock.calls.find(c => String(c[0]).includes('/assinaturas?id=eq.'))
     expect(JSON.parse(desfaz![1].body)).toEqual({ boas_vindas_em: null })

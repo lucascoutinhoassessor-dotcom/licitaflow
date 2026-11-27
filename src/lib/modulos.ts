@@ -3,7 +3,7 @@ import { GRUPOS_NAV, IA, NAV_CONTA, type GrupoNav, type ItemNav } from './navega
 export type EstadoModulo = 'liberado' | 'teste' | 'em_breve' | 'oculto'
 
 /** Telas essenciais da conta: sempre disponíveis, não entram no controle de liberação. */
-const ESSENCIAIS = new Set(['empresas', 'equipe', 'plano', 'cobrancas', 'avisos', 'suporte', 'configuracoes'])
+const ESSENCIAIS = new Set(['empresas', 'equipe', 'plano', 'cobrancas', 'avisos', 'quadro', 'sugestoes', 'suporte', 'configuracoes'])
 
 /** Identificador do módulo a partir da rota: /app/processos → processos, /suporte → suporte. */
 export function idModulo(rota: string): string | null {

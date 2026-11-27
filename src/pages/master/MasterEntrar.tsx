@@ -4,6 +4,7 @@ import { motion } from 'framer-motion'
 import { ShieldCheck } from 'lucide-react'
 import { supabase, mensagemErro } from '@/lib/supabase'
 import { InputSenha } from '@/components/ui'
+import { consultarComLimite } from '@/lib/conexao'
 
 /** Login exclusivo do console master. Só administradores da plataforma passam daqui. */
 export default function MasterEntrar() {
@@ -17,24 +18,27 @@ export default function MasterEntrar() {
     e.preventDefault()
     setErro('')
     setEnviando(true)
-    const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password: senha })
-    if (error) {
+    try {
+      const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password: senha })
+      if (error) return setErro(mensagemErro(error))
+      // Uma falha momentânea na checagem não deve ser lida como "sem acesso": tenta de novo antes de decidir.
+      const verificar = () => consultarComLimite(signal => supabase.rpc('is_platform_admin').abortSignal(signal))
+      let resposta = await verificar()
+      for (let i = 0; resposta.error && i < 2; i++) {
+        await new Promise((r) => setTimeout(r, 800 * (i + 1)))
+        resposta = await verificar()
+      }
+      if (resposta.error) return setErro('Login feito, mas não foi possível verificar o acesso master agora. Tente entrar de novo em instantes.')
+      if (resposta.data !== true) {
+        await supabase.auth.signOut()
+        return setErro('Esta conta não tem acesso ao console master.')
+      }
+      navigate('/master', { replace: true })
+    } catch (e) {
+      setErro(mensagemErro(e))
+    } finally {
       setEnviando(false)
-      return setErro(mensagemErro(error))
     }
-    // Uma falha momentânea na checagem não deve ser lida como "sem acesso": tenta de novo antes de decidir.
-    let resposta = await supabase.rpc('is_platform_admin')
-    for (let i = 0; resposta.error && i < 2; i++) {
-      await new Promise((r) => setTimeout(r, 800 * (i + 1)))
-      resposta = await supabase.rpc('is_platform_admin')
-    }
-    setEnviando(false)
-    if (resposta.error) return setErro('Login feito, mas não foi possível verificar o acesso master agora. Tente entrar de novo em instantes.')
-    if (resposta.data !== true) {
-      await supabase.auth.signOut()
-      return setErro('Esta conta não tem acesso ao console master.')
-    }
-    navigate('/master', { replace: true })
   }
 
   return (

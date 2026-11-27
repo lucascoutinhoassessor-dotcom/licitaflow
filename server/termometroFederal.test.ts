@@ -1,6 +1,6 @@
 import { deflateRawSync } from 'node:zlib'
 import { describe, expect, it, vi } from 'vitest'
-import { atualizarFederal, competencia, lerCsv, lerDia, proximoDia } from './termometroFederal.js'
+import { atualizarFederal, competencia, lerCsv, lerDia, lotes, proximoDia } from './termometroFederal.js'
 
 /** ZIP mínimo (deflate) com os arquivos dados, em latin1 como o Portal publica. */
 function zip(arquivos: Record<string, string>) {
@@ -87,5 +87,33 @@ describe('Termômetro federal', () => {
     const r = await atualizarFederal({ token: 't', rpc, fetcher: fetcher as unknown as typeof fetch, agora: Date.parse('2026-11-26T12:00:00Z') })
     expect(chamadas).toEqual(['20261031', '20261101'])
     expect(r.feitos?.[0]).toMatchObject({ situacao: 'pulado (404)' })
+  })
+
+  it('lotes: tudo de um empenho no mesmo lote, UGs no primeiro, ao menos um lote', () => {
+    const A = '111111000012026NE000001', B = '222222000012026NE000002', C = '333333000012026NE000003'
+    const l = lotes({ liquidacoes: [[A, 'd', null], [B, 'd', null], [C, 'd', null]], pagamentos: [[A, 'd'], [A, 'd'], [B, 'd']], ugs: [['111111']] }, 3)
+    expect(l.map((x) => [x.liq.length, x.pag.length, x.ugs.length])).toEqual([[1, 2, 1], [2, 1, 0]])
+    expect(l[1].liq.map((x) => x[0])).toEqual([B, C])
+    expect(lotes({ liquidacoes: [], pagamentos: [], ugs: [] })).toEqual([{ liq: [], pag: [], ugs: [] }])
+  })
+
+  it('rodada: manda o dia em lotes e retoma do lote em que parou', async () => {
+    const chamadas: string[] = []
+    const rpc = vi.fn(async (nome: string, corpo: Record<string, unknown>) => {
+      if (nome === 'termometro_estado') return { ativo: true, recursos: { federal: '20261118', federal_parte: '20261119:1' } }
+      chamadas.push(`${corpo.p_dia}:${corpo.p_parte}/${corpo.p_partes}`); return { casados: 1 }
+    })
+    const fetcher = vi.fn(async (url: string) => (url.endsWith('20261119') ? new Response(dia) : new Response('', { status: 403 })))
+    // O dia de teste cabe num lote só: com federal_parte 1, já está todo gravado e nada é reenviado.
+    const r = await atualizarFederal({ token: 't', rpc, fetcher: fetcher as unknown as typeof fetch, agora: Date.parse('2026-11-26T12:00:00Z') })
+    expect(chamadas).toEqual([])
+    expect(r.feitos?.[0]).toMatchObject({ dia: '20261119', lotes: '1/1' })
+  })
+
+  it('rodada: no máximo maxDias dias por vez', async () => {
+    const rpc = vi.fn(async (nome: string) => (nome === 'termometro_estado' ? { ativo: true, recursos: { federal: '20261110' } } : { casados: 0 }))
+    const fetcher = vi.fn(async () => new Response(dia))
+    const r = await atualizarFederal({ token: 't', rpc, fetcher: fetcher as unknown as typeof fetch, agora: Date.parse('2026-11-26T12:00:00Z'), maxDias: 2 })
+    expect(r.feitos?.map((f) => f.dia)).toEqual(['20261111', '20261112'])
   })
 })

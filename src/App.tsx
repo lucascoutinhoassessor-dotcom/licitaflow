@@ -17,6 +17,7 @@ import { AcessoNegadoMaster } from '@/pages/master/AcessoNegado'
 const Landing = lazy(() => import('@/pages/landing/Landing'))
 const Entrar = lazy(() => import('@/pages/auth/Entrar'))
 const Cadastro = lazy(() => import('@/pages/auth/Cadastro'))
+const Checkout = lazy(() => import('@/pages/Checkout'))
 const RecuperarSenha = lazy(() => import('@/pages/auth/RecuperarSenha'))
 const RedefinirSenha = lazy(() => import('@/pages/auth/RedefinirSenha'))
 const ConfirmarEmail = lazy(() => import('@/pages/auth/ConfirmarEmail'))
@@ -75,6 +76,10 @@ const MasterModulos = lazy(() => import('@/pages/master/Modulos'))
 const MasterConsumoIA = lazy(() => import('@/pages/master/ConsumoIA'))
 const MasterCupons = lazy(() => import('@/pages/master/Cupons'))
 const MasterLogs = lazy(() => import('@/pages/master/Logs'))
+const QuadroInformativo = lazy(() => import('@/components/QuadroInformativo'))
+const MasterQuadro = lazy(() => import('@/pages/master/Quadro'))
+const MasterSugestoes = lazy(() => import('@/pages/master/Sugestoes'))
+const SugestoesCliente = lazy(() => import('@/pages/relacionamento/SugestoesCliente'))
 const MasterSomAviso = lazy(() => import('@/pages/master/SomAviso'))
 const MasterNotificacoes = lazy(() => import('@/pages/master/Notificacoes'))
 const NaoEncontrada = lazy(() => import('@/pages/NaoEncontrada'))
@@ -160,6 +165,8 @@ export default function App() {
       <Suspense fallback={<Carregando telaCheia />}>
         <Routes>
           <Route path="/" element={<Landing />} />
+          <Route path="/checkout" element={<Checkout />} />
+          <Route path="/obrigado" element={<Checkout obrigado />} />
           <Route path="/entrar" element={<SoVisitante><Entrar /></SoVisitante>} />
           <Route path="/cadastro" element={<SoVisitante><Cadastro /></SoVisitante>} />
           <Route path="/recuperar-senha" element={<SoVisitante><RecuperarSenha /></SoVisitante>} />
@@ -200,6 +207,8 @@ export default function App() {
             <Route path="agentes/cotador/:processoId" element={<Cotador />} />
             <Route path="agentes/termometro" element={<TermometroPagamento />} />
             <Route path="avisos" element={<Avisos />} />
+            <Route path="quadro" element={<QuadroInformativo />} />
+            <Route path="sugestoes" element={<SugestoesCliente />} />
             <Route path="relatorios" element={<RelatoriosCliente />} />
             <Route path="plano" element={<MeuPlano />} />
             <Route path=":modulo" element={<EmBreve />} />
@@ -215,6 +224,8 @@ export default function App() {
             <Route path="auditoria" element={<MasterAuditoria />} />
             <Route path="suporte" element={<Suporte master />} />
             <Route path="avisos" element={<Avisos master />} />
+            <Route path="quadro" element={<MasterQuadro />} />
+            <Route path="sugestoes" element={<MasterSugestoes />} />
             <Route path="relatorios" element={<RelatoriosMaster />} />
             <Route path="planos" element={<Planos />} />
             <Route path="financeiro" element={<MasterFinanceiro />} />

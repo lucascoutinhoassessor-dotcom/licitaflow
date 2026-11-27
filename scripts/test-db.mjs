@@ -360,11 +360,22 @@ expect(blocked,'cliente não altera o prazo do teste grátis');
 blocked=false;try{await as(U2, `select public.admin_teste_gratis(0, true)`);}catch{blocked=true;}
 expect(!blocked,'chamada antiga com zero desativa o teste grátis sem ambiguidade');
 expect((await as(U2, 'select public.admin_teste_status() r')).rows[0].r.ativo===false,'zero no controle antigo desativa a nova política');
+blocked=false;try{await as(U2, `select public.admin_teste_gratis(-1, true)`);}catch{blocked=true;}
+expect(blocked,'prazo do teste fica entre 0 e 90 dias');
 await as(U2, `select public.admin_teste_gratis(7, true)`);
 const o3=(await as(U1, `select public.criar_organizacao('Org Nova', 'fornecedor') as id`)).rows[0].id;
 expect((await db.query(`select trial_ate - current_date d from public.organizations where id='${o3}'`)).rows[0].d===7,'novo cadastro recebe o prazo definido pelo master');
 await sistema(`update public.organizations set plano='trial', trial_ate=current_date-1, suspensa=false, motivo_suspensao=null where id in ('${o1}','${o3}')`);
 await sistema(`insert into public.assinaturas(org_id,plano_id,ciclo,valor_centavos,status,gateway_assinatura_id) values('${o1}','essencial','mensal',19700,'ativa','sub_ativa')`);
+// Uma assinatura sem pagamento não estende o teste; o RLS bloqueia antes do cron.
+expect((await as(U1, `select public.is_member('${o3}') ok`)).rows[0].ok===false,'teste vencido bloqueia o banco antes da rotina');
+expect((await as(U1, `select public.has_role('${o3}',array['owner']) ok`)).rows[0].ok===false,'teste vencido impede escrita antes da rotina');
+const efetivas=(await as(U1, `select public.minhas_organizacoes() r`)).rows[0].r;
+expect(efetivas.find(o=>o.id===o3).suspensa===true,'cliente recebe suspensão efetiva antes do cron');
+expect((await as(U1, `select public.is_member('${o1}') ok`)).rows[0].ok===false,'assinatura ativa sem pagamento não libera teste vencido');
+expect((await as(U1, `select id from public.processos where org_id='${o1}'`)).rows.length===0,'RLS oculta processos do teste vencido antes do cron');
+await sistema(`update public.assinaturas set pago_ate=current_date+30 where org_id='${o1}'`);
+expect((await as(U1, `select public.is_member('${o1}') ok`)).rows[0].ok===true,'assinatura paga preserva o acesso');
 await sistema(`select public.rotina_cobranca()`);
 const st=(await db.query(`select id, suspensa, motivo_suspensao from public.organizations where id in ('${o1}','${o3}')`)).rows;
 expect(st.find(r=>r.id===o3).motivo_suspensao==='Teste grátis encerrado (automático)','teste vencido sem plano é bloqueado pela rotina');
@@ -378,8 +389,28 @@ await as(U2, `select public.admin_teste_gratis(14, false)`);
 await sistema(`update public.organizations set trial_ate=current_date-1 where id='${o3}'`);
 await sistema(`select public.rotina_cobranca()`);
 expect((await db.query(`select suspensa from public.organizations where id='${o3}'`)).rows[0].suspensa===false,'com o bloqueio desligado, teste vencido não é suspenso');
+await as(U2, `select public.admin_teste_gratis(0, true)`);
+expect((await db.query(`select public.dias_teste_gratis() d`)).rows[0].d===0,'master desativa novos testes com zero dias');
+const semTeste=(await as(U1, `select public.criar_organizacao('Sem teste','fornecedor') id`)).rows[0].id;
+expect((await as(U1, `select public.is_member('${semTeste}') ok`)).rows[0].ok===false,'cadastro sem teste exige pagamento imediatamente');
+expect((await as(U1, `select public.pode_gerir_cobranca('${semTeste}') ok`)).rows[0].ok===true,'conta bloqueada continua podendo contratar');
+blocked=false;try{await as(U1, `insert into public.empresas(org_id,cnpj,razao_social) values('${semTeste}','12345678000190','Bloqueada')`);}catch{blocked=true;}
+expect(blocked,'conta sem teste não cadastra empresa antes do pagamento');
+expect((await as(U1, `select * from public.checkout_acessos`)).rows.length===0,'senhas cifradas não são expostas ao cliente');
+const compraSemTeste=(await as(U1, `select public.preparar_assinatura('${semTeste}','essencial','mensal','PIX','12345678909') id`)).rows[0].id;
+await sistema(`update public.plataforma_email set ativo=true,boas_vindas=true,senha_cifrada='cifrada-teste' where id='smtp'`);
+expect((await sistema(`select public.reservar_boas_vindas('{"id":"pay_sem_teste"}') r`)).rows[0].r===null,'não reserva e-mail de acesso sem pagamento confirmado');
+await sistema(`select public.processar_pagamento_asaas('PAYMENT_CONFIRMED',jsonb_build_object('id','pay_sem_teste','externalReference','${compraSemTeste}','value',197,'dueDate',current_date::text,'status','CONFIRMED'))`);
+expect((await as(U1, `select public.is_member('${semTeste}') ok`)).rows[0].ok===true,'confirmação do pagamento libera cadastro sem teste');
+const envio=(await sistema(`select public.reservar_boas_vindas('{"id":"pay_sem_teste"}') r`)).rows[0].r;
+expect(envio.org_id===semTeste && envio.email==='a@teste.com','primeiro pagamento prepara dados de acesso do dono da conta');
+expect((await sistema(`select public.reservar_boas_vindas('{"id":"pay_sem_teste"}') r`)).rows[0].r===null,'reserva atômica impede duplicação do e-mail de acesso');
+await db.exec(`update public.plataforma_email set ativo=false,senha_cifrada=null where id='smtp'; delete from public.assinatura_faturas where org_id='${semTeste}'; delete from public.assinaturas where org_id='${semTeste}'`);
+await sistema(`delete from public.organizations where id='${semTeste}'`);
+await as(U2, `select public.admin_teste_gratis(14, false)`);
 await db.exec(`delete from public.assinaturas; delete from public.organizations where id='${o3}'`);
 
+{
 // Oferta desativada: continua sem teste mesmo com o bloqueio de vencidos desligado.
 blocked=false;try{await as(U1, `select public.admin_teste_gratis(14, false, false, false)`);}catch{blocked=true;}
 expect(blocked,'cliente não pode desligar o teste grátis');
@@ -406,6 +437,8 @@ expect((await db.query(`select suspensa from public.organizations where id='${se
 await db.exec(`delete from public.assinatura_faturas where assinatura_id='${novaAss}'; delete from public.assinaturas where id='${novaAss}'; delete from public.organizations where id='${semTeste}'`);
 await as(U2, 'select public.admin_teste_gratis(14,false,false,true)');
 expect((await as(U2, 'select public.admin_teste_status() r')).rows[0].r.ativo===true,'master reativa a oferta');
+
+}
 
 // Liberação de funcionalidades: master decide; cliente recebe só o estado efetivo da própria org.
 expect((await as(U1, `select public.modulos_da_org('${o1}') r`)).rows[0].r.agentes==='em_breve','cliente recebe os estados dos módulos');

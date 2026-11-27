@@ -10,6 +10,7 @@ const AJUDA: Record<string, string> = {
   sentinela: 'Processos em andamento com edital no PNCP, vigiados ao mesmo tempo.',
   radar: 'Empresas com palavras-chave e Radar ligado, monitoradas ao mesmo tempo.',
   cotador: 'Cada processo conta uma vez por mês, na primeira importação ou pesquisa de preço. Renova no dia 1º.',
+  juridico: 'Cada peça redigida pela IA conta uma. As minutas pelo formulário do Jurídico não contam. Renova no dia 1º.',
   termometro: 'Nota CAPAG do Tesouro Nacional no edital, no Leitor, no Radar e no processo.',
 }
 

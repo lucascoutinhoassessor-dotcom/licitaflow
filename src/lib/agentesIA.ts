@@ -14,6 +14,7 @@ export const AGENTES_IA: AgenteIA[] = [
   { id: 'sentinela', nome: 'Sentinela', unidade: 'processos vigiados', tipo: 'simultaneo' },
   { id: 'radar', nome: 'Radar', unidade: 'empresas monitoradas', tipo: 'simultaneo' },
   { id: 'cotador', nome: 'Cotador', unidade: 'processos cotados', tipo: 'mensal' },
+  { id: 'juridico', nome: 'Jurídico com IA', unidade: 'peças redigidas', tipo: 'mensal' },
   // Consulta sem custo: não conta uso; o plano só define se está incluído (sem limite) ou não (0).
   { id: 'termometro', nome: 'Termômetro de Pagamento', unidade: 'consultas', tipo: 'mensal', semContagem: true },
 ]

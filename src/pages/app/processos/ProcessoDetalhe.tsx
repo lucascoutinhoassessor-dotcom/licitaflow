@@ -1,4 +1,5 @@
 import ArquivosEdital from '@/components/ArquivosEdital'
+import { SentinelaNoProcesso } from '@/components/AcompanhamentoSentinela'
 import { rotuloPortal } from '@/lib/portais'
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
@@ -356,6 +357,7 @@ export default function ProcessoDetalhe() {
   const { salvar, excluir } = useSalvar('processos', ['processo_eventos'])
   const [aba, setAba] = useState<Aba>('resumo')
   const [editando, setEditando] = useState(false)
+  const [objetoCompleto, setObjetoCompleto] = useState(false)
 
   if (q.isLoading) return <Carregando />
   const p = q.data
@@ -386,13 +388,14 @@ export default function ProcessoDetalhe() {
       </Link>
 
       <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
             <BadgeEtapa etapa={p.etapa} />
             <span>{MODALIDADES[p.modalidade]}{p.numero ? ` · ${p.numero}` : ''}</span>
             {p.prioridade === 'alta' && <Badge cor="vermelho">Prioridade alta</Badge>}
           </div>
-          <h1 className="mt-2 text-xl font-semibold leading-snug sm:text-2xl">{p.objeto}</h1>
+          <h1 className={`mt-2 break-words text-xl font-semibold leading-snug sm:text-2xl ${!objetoCompleto && p.objeto.length > 80 ? 'line-clamp-3' : ''}`}>{p.objeto}</h1>
+          {p.objeto.length > 80 && <button type="button" aria-expanded={objetoCompleto} className="mt-1 text-xs font-medium text-primary hover:underline" onClick={() => setObjetoCompleto(!objetoCompleto)}>{objetoCompleto ? 'Recolher objeto' : 'Ver objeto completo'}</button>}
           {p.orgao_nome && <p className="mt-1 text-sm text-muted-foreground">{p.orgao_nome}</p>}
           <SeloTermometroAuto className="mt-1.5" alvo={alvoPeloNome(p.orgao_nome, p.uf, p.municipio)} peloNome />
         </div>
@@ -415,6 +418,8 @@ export default function ProcessoDetalhe() {
           {podeEditar && <Button variante="contorno" tamanho="sm" className="h-9" onClick={() => setEditando(true)}><Pencil className="h-4 w-4" /> Editar</Button>}
         </div>
       </div>
+
+      {estadoModulo('/app/agentes') === 'liberado' && <SentinelaNoProcesso processo={p} />}
 
       {(() => {
         // Edital vindo do PNCP: arquivos (edital, TR, ETP, anexos) abertos aqui dentro.

@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { consultarComLimite } from './conexao'
 
 const url = import.meta.env.VITE_SUPABASE_URL as string | undefined
 const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
@@ -7,6 +8,12 @@ const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
 export const supabaseNaoConfigurado = !url || !anonKey
 
 export const supabase = createClient(url ?? 'http://localhost:54321', anonKey ?? 'sem-chave', {
+  global: {
+    // Uma renovação pendurada bloqueia também as demais consultas que aguardam o token.
+    fetch: (input, init) => String(input).includes('/auth/v1/')
+      ? consultarComLimite(signal => fetch(input, { ...init, signal }), init?.signal ?? undefined)
+      : fetch(input, init),
+  },
   auth: {
     persistSession: true,
     autoRefreshToken: true,

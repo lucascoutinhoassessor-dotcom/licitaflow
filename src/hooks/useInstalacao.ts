@@ -1,6 +1,8 @@
 import { createContext, useContext } from 'react'
 interface Instalacao {
   ocultar: boolean
+  instalado: boolean
+  conferindo: boolean
   instalando: boolean
   ajuda: boolean
   instalar: () => Promise<void>

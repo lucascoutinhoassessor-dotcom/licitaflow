@@ -9,6 +9,7 @@
 import webpushPadrao from 'web-push'
 import { entregarNotificacoes, enviarWhatsapp, telefoneWhatsapp } from './notificacoes.js'
 import { cifrar, decifrar } from './asaas.js'
+import { enviarResumoAgentes } from './pushAgentes.js'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const CONTATO = 'https://licitaforce-app.vercel.app'
@@ -129,6 +130,15 @@ export function criarHandler({ webpush = webpushPadrao, fetcher = fetch } = {}) 
           return res.status(200).json(await entregarNotificacoes({ token: coleta, chamar, webpush, fetcher }))
         } catch (e) {
           return res.status(/token/i.test(e.message) ? 401 : 502).json({ error: 'Não foi possível entregar os lembretes' })
+        }
+      }
+      if (corpo.acao === 'resumo-agentes') {
+        const coleta = String(req.headers['x-coleta'] ?? '')
+        if (!/^[0-9a-f]{32,128}$/.test(coleta)) return res.status(401).json({ error: 'Não autorizado' })
+        try {
+          return res.status(200).json(await enviarResumoAgentes({ token: coleta, chamar, webpush }))
+        } catch (e) {
+          return res.status(/token/i.test(e.message) ? 401 : 502).json({ error: 'Não foi possível enviar o resumo dos agentes' })
         }
       }
       // Chamado pelo pg_cron a cada minuto quando há push vencido. Não precisa de login: só dispara o que

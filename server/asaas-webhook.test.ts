@@ -12,9 +12,9 @@ describe('webhook do Asaas',()=>{
     expect(r.status).toHaveBeenCalledWith(401);expect(fetch).toHaveBeenCalledTimes(1)
   })
   it('evento repetido não é processado de novo',async()=>{
-    ambiente();const fetch=vi.fn().mockResolvedValueOnce(Response.json(linha())).mockResolvedValueOnce(Response.json([]));vi.stubGlobal('fetch',fetch);const r=res()
+    ambiente();const fetch=vi.fn().mockResolvedValueOnce(Response.json(linha())).mockResolvedValueOnce(Response.json([])).mockResolvedValueOnce(Response.json(null));vi.stubGlobal('fetch',fetch);const r=res()
     await handler({method:'POST',headers:{'asaas-access-token':'token-certo-1234567890'},body:{id:'evt_1',event:'PAYMENT_RECEIVED',payment:{id:'pay_1'}}},r)
-    expect(r.json).toHaveBeenCalledWith({recebido:true,duplicado:true});expect(fetch).toHaveBeenCalledTimes(2)
+    expect(r.json).toHaveBeenCalledWith({recebido:true,duplicado:true});expect(fetch).toHaveBeenCalledTimes(3)
   })
   it('pagamento novo vai para o processamento no banco',async()=>{
     ambiente();const fetch=vi.fn().mockResolvedValueOnce(Response.json(linha())).mockResolvedValueOnce(Response.json([{id:'evt_2'}])).mockResolvedValueOnce(Response.json('acesso liberado')).mockResolvedValueOnce(new Response(null,{status:204}));vi.stubGlobal('fetch',fetch);const r=res()

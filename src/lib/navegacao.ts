@@ -153,6 +153,8 @@ export const NAV_CONTA: ItemNav[] = [
   { rota: '/app/equipe', rotulo: 'Equipe', icone: Users },
   { rota: '/app/plano', rotulo: 'Meu plano e uso', icone: CreditCard },
   { rota: '/cobrancas', rotulo: 'Cobranças do LicitaForce', icone: Wallet },
+  { rota: '/app/quadro', rotulo: 'Quadro informativo', icone: Bell },
+  { rota: '/app/sugestoes', rotulo: 'Minhas sugestões', icone: Headphones },
   { rota: '/app/avisos', rotulo: 'Avisos', icone: Bell },
   { rota: '/suporte', rotulo: 'Suporte e sugestões', icone: Headphones },
   { rota: '/app/configuracoes', rotulo: 'Configurações', icone: Settings },

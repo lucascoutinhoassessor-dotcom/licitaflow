@@ -23,7 +23,7 @@
 
 - Cancelar não estorna nem tira o plano na hora: não há novas cobranças e o acesso pago vale até a data "pago até". Estornos são feitos no painel do Asaas (o webhook registra a fatura como estornada).
 - Trocar de plano atualiza o valor da assinatura e das faturas em aberto no Asaas e aplica o plano na hora se a assinatura estiver ativa. Não há cálculo proporcional (pró-rata).
-- O teste grátis vencido não bloqueia o acesso automaticamente (comportamento anterior mantido); o painel mostra quantos estão vencidos para abordagem.
+- O teste grátis vencido bloqueia o acesso automaticamente. A configuração de zero dias desativa novos testes e direciona à contratação; veja `checkout-acesso.md` para a migração e o fluxo completo.
 - "Sincronizar com Asaas" reprocessa as últimas 100 cobranças da assinatura, útil se algum webhook se perdeu.
 - Pendentes para próximas etapas: cupons e promoções, afiliados, colaboradores do master com permissão por área, WhatsApp automático de cobrança, pró-rata.
 

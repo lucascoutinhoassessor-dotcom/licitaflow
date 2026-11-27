@@ -42,6 +42,9 @@ ok((await lim(o1)).usadas === 2, 'conta só usos novos do mês (reaproveitadas e
 ok(await falha(U1, `select public.ia_limite_e_uso($1, 'leitor-editais')`, [o1]), 'cliente não chama a função do servidor')
 ok(await falha(U1, `insert into public.ia_limites_org (org_id, agente, limite) values ($1, 'leitor-editais', 999)`, [o1]), 'cliente não grava a própria exceção')
 ok(await falha(U1, `select public.admin_salvar_limite_ia_org($1, 'leitor-editais', 999)`, [o1]), 'cliente não usa a função do master')
+const pj = Object.fromEntries((await db.query('select id, limites_ia from public.plataforma_planos')).rows.map((r) => [r.id, r.limites_ia]))
+ok(pj.trial?.juridico === 1 && pj.essencial?.juridico === 5 && pj.profissional?.juridico === 20 && pj.assessoria?.juridico === 60 && (pj.cancelado?.juridico ?? 0) === 0,
+  'Jurídico com IA definido em todos os planos (1, 5, 20, 60, 0)')
 ok(await falha(U1, `update public.plataforma_planos set limites_ia = '{"leitor-editais":null}' where id = 'essencial'`) ||
   (await db.query(`select limites_ia from public.plataforma_planos where id = 'essencial'`)).rows[0].limites_ia['leitor-editais'] === 10, 'cliente não altera o plano')
 
@@ -69,5 +72,6 @@ ok(ficha.plano.id === 'essencial' && ficha.uso['leitor-editais'].novas === 2 && 
 const consumo = (await como(ADM, 'select public.admin_consumo_ia() r'))[0].r
 ok(consumo.linhas.length === 1 && Number(consumo.linhas[0].custo_usd) === 1 && consumo.linhas[0].org === 'Org Ana', 'consumo do mês soma o custo por cliente')
 ok(await falha(U1, 'select public.admin_consumo_ia()'), 'cliente não vê o consumo geral')
+
 
 console.log(`\n${n} verificações de limites de IA ok`)

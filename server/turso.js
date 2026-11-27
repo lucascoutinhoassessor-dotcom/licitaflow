@@ -5,7 +5,8 @@
 // (modo "por data de abertura") lê daqui, com os mesmos filtros do buscar_oportunidades do Postgres.
 // Conversa com o Turso pela API HTTP (/v2/pipeline), sem dependência nova. Passo a passo em docs/turso.md.
 import { createHash } from 'node:crypto'
-import { compraEnxuta, consultaFts, diaUtil, IDS_PORTAIS, portalDe, tempo, textoEdital, tipoPeloObjeto } from './turso-regras.js'
+import { gzipSync, gunzipSync } from 'node:zlib'
+import { compraEnxuta, consultaFts, diaUtil, filtroDescricao, IDS_PORTAIS, portalDe, tempo, textoEdital, tipoPeloObjeto } from './turso-regras.js'
 import { chavesConsumo, cicloAtual, comandoSomar, configCota, nivelCota, peloMenos } from './turso-cota.js'
 
 const PNCP = 'https://pncp.gov.br/api/consulta/v1'
@@ -244,6 +245,32 @@ export function clienteTurso(env = process.env, fetcher = fetch) {
 // ======================================================================================= coleta
 
 const agoraIso = () => new Date().toISOString()
+// Mantém filtros/FTS pesquisáveis; compacta apenas o documento exibido pela tela.
+export function compactarCompra(json) {
+  const comprimido = 'gz:' + gzipSync(json).toString('base64')
+  return Buffer.byteLength(comprimido) < Buffer.byteLength(json) ? comprimido : json
+}
+export const lerCompra = (texto) => JSON.parse(texto.startsWith('gz:')
+  ? gunzipSync(Buffer.from(texto.slice(3), 'base64'), { maxOutputLength: 2_000_000 }).toString('utf8') : texto)
+
+/** Migração gradual: no máximo 50 documentos por rodada, sem reescrever índices ou o FTS. */
+export async function compactarBase(turso, cursor = 0) {
+  const lista = await turso.consultar('select rowid as id, compra from editais where rowid > ? order by rowid limit 50', [Number(cursor) || 0])
+  if (!lista.length) return 0
+  const comandos = []
+  let poupados = 0
+  for (const l of lista) {
+    if (l.compra.startsWith('gz:')) continue
+    const menor = compactarCompra(l.compra)
+    if (menor === l.compra) continue
+    poupados += Buffer.byteLength(l.compra) - Buffer.byteLength(menor)
+    // Evita sobrescrever uma atualização concorrente do coletor.
+    comandos.push(['update editais set compra = ? where rowid = ? and compra = ?', [menor, l.id, l.compra]])
+  }
+  comandos.push(guardar('compactacao_cursor', lista.at(-1).id))
+  await turso.pipeline(comandos)
+  return poupados
+}
 const dia = (d) => d.toISOString().slice(0, 10).replace(/-/g, '')
 const guardar = (chave, valor) => ['insert into coleta_estado(chave,valor,atualizado_em) values(?,?,?) on conflict(chave) do update set valor=excluded.valor, atualizado_em=excluded.atualizado_em', [chave, String(valor), agoraIso()]]
 
@@ -294,7 +321,7 @@ export async function gravarEditais(turso, lista, agora = agoraIso()) {
         encerramento=excluded.encerramento,tipo_objeto=excluded.tipo_objeto,dia_util=excluded.dia_util,atualizado_pncp=excluded.atualizado_pncp,
         coletado_em=excluded.coletado_em,compra=excluded.compra,hash=excluded.hash,
         itens_completos=case when editais.itens_completos = 0 then 0 else 2 end,itens_tentativas=0`,
-    [n.controle, n.cnpj, n.ano, n.sequencial, n.modalidade, n.portal, n.uf, n.situacao, n.srp, n.modo_disputa, n.valor, n.orgao_cnpj, n.orgao_nome, n.publicacao, n.encerramento, n.tipo_objeto, n.dia_util, n.atualizado_pncp, agora, n.compra, n.hash]])
+    [n.controle, n.cnpj, n.ano, n.sequencial, n.modalidade, n.portal, n.uf, n.situacao, n.srp, n.modo_disputa, n.valor, n.orgao_cnpj, n.orgao_nome, n.publicacao, n.encerramento, n.tipo_objeto, n.dia_util, n.atualizado_pncp, agora, compactarCompra(n.compra), n.hash]])
     // As linhas do FTS usam o rowid do edital: apagar por "controle" (coluna sem índice) lia a tabela inteira a cada edital.
     comandos.push(['delete from editais_fts where rowid = (select rowid from editais where controle = ?)', [n.controle]],
       ['insert into editais_fts(rowid, controle, texto) select rowid, controle, ? from editais where controle = ?', [n.texto, n.controle]])
@@ -384,6 +411,20 @@ export async function coletarRodada(turso, { prazo = Date.now() + 40_000, fetche
   if (estado.indices_historico !== '1') await turso.pipeline([...INDICES_HISTORICO.map((s) => [s]), guardar('indices_historico', '1')])
   if (estado.otimizacao !== '1') await migrarOtimizacao(turso)
   if (estado.indice_uf !== '1') await turso.pipeline([[INDICE_UF], guardar('indice_uf', '1')])
+  // Reindexação gradual: também lê documentos compactados sem fazer JSON no banco.
+  if (estado.fts_objeto !== '1') {
+    const lote = await turso.consultar('select rowid as id, controle, compra, hash from editais where rowid > ? order by rowid limit 100', [Number(estado.fts_objeto_cursor) || 0])
+    await turso.transacao([
+      ...lote.flatMap(l => [
+        // Não sobrescreve uma versão mais recente gravada por outra rodada do coletor.
+        ['delete from editais_fts where rowid = ? and exists(select 1 from editais where rowid = ? and hash is ?)', [l.id, l.id, l.hash]],
+        ['insert into editais_fts(rowid, controle, texto) select rowid, controle, ? from editais where rowid = ? and hash is ?', [textoEdital(lerCompra(l.compra)), l.id, l.hash]],
+      ]),
+      guardar('fts_objeto_cursor', lote.at(-1)?.id ?? estado.fts_objeto_cursor ?? 0),
+      ...(lote.length < 100 ? [guardar('fts_objeto', '1')] : []),
+      ['delete from cache_busca'],
+    ])
+  }
   if (estado.pausado_ate && estado.pausado_ate > agoraIso()) return [{ pausado: estado.pausado_ate }]
   // Cota do mês (server/turso-cota.js): freia antes de o Turso bloquear o banco.
   const cota = nivelCota(estado, turso.cota ?? configCota(), { agora: hoje, pendente: turso.pendente?.() })
@@ -410,7 +451,9 @@ export async function coletarRodada(turso, { prazo = Date.now() + 40_000, fetche
   // 1. Carga completa diária (até 55% do tempo e metade das consultas). Cursor "dia:índice da modalidade:página".
   if (!enxuta) await etapa('carga', async () => {
     let [diaCarga, im, pg] = String(estado.carga ?? '').split(':')
-    if (diaCarga !== data && !(estado.carga_completa_em ?? '').startsWith(hoje.toISOString().slice(0, 10))) { diaCarga = data; im = 0; pg = 1 }
+    // Uma carga grande pode atravessar a meia-noite. Só começa outra depois de terminar a anterior.
+    const pendente = /^\d{8}$/.test(diaCarga ?? '') && Number(im) < MODALIDADES.length
+    if (!pendente && !(estado.carga_completa_em ?? '').startsWith(hoje.toISOString().slice(0, 10))) { diaCarga = data; im = 0; pg = 1 }
     // Credenciamentos ficam abertos por anos: a lista vai até 2099 (até 2027 faltavam ~3,4 mil).
     // Na troca do limite, refaz já a partir do credenciamento, sem esperar o dia seguinte.
     const comandosLimite = []
@@ -421,7 +464,7 @@ export async function coletarRodada(turso, { prazo = Date.now() + 40_000, fetche
     im = Number(im) || 0; pg = Number(pg) || 1
     if (comandosLimite.length) await turso.pipeline([...comandosLimite, guardar('carga', `${diaCarga}:${im}:${pg}`)])
     const limiteData = LIMITE_CARGA
-    while (diaCarga === data && im < MODALIDADES.length && tempoAte(0.55) && pncp.restantes() > Math.floor(maxConsultas / 2)) {
+    while (diaCarga && im < MODALIDADES.length && tempoAte(0.55) && pncp.restantes() > Math.floor(maxConsultas / 2)) {
       const { lista, paginas } = await lerPagina(pncp, `${PNCP}/contratacoes/proposta?dataFinal=${limiteData}&codigoModalidadeContratacao=${MODALIDADES[im]}&pagina=${pg}&tamanhoPagina=50`)
       const gravados = await gravarEditais(turso, lista)
       feitos.push({ etapa: 'carga', modalidade: MODALIDADES[im], pagina: pg, de: paginas, gravados })
@@ -522,6 +565,9 @@ export async function coletarRodada(turso, { prazo = Date.now() + 40_000, fetche
     const s = await recontarBase(turso)
     feitos.push({ etapa: 'situacao', editais: s.editais, abertos: s.abertos, comItens: s.comItens })
   })
+  if (cota.nivel === 'normal' && tempoAte(0.95)) await etapa('compactacao', async () => {
+    feitos.push({ etapa: 'compactacao', bytes: await compactarBase(turso, estado.compactacao_cursor) })
+  })
   const fim = [guardar('ultima_coleta_em', agoraIso()), guardar('cota_nivel', cota.nivel),
     ['delete from cache_busca where expira < ?', [agoraIso()]]]
   if (pausar) fim.push(guardar('pausado_ate', new Date(Date.now() + 3 * 60_000).toISOString()))
@@ -618,12 +664,25 @@ export function montarFiltros(f, agora = agoraIso()) {
   }
   // Filtros que não dependem dos itens; os de item entram depois (para contar os pendentes, como no Postgres).
   const base = { onde: [...onde], args: [...args] }
-  if (tipo) { onde.push("instr(coalesce(e.tipo_itens, '') || coalesce(e.tipo_objeto, ''), ?) > 0"); args.push(tipo) }
+  if (tipo) { onde.push("instr(coalesce(nullif(e.tipo_itens, ''), e.tipo_objeto, ''), ?) > 0"); args.push(tipo) }
+  if (q && (tipo || porItem)) {
+    // Se o termo só aparece nos itens, ele deve estar no item que satisfaz os filtros.
+    const texto = filtroDescricao(termo), cond = ['i.controle = e.controle', texto.sql]
+    const valores = [...texto.args]
+    if (tipo) { cond.push("coalesce(i.tipo, case when e.tipo_itens in ('M','S') then e.tipo_itens when e.tipo_itens is null then e.tipo_objeto end) = ?"); valores.push(tipo) }
+    if (f.exclusivo === true) cond.push('i.beneficio = 1')
+    if (iMin !== null || iMax !== null) cond.push('i.sigiloso = 0 and i.valor_unitario > 0')
+    if (iMin !== null) { cond.push('i.valor_unitario >= ?'); valores.push(iMin) }
+    if (iMax !== null) { cond.push('i.valor_unitario <= ?'); valores.push(iMax) }
+    onde.push(`(e.rowid in (select rowid from editais_fts where editais_fts match ?) or exists (select 1 from itens i where ${cond.join(' and ')}))`)
+    args.push(q, ...valores)
+  }
   if (porItem) {
     onde.push('e.itens_completos >= 1')
     if (maxItens !== null) { onde.push('e.quantidade_itens <= ?'); args.push(maxItens) }
     if (iMin !== null || iMax !== null || f.exclusivo === true) {
       const cond = ['i.controle = e.controle']
+      if (tipo) { cond.push("coalesce(i.tipo, case when e.tipo_itens in ('M','S') then e.tipo_itens when e.tipo_itens is null then e.tipo_objeto end) = ?"); args.push(tipo) }
       if (f.exclusivo === true) cond.push('i.beneficio = 1')
       if (iMin !== null || iMax !== null) cond.push('i.sigiloso = 0 and i.valor_unitario > 0')
       if (iMin !== null) { cond.push('i.valor_unitario >= ?'); args.push(iMin) }
@@ -649,13 +708,13 @@ export async function contarCobertura(turso) {
 
 /**
  * Tamanho da base (só a coleta chama, a cada 6 h). Guarda em coleta_estado.
- * Com o histórico (~600 mil editais), contar tudo leria a base inteira: o total sai do maior rowid (aproximado, uma
- * leitura só), e só os abertos e os com itens (índice parcial editais_com_itens) são contados.
+ * A contagem real usa o índice da chave; o maior rowid não representa o tamanho após exclusões.
+ * Só roda na coleta a cada 6 h, nunca por busca ou por visualização do painel.
  */
 export async function recontarBase(turso) {
   const agora = agoraIso()
   const [[n], [abertos], [itens]] = await turso.lote([
-    ['select max(rowid) as n from editais'],
+    ['select count(*) as n from editais'],
     ['select count(*) as n from editais where encerramento >= ?', [agora]],
     ['select count(*) as n from editais where itens_completos <> 0'],
   ])
@@ -685,6 +744,42 @@ export async function situacaoTurso(turso, { recontar = false } = {}) {
 
 /** A cota do mês está no fim: a busca responde pelo Postgres (o app já sabe voltar para lá). */
 export class CotaTurso extends Error {}
+
+/** Só agrega o dia atual pelo índice de publicação; não lê os documentos/itens individuais. */
+export async function resumoHoje(turso, agora = new Date()) {
+  const data = diaSP(agora.toISOString())
+  const de = inicioDiaSP(data), ate = fimDiaSP(data)
+  // Tipo e faixas usam as mesmas regras da busca (montarFiltros): o número do cartão bate com a lista ao clicar.
+  // Valor 0 ou ausente = não divulgado (fica fora das faixas, como no filtro de valor).
+  const tipo = "coalesce(nullif(tipo_itens, ''), tipo_objeto, '')"
+  const [[r], ufs, [abertura], estado] = await turso.lote([
+    [`select count(*) as editais, coalesce(sum(quantidade_itens),0) as itens,
+      coalesce(sum(itens_completos <> 0),0) as editaisComItens,
+      coalesce(sum(instr(${tipo}, 'S') > 0),0) as servicos,
+      coalesce(sum(instr(${tipo}, 'M') > 0),0) as materiais,
+      coalesce(sum(valor > 0 and valor <= 50000),0) as ate50mil,
+      coalesce(sum(valor > 50000 and valor <= 250000),0) as ate250mil,
+      coalesce(sum(valor > 250000),0) as acima250mil,
+      coalesce(sum(coalesce(valor, 0) = 0),0) as naoDivulgado,
+      coalesce(sum(case when valor > 0 then valor else 0 end),0) as valorTotal
+      from editais where publicacao >= ? and publicacao < ?`, [de, ate]],
+    ['select uf, count(*) as n from editais where publicacao >= ? and publicacao < ? and uf is not null and uf <> \'\' group by uf order by n desc limit 6', [de, ate]],
+    // Sessões que ainda abrem hoje (índice de encerramento, só o resto do dia).
+    ['select count(*) as n from editais where encerramento >= ? and encerramento < ? and coalesce(situacao, 1) = 1', [agora.toISOString(), ate]],
+    ["select chave, valor from coleta_estado where chave in ('ultima_coleta_em','carga_completa_em','pausado_ate')"],
+  ])
+  const e = Object.fromEntries(estado.map(l => [l.chave, l.valor]))
+  return { ...r, ufs: ufs.map(u => ({ uf: u.uf, n: u.n })), abremHoje: abertura?.n ?? 0, data, atualizadoEm: e.ultima_coleta_em ?? null, cargaCompleta: !!e.carga_completa_em, pausadoAte: e.pausado_ate ?? null }
+}
+
+/** Quantas licitações publicadas hoje citam as palavras-chave da empresa (mesma busca da tela; para em 1.000). */
+export async function perfilHoje(turso, termos, agora = new Date()) {
+  const data = diaSP(agora.toISOString())
+  const { onde, args } = montarFiltros({ busca: termos, situacao: 'publicacoes', inicio: data, fim: data })
+  const [r] = await turso.consultar(`select count(*) as n from (select 1 from editais e where ${onde.join(' and ')} limit ${LIMITE_CONTAGEM + 1})`, args)
+  const n = r?.n ?? 0
+  return { data, compativeis: Math.min(n, LIMITE_CONTAGEM), limitado: n > LIMITE_CONTAGEM }
+}
 
 const POR_FILTRO = new WeakMap(), NIVEL = new Map()
 const chaveNivel = (turso) => turso.cota ? `${turso.cota.plano}:${turso.cota.leituras}` : 'padrao'
@@ -748,7 +843,7 @@ export async function buscarTurso(turso, filtros, pagina = 1, tamanho = 20) {
   const cobertura = lerJson(e.cobertura), base0 = lerJson(e.contagem)
   return {
     data: paginaLinhas.map((l) => {
-      const c = JSON.parse(l.compra), tipo = l.tipo_itens ?? l.tipo_objeto
+      const c = lerCompra(l.compra), tipo = l.tipo_itens ?? l.tipo_objeto
       return { ...c, ...(l.modo_disputa != null ? { modoDisputaId: l.modo_disputa } : {}), ...(tipo ? { materialOuServico: tipo } : {}), ...(!l.tipo_itens && l.tipo_objeto ? { tipoEstimado: true } : {}) }
     }),
     // Órgãos vazios: o app pede a lista (acao=turso-orgaos) quando o usuário abre o seletor.

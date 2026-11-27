@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { ArrowLeft, BellRing, Building2, CalendarClock, ExternalLink, Plus, Radar as IconeRadar, RefreshCw, Settings2, Sparkles, X } from 'lucide-react'
@@ -100,12 +100,24 @@ function EditarPerfil({ empresa, perfil, aoFechar }: { empresa: EmpresaRadar; pe
 }
 
 export default function Radar() {
-  const { org, podeEditar } = useOrg()
+  const { org, podeEditar, organizacoes, trocarOrg } = useOrg()
+  const [params, setParams] = useSearchParams()
+  const orgEmail = params.get('org')
+  const empresaEmail = params.get('empresa') || ''
+  const sugestaoEmail = /^\d+$/.test(params.get('sugestao') || '') ? params.get('sugestao') : null
+  useEffect(() => {
+    if (orgEmail && orgEmail !== org?.id && organizacoes.some((o) => o.id === orgEmail)) trocarOrg(orgEmail)
+  }, [orgEmail, org?.id, organizacoes, trocarOrg])
+  const abrindoOrgEmail = !!orgEmail && orgEmail !== org?.id && organizacoes.some((o) => o.id === orgEmail)
   const qc = useQueryClient()
   const navigate = useNavigate()
   const { salvar } = useSalvar('processos', ['processo_eventos', 'prazos'])
   const [aba, setAba] = useState<'nova' | 'adicionada' | 'descartada'>('nova')
-  const [filtroEmpresa, setFiltroEmpresa] = useState('')
+  const [filtroEmpresa, setFiltroEmpresa] = useState(empresaEmail)
+  useEffect(() => { setFiltroEmpresa(empresaEmail) }, [empresaEmail])
+  function verTodas() {
+    setParams((anteriores) => { const p = new URLSearchParams(anteriores); p.delete('sugestao'); return p }, { replace: true })
+  }
   const [editando, setEditando] = useState<EmpresaRadar | null>(null)
   const [ocupado, setOcupado] = useState<string | null>(null)
 
@@ -116,18 +128,19 @@ export default function Radar() {
     const { data, error } = await supabase.from('radar_perfis').select('*').eq('org_id', org!.id); if (error) throw error; return data as PerfilRadar[]
   } })
   const [pagina, setPagina] = useState(1)
-  useEffect(() => { setPagina(1) }, [aba, filtroEmpresa])
+  useEffect(() => { setPagina(1) }, [aba, filtroEmpresa, sugestaoEmail, org?.id])
   // Só a página da tela vem do banco (20 por vez). Empresa e prazo filtram no banco, para a contagem bater.
-  const sugestoes = useQuery({ queryKey: ['radar-sugestoes', org?.id, aba, filtroEmpresa, pagina], enabled: !!org, placeholderData: (anterior) => anterior, queryFn: async () => {
-    let q = supabase.from('radar_sugestoes').select('*', { count: 'exact' }).eq('org_id', org!.id).eq('status', aba)
+  const sugestoes = useQuery({ queryKey: ['radar-sugestoes', org?.id, aba, filtroEmpresa, pagina, sugestaoEmail], enabled: !!org && !abrindoOrgEmail, placeholderData: (anterior) => anterior, queryFn: async () => {
+    let q = supabase.from('radar_sugestoes').select('*', { count: 'exact' }).eq('org_id', org!.id)
+    q = sugestaoEmail ? q.eq('id', sugestaoEmail) : q.eq('status', aba)
     if (filtroEmpresa) q = q.eq('empresa_id', filtroEmpresa)
-    if (aba === 'nova') q = q.or(`encerramento.is.null,encerramento.gt.${new Date().toISOString()}`)
+    if (aba === 'nova' && !sugestaoEmail) q = q.or(`encerramento.is.null,encerramento.gt.${new Date().toISOString()}`)
     const { data, error, count } = await (aba === 'nova' ? q.order('pontuacao', { ascending: false }).order('encerramento') : q.order('decidido_em', { ascending: false }))
       .range((pagina - 1) * POR_PAGINA, pagina * POR_PAGINA - 1)
     if (error) throw error
     return { lista: data as SugestaoRadar[], total: count ?? 0 }
   } })
-  useEffect(() => { if (filtroEmpresa && !resumo.data?.empresas.some((e) => e.empresa_id === filtroEmpresa)) setFiltroEmpresa('') }, [resumo.data, filtroEmpresa])
+  useEffect(() => { if (resumo.data && !abrindoOrgEmail && filtroEmpresa && !resumo.data.empresas.some((e) => e.empresa_id === filtroEmpresa)) setFiltroEmpresa('') }, [resumo.data, filtroEmpresa, abrindoOrgEmail])
   const lista = sugestoes.data?.lista ?? []
   const totalPaginas = Math.max(1, Math.ceil((sugestoes.data?.total ?? 0) / POR_PAGINA))
   // Decidir a última sugestão de uma página leva para a anterior.
@@ -173,7 +186,7 @@ export default function Radar() {
   }
 
   const voltar = <Link to="/app/agentes" className="mb-4 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="h-4 w-4" /> Agentes de IA</Link>
-  if (resumo.isLoading) return <Carregando />
+  if (resumo.isLoading || abrindoOrgEmail) return <Carregando />
   if (resumo.isError) return <>{voltar}<Aviso>Não foi possível abrir o Radar agora.</Aviso></>
   const r = resumo.data!
   const monitoradas = r.empresas.filter((e) => e.monitorada).length
@@ -188,7 +201,7 @@ export default function Radar() {
             <h1 className="flex items-center gap-2 text-xl font-semibold"><IconeRadar className="h-6 w-6 text-primary" />Radar <Badge cor="azul">Beta</Badge></h1>
             <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
               Todo dia às 7h o Radar cruza os editais abertos com o perfil de cada empresa e sugere os que combinam, com o motivo.
-              Você decide o que vai para o funil.
+              As oportunidades também chegam ao e-mail da sua conta. Você decide o que vai para o funil.
             </p>
           </div>
           <Badge cor="azul">Seu plano: {textoLimite(r.limite.limite, 'simultaneo')}</Badge>
@@ -246,17 +259,18 @@ export default function Radar() {
         <h2 className="text-lg font-semibold">Oportunidades encontradas</h2>
         <div className="flex flex-wrap items-center gap-2">
           {r.empresas.length > 1 && (
-            <select className="h-9 rounded-md border bg-background px-2 text-sm" value={filtroEmpresa} onChange={(e) => setFiltroEmpresa(e.target.value)} aria-label="Filtrar por empresa">
+            <select className="h-9 rounded-md border bg-background px-2 text-sm" value={filtroEmpresa} onChange={(e) => { verTodas(); setFiltroEmpresa(e.target.value) }} aria-label="Filtrar por empresa">
               <option value="">Todas as empresas</option>
               {r.empresas.map((e) => <option key={e.empresa_id} value={e.empresa_id}>{e.nome_fantasia || e.razao_social}</option>)}
             </select>
           )}
-          <Abas abas={[{ id: 'nova', rotulo: 'Para avaliar' }, { id: 'adicionada', rotulo: 'No funil' }, { id: 'descartada', rotulo: 'Descartadas' }]} atual={aba} aoTrocar={(id) => setAba(id === 'adicionada' ? 'adicionada' : id === 'descartada' ? 'descartada' : 'nova')} />
+          <Abas abas={[{ id: 'nova', rotulo: 'Para avaliar' }, { id: 'adicionada', rotulo: 'No funil' }, { id: 'descartada', rotulo: 'Descartadas' }]} atual={aba} aoTrocar={(id) => { verTodas(); setAba(id === 'adicionada' ? 'adicionada' : id === 'descartada' ? 'descartada' : 'nova') }} />
         </div>
       </div>
+      {sugestaoEmail && <div className="mb-3 flex items-center justify-between gap-2 text-sm"><span>Oportunidade acessada pelo e-mail.</span><Button tamanho="sm" variante="contorno" onClick={verTodas}>Ver todas as oportunidades</Button></div>}
       {sugestoes.isLoading ? <Carregando /> : !lista.length ? (
         <Card className="p-5 text-sm text-muted-foreground">
-          {aba === 'nova' ? (monitoradas ? 'Nenhuma oportunidade para avaliar agora. O Radar procura todo dia às 7h; use "Buscar agora" no perfil da empresa para procurar já.' : 'Cadastre as palavras-chave de uma empresa para o Radar começar a procurar.')
+          {sugestaoEmail ? 'Esta oportunidade não está disponível nesta conta. Use “Ver todas as oportunidades” para acessar o Radar.' : aba === 'nova' ? (monitoradas ? 'Nenhuma oportunidade para avaliar agora. O Radar procura todo dia às 7h; use "Buscar agora" no perfil da empresa para procurar já.' : 'Cadastre as palavras-chave de uma empresa para o Radar começar a procurar.')
             : aba === 'adicionada' ? 'Nenhuma oportunidade levada ao funil ainda.' : 'Nenhuma oportunidade descartada.'}
         </Card>
       ) : (

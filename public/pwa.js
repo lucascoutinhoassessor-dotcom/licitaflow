@@ -31,8 +31,16 @@
   if (instalado) document.documentElement.classList.add('lf-instalado');
   // O Chrome avisa que dá para instalar (só acontece quando o app ainda não está instalado). Guardamos o pedido
   // desde já para o botão "Instalar app" aparecer na hora e abrir a instalação direto (InstalacaoProvider).
-  window.addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); window.__lfInstalar = e; });
-  window.addEventListener('appinstalled', function () { window.__lfInstalar = null; });
+  function lembrarInstalacao(valor) {
+    try {
+      var chave = 'lf-app-instalado-' + (rotaMaster ? 'master' : 'usuario');
+      if (valor) localStorage.setItem(chave, '1');
+      else localStorage.removeItem(chave);
+    } catch (_) { /* armazenamento indisponível */ }
+  }
+  if (instalado) lembrarInstalacao(true);
+  window.addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); lembrarInstalacao(false); window.__lfInstalar = e; });
+  window.addEventListener('appinstalled', function () { lembrarInstalacao(true); window.__lfInstalar = null; });
   var head = document.head;
   function link(rel, href) {
     var el = document.createElement('link');

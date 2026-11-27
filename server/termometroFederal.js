@@ -122,30 +122,58 @@ const hojeSp = (agora) => new Date(agora - 3 * 3600_000).toISOString().slice(0, 
 const diasEntre = (a, b) => Math.round((Date.UTC(+b.slice(0, 4), +b.slice(4, 6) - 1, +b.slice(6, 8)) - Date.UTC(+a.slice(0, 4), +a.slice(4, 6) - 1, +a.slice(6, 8))) / 864e5)
 
 /**
+ * Divide o dia em lotes pequenos para o banco (a máquina Nano não aguenta 1,3 MB numa chamada só: em 27/11/2026 as
+ * rodadas estouraram o tempo, ficaram rodando no banco e ajudaram a derrubá-lo). Tudo de um empenho vai no mesmo lote,
+ * para o casamento FIFO não depender da ordem dos lotes. As UGs vão no primeiro. Sempre há ao menos um lote.
+ */
+export function lotes({ liquidacoes, pagamentos, ugs }, maximo = 2500) {
+  const porEmpenho = new Map()
+  const de = (e) => { let g = porEmpenho.get(e); if (!g) porEmpenho.set(e, (g = { liq: [], pag: [] })); return g }
+  for (const l of liquidacoes) de(l[0]).liq.push(l)
+  for (const p of pagamentos) de(p[0]).pag.push(p)
+  const saida = [{ liq: [], pag: [], ugs }]
+  for (const g of porEmpenho.values()) {
+    let atual = saida.at(-1)
+    if (atual.liq.length + atual.pag.length > 0 && atual.liq.length + atual.pag.length + g.liq.length + g.pag.length > maximo) saida.push((atual = { liq: [], pag: [], ugs: [] }))
+    atual.liq.push(...g.liq); atual.pag.push(...g.pag)
+  }
+  return saida
+}
+
+/**
  * Rodada: processa, em ordem, os dias publicados depois do último já lido (recursos.federal), até alcançar o
- * Portal ou estourar o tempo. Sem cursor, começa em `inicio` (padrão: 120 dias atrás).
+ * Portal, ler `maxDias` dias ou estourar o tempo. Sem cursor, começa em `inicio` (padrão: 120 dias atrás).
+ * Cada dia vai em lotes; um dia interrompido no meio continua do lote seguinte (recursos.federal_parte = "AAAAMMDD:k").
  * Um dia que ainda não saiu (o Portal responde 403/404) encerra a rodada; com mais de 10 dias e o dia seguinte publicado, é pulado.
  */
-export async function atualizarFederal({ token, rpc, fetcher = fetch, agora = Date.now(), limiteMs = 230_000, inicio }) {
+export async function atualizarFederal({ token, rpc, fetcher = fetch, agora = Date.now(), limiteMs = 200_000, maxDias = 3, inicio }) {
   const t0 = Date.now()
   const estado = await rpc('termometro_estado', { p_token: token })
   if (!estado?.ativo) return { ativo: false }
   const hoje = hojeSp(agora)
   let dia = estado.recursos?.federal ? proximoDia(estado.recursos.federal) : (inicio ?? hojeSp(agora - 120 * 864e5))
+  const [diaParte, parteFeita] = String(estado.recursos?.federal_parte ?? '').split(':')
   const feitos = []
-  while (dia < hoje && Date.now() - t0 < limiteMs) {
+  while (dia < hoje && feitos.length < maxDias && Date.now() - t0 < limiteMs) {
     const r = await fetcher(URL_DIA(dia), { headers: { 'User-Agent': 'Mozilla/5.0 (LicitaForce)' }, redirect: 'follow', signal: AbortSignal.timeout(90_000) })
     if (!r.ok) {
       // Pula só se o dia seguinte já saiu (senão o Portal está fora do ar e é melhor esperar).
       const seguinte = diasEntre(dia, hoje) > 10 && (await fetcher(URL_DIA(proximoDia(dia)), { method: 'HEAD', redirect: 'follow', signal: AbortSignal.timeout(30_000) }).catch(() => null))?.ok
       if (!seguinte) { feitos.push({ dia, situacao: `ainda não publicado (${r.status})` }); break }
-      await rpc('termometro_federal_dia', { p_token: token, p_dia: dia, p_liq: [], p_pag: [], p_ugs: [] })
+      await rpc('termometro_federal_dia', { p_token: token, p_dia: dia, p_liq: [], p_pag: [], p_ugs: [], p_parte: 0, p_partes: 1 })
       feitos.push({ dia, situacao: `pulado (${r.status})` }); dia = proximoDia(dia); continue
     }
     let d
     try { d = lerDia(Buffer.from(await r.arrayBuffer())) } catch (e) { feitos.push({ dia, situacao: `arquivo ilegível: ${e?.message ?? 'erro'}` }); break }
-    const res = await rpc('termometro_federal_dia', { p_token: token, p_dia: dia, p_liq: d.liquidacoes, p_pag: d.pagamentos, p_ugs: d.ugs })
-    feitos.push({ dia, liquidacoes: d.liquidacoes.length, pagamentos: d.pagamentos.length, ...res })
+    const partes = lotes(d)
+    let casados = 0, parte = diaParte === dia ? Number(parteFeita) || 0 : 0
+    for (; parte < partes.length && Date.now() - t0 < limiteMs; parte++) {
+      const p = partes[parte]
+      const res = await rpc('termometro_federal_dia', { p_token: token, p_dia: dia, p_liq: p.liq, p_pag: p.pag, p_ugs: p.ugs, p_parte: parte, p_partes: partes.length })
+      casados += res?.casados ?? 0
+    }
+    feitos.push({ dia, liquidacoes: d.liquidacoes.length, pagamentos: d.pagamentos.length, lotes: `${parte}/${partes.length}`, casados })
+    if (parte < partes.length) break // tempo acabou no meio do dia: a próxima rodada continua deste lote
     dia = proximoDia(dia)
   }
   return { feitos }

@@ -44,10 +44,10 @@ export function EmailConfig() {
   const configurado = !!(s?.ativo && s.tem_senha)
   return <Card className="space-y-4 p-5">
     <div className="flex flex-wrap items-center gap-2">
-      <Mail className="h-5 w-5 text-primary" /><h2 className="flex-1 font-semibold">E-mail (acesso e senha dos clientes)</h2>
+      <Mail className="h-5 w-5 text-primary" /><h2 className="flex-1 font-semibold">E-mail (tickets, acesso e senha)</h2>
       {s && <Badge cor={configurado ? 'verde' : 'amarelo'}>{configurado ? 'Configurado' : 'Não configurado'}</Badge>}
     </div>
-    <p className="text-sm text-muted-foreground">Usado para confirmar o cadastro, mandar o link de “Esqueci minha senha” e avisar que o acesso foi liberado quando o cliente paga. Os e-mails saem com o nome e o logo do LicitaForce. Com Gmail é grátis (até ~500 e-mails por dia).</p>
+    <p className="text-sm text-muted-foreground">Usado para enviar tickets de suporte, solicitações, respostas, atualizações de atendimento, confirmação de cadastro, recuperação de senha e liberação de conta. A caixa configurada também recebe os tickets; o cliente recebe a confirmação e as atualizações. Os e-mails saem com o nome e o logo do LicitaForce. Com Gmail é grátis (até ~500 e-mails por dia).</p>
     {q.isError && <Aviso>{mensagemErro(q.error)}</Aviso>}
     {q.isLoading && <Carregando />}
     {s && <>
