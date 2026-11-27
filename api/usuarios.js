@@ -9,13 +9,24 @@ const EMAIL=/^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const DATA=/^\d{4}-\d{2}-\d{2}$/
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 // Ficha do cliente no master: editar login, mandar redefinição de senha e mandar a liberação da conta.
-const ACOES_MASTER=['editar_usuario','enviar_redefinicao','enviar_liberacao']
+const ACOES_MASTER=['editar_usuario','enviar_redefinicao','enviar_liberacao','excluir_usuario']
 
 async function acaoMaster(body,eu,chamar,env,res) {
   const id=String(body.usuario ?? '')
   if(!UUID.test(id)) return res.status(400).json({error:'Usuário inválido'})
   const usuario=await chamar(`/auth/v1/admin/users/${id}`)
   const auditar=(acao,dados)=>chamar('/rest/v1/admin_audit',{method:'POST',body:JSON.stringify({ator:eu.id,acao,alvo:'auth.users',dados:{usuario:id,...dados}})}).catch(()=>{})
+
+  // Exclusão do login, seja cliente ou master. Só não deixa excluir a si mesmo (perderia o acesso no meio da sessão).
+  // As tabelas ligadas ao usuário usam "on delete cascade" (vínculos, permissão master, push) ou "set null" (autoria);
+  // as organizações e os dados delas continuam no sistema.
+  if(body.acao==='excluir_usuario') {
+    if(id===eu.id) return res.status(400).json({error:'Você não pode excluir a sua própria conta por aqui.'})
+    const [master]=await chamar(`/rest/v1/platform_admins?select=user_id&user_id=eq.${id}`).catch(()=>[])
+    await auditar('usuario.excluir',{email:usuario.email,nome:usuario.user_metadata?.nome ?? null,master:!!master})
+    await chamar(`/auth/v1/admin/users/${id}`,{method:'DELETE'})
+    return res.json({ok:true})
+  }
 
   if(body.acao==='editar_usuario') {
     const mudar={}

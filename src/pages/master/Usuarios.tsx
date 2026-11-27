@@ -1,7 +1,8 @@
 import { Link } from 'react-router-dom'
 import { useMemo, useState, type FormEvent } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Copy, Search, ShieldCheck, UserPlus } from 'lucide-react'
+import { Copy, Search, ShieldCheck, Trash2, UserPlus } from 'lucide-react'
+import { acaoUsuarioMaster } from '@/components/EdicaoClienteMaster'
 import { toast } from 'sonner'
 import { supabase, mensagemErro } from '@/lib/supabase'
 import { formatarData, formatarDataHora } from '@/lib/format'
@@ -183,6 +184,19 @@ export default function Usuarios() {
     qc.invalidateQueries({ queryKey: ['admin-usuarios'] })
   }
 
+  async function excluir(u: UsuarioAdmin) {
+    const tipo = u.is_admin ? 'o usuário MASTER' : 'o usuário'
+    if (!confirm(`Excluir ${tipo} ${u.email}? O login é apagado de vez e não pode ser desfeito. As organizações e os dados delas continuam no sistema.`)) return
+    if (u.is_admin && prompt(`Para confirmar a exclusão de um master, digite o e-mail dele:`)?.trim().toLowerCase() !== u.email.toLowerCase()) return toast.error('E-mail não confere. Nada foi excluído.')
+    try {
+      await acaoUsuarioMaster({ acao: 'excluir_usuario', usuario: u.id })
+      toast.success('Usuário excluído e registrado na auditoria.')
+      qc.invalidateQueries({ queryKey: ['admin-usuarios'] })
+    } catch (e) {
+      toast.error((e as Error).message)
+    }
+  }
+
   return (
     <>
       <CabecalhoPagina
@@ -224,9 +238,14 @@ export default function Usuarios() {
               <div>Último acesso: {formatarDataHora(u.last_sign_in_at)}</div>
             </div>
             {u.id !== user?.id && (
-              <Button tamanho="sm" variante="contorno" onClick={() => alternarAdmin(u)}>
-                {u.is_admin ? 'Remover master' : 'Tornar master'}
-              </Button>
+              <div className="flex gap-2">
+                <Button tamanho="sm" variante="contorno" onClick={() => alternarAdmin(u)}>
+                  {u.is_admin ? 'Remover master' : 'Tornar master'}
+                </Button>
+                <Button tamanho="sm" variante="perigo" onClick={() => excluir(u)}>
+                  <Trash2 className="mr-1 h-4 w-4" /> Excluir
+                </Button>
+              </div>
             )}
           </div>
         ))}
