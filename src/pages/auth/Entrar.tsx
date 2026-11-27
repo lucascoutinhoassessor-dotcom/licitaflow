@@ -4,6 +4,9 @@ import { supabase, mensagemErro } from '@/lib/supabase'
 import { Aviso, Button, Campo, Input, InputSenha } from '@/components/ui'
 import { AuthShell } from './AuthShell'
 import { masterSeparado } from '@/lib/pwa'
+import { useConteudoSite } from '@/hooks/useConteudoSite'
+import { useDiasTeste } from '@/hooks/useDiasTeste'
+import { comDias, linkSeguro } from '@/lib/conteudoSite'
 
 export default function Entrar() {
   const [email, setEmail] = useState('')
@@ -14,6 +17,8 @@ export default function Entrar() {
   const [params] = useSearchParams()
   const voltar = params.get('voltar')
   const destino = voltar && voltar.startsWith('/') && !voltar.startsWith('//') ? voltar : '/app'
+  const { conteudo, carregando } = useConteudoSite()
+  const dias = useDiasTeste()
 
   async function enviar(e: FormEvent) {
     e.preventDefault()
@@ -32,19 +37,25 @@ export default function Entrar() {
     navigate(admin === true && !voltar ? '/master' : destino, { replace: true })
   }
 
+  // Textos editados no master (Landing page → Geral → Tela de login). O convite só aparece depois de carregar,
+  // para não piscar uma oferta antiga; texto do link vazio esconde o convite.
+  const l = conteudo.login
+  const textoLink = comDias(l.cadastro.texto, dias).trim()
+  const link = linkSeguro(l.cadastro.link) || '/cadastro'
+  const classeLink = 'font-medium text-primary hover:underline'
+  const convite = carregando || !textoLink ? undefined : (
+    <>
+      {l.pergunta && <>{comDias(l.pergunta, dias)} </>}
+      {link.startsWith('/') ? (
+        <Link to={link === '/cadastro' && voltar ? `/cadastro?voltar=${encodeURIComponent(voltar)}` : link} className={classeLink}>{textoLink}</Link>
+      ) : (
+        <a href={link} className={classeLink} {...(/^https?:/i.test(link) ? { target: '_blank', rel: 'noopener noreferrer' } : {})}>{textoLink}</a>
+      )}
+    </>
+  )
+
   return (
-    <AuthShell
-      titulo="Entrar no LicitaForce"
-      subtitulo="Acesse sua central de licitações."
-      rodape={
-        <>
-          Ainda não tem conta?{' '}
-          <Link to={`/cadastro${voltar ? `?voltar=${encodeURIComponent(voltar)}` : ''}`} className="font-medium text-primary hover:underline">
-            Criar conta grátis
-          </Link>
-        </>
-      }
-    >
+    <AuthShell titulo={comDias(l.titulo, dias) || 'Entrar'} subtitulo={comDias(l.subtitulo, dias) || undefined} rodape={convite}>
       <form onSubmit={enviar} className="space-y-4">
         {erro && <Aviso>{erro}</Aviso>}
         <Campo rotulo="E-mail" htmlFor="email">

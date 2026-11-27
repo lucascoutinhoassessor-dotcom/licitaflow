@@ -135,6 +135,18 @@ function Geral({ c, setC }: { c: ConteudoSite; setC: (f: (c: ConteudoSite) => Co
         <Marcar rotulo="Mostrar convite para instalar o app" valor={c.rodape.instalar_app} mudar={(instalar_app) => em('rodape', { instalar_app })} />
       </Card>
       <Card className="space-y-3 p-4">
+        <h3 className="font-semibold">Tela de login</h3>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <Texto rotulo="Título" valor={c.login.titulo} mudar={(titulo) => em('login', { titulo })} />
+          <Texto rotulo="Frase abaixo do título" valor={c.login.subtitulo} mudar={(subtitulo) => em('login', { subtitulo })} ajuda="Vazio = sem frase" />
+          <Texto rotulo="Pergunta antes do link" valor={c.login.pergunta} mudar={(pergunta) => em('login', { pergunta })} ajuda="Ex.: Ainda não tem conta?" />
+        </div>
+        <Botao rotulo="Link para criar conta" valor={c.login.cadastro} mudar={(cadastro) => em('login', { cadastro })} />
+        <p className="text-xs text-muted-foreground">
+          Deixe o texto do link vazio para esconder o convite. Use {'{dias}'} para mostrar o prazo do teste grátis (ex.: "Teste {'{dias}'} dias grátis"). O texto não libera acesso: quem se cadastra só entra com o teste grátis ligado em Planos, com dias concedidos na ficha do cliente ou depois de pagar.
+        </p>
+      </Card>
+      <Card className="space-y-3 p-4">
         <h3 className="font-semibold">Google e aba do navegador</h3>
         <Texto rotulo="Título da aba" valor={c.seo.titulo_aba} mudar={(titulo_aba) => em('seo', { titulo_aba })} />
         <Texto rotulo="Descrição para buscadores" valor={c.seo.descricao} longo mudar={(descricao) => em('seo', { descricao })} />

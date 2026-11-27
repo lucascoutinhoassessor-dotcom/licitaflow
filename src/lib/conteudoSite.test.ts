@@ -58,3 +58,18 @@ describe('oferta desativada na landing', () => {
     expect(comDias('Conheça os planos',0)).toBe('Conheça os planos')
   })
 })
+
+describe('tela de login', () => {
+  it('mantém os textos atuais em conteúdo publicado antes do campo existir', () => {
+    const antigo = { ...conteudoPadrao(), login: undefined }
+    expect(lerConteudo(antigo).login).toEqual(conteudoPadrao().login)
+  })
+  it('lê os textos do master, inclusive link vazio para esconder o convite', () => {
+    const c = lerConteudo({ ...conteudoPadrao(), login: { titulo: 'Bem-vindo', subtitulo: '', pergunta: 'Novo aqui?', cadastro: { texto: '', link: '/cadastro' } } })
+    expect(c.login).toEqual({ titulo: 'Bem-vindo', subtitulo: '', pergunta: 'Novo aqui?', cadastro: { texto: '', link: '/cadastro' } })
+  })
+  it('recusa link perigoso no convite', () => {
+    const c = conteudoPadrao(); c.login.cadastro.link = 'javascript:alert(1)'
+    expect(validarConteudo(c)).toMatch(/login/i)
+  })
+})

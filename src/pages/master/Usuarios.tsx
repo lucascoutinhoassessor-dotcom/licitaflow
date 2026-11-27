@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Copy, Search, ShieldCheck, Trash2, UserPlus } from 'lucide-react'
 import { acaoUsuarioMaster } from '@/components/EdicaoClienteMaster'
 import { toast } from 'sonner'
-import { supabase, mensagemErro } from '@/lib/supabase'
+import { supabase, mensagemErro, fetchComSessao } from '@/lib/supabase'
 import { formatarData, formatarDataHora } from '@/lib/format'
 import { useAuth } from '@/providers/AuthProvider'
 import { Aviso, Badge, Button, CabecalhoPagina, Campo, Card, Carregando, Input, Modal, Select } from '@/components/ui'
@@ -52,11 +52,9 @@ function NovoUsuario({ aoFechar }: { aoFechar: () => void }) {
     e.preventDefault()
     setSalvando(true)
     try {
-      const { data } = await supabase.auth.getSession()
-      if (!data.session) throw new Error('Entre na sua conta novamente.')
-      const r = await fetch('/api/usuarios', {
+      const r = await fetchComSessao('/api/usuarios', {
         method: 'POST',
-        headers: { Authorization: `Bearer ${data.session.access_token}`, 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ nome, email, senha, org: criarOrg ? { nome: orgNome, tipo, plano, trial_ate: plano === 'trial' ? trialAte : null } : null }),
       })
       if (!r.headers.get('content-type')?.includes('application/json')) throw new Error('API indisponível nesta publicação (só funciona na Vercel).')
@@ -186,12 +184,19 @@ export default function Usuarios() {
 
   async function excluir(u: UsuarioAdmin) {
     const tipo = u.is_admin ? 'o usuário MASTER' : 'o usuário'
-    if (!confirm(`Excluir ${tipo} ${u.email}? O login é apagado de vez e não pode ser desfeito. As organizações e os dados delas continuam no sistema.`)) return
+    // Organização sem mais ninguém é excluída junto pelo banco (ou suspensa, se tiver histórico de pagamento).
+    const membros = new Map<string, number>()
+    for (const x of q.data ?? []) for (const o of x.organizacoes) membros.set(o.id, (membros.get(o.id) ?? 0) + 1)
+    const sozinho = u.organizacoes.filter((o) => (membros.get(o.id) ?? 0) <= 1).map((o) => o.nome)
+    const orgs = sozinho.length
+      ? `\n\nEle é o único usuário de: ${sozinho.join(', ')}. Essa(s) organização(ões) e os dados delas também serão excluídos (as que tiverem histórico de pagamento ficam suspensas, para preservar o financeiro).`
+      : '\n\nAs organizações dele têm outros usuários e continuam no sistema.'
+    if (!confirm(`Excluir ${tipo} ${u.email}? O login é apagado de vez e não pode ser desfeito.${orgs}`)) return
     if (u.is_admin && prompt(`Para confirmar a exclusão de um master, digite o e-mail dele:`)?.trim().toLowerCase() !== u.email.toLowerCase()) return toast.error('E-mail não confere. Nada foi excluído.')
     try {
       await acaoUsuarioMaster({ acao: 'excluir_usuario', usuario: u.id })
       toast.success('Usuário excluído e registrado na auditoria.')
-      qc.invalidateQueries({ queryKey: ['admin-usuarios'] })
+      for (const k of ['admin-usuarios', 'admin-orgs', 'admin-resumo', 'admin-financeiro']) qc.invalidateQueries({ queryKey: [k] })
     } catch (e) {
       toast.error((e as Error).message)
     }

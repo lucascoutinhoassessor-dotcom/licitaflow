@@ -32,6 +32,8 @@ export type ConteudoSite = {
   menu: { links: LinkSite[]; entrar: string; cadastro: LinkSite; painel: string }
   secoes: SecaoSite[]
   rodape: { links: LinkSite[]; contato: string; copyright: string; instalar_app: boolean }
+  /** Tela de login: títulos e o convite para criar conta ({dias} vira o prazo do teste). Texto do link vazio = esconde o convite. */
+  login: { titulo: string; subtitulo: string; pergunta: string; cadastro: LinkSite }
 }
 
 export const TIPOS_SECAO: { tipo: TipoSecao; nome: string; descricao: string }[] = [
@@ -190,6 +192,10 @@ export function conteudoPadrao(): ConteudoSite {
       links: [{ texto: 'Produto', link: '#produto' }, { texto: 'Planos', link: '#planos' }, { texto: 'Segurança', link: '#seguranca' }, { texto: 'Entrar', link: '/entrar' }],
       contato: '', copyright: 'LicitaForce', instalar_app: true,
     },
+    login: {
+      titulo: 'Entrar no LicitaForce', subtitulo: 'Acesse sua central de licitações.',
+      pergunta: 'Ainda não tem conta?', cadastro: { texto: 'Criar conta grátis', link: '/cadastro' },
+    },
   }
 }
 
@@ -235,7 +241,7 @@ export function lerConteudo(dados: unknown): ConteudoSite {
   const o = obj(dados)
   if (o.versao_schema !== 2) return doFormato1(o)
   const p = conteudoPadrao()
-  const seo = obj(o.seo), tema = obj(o.tema), marca = obj(o.marca), menu = obj(o.menu), rodape = obj(o.rodape)
+  const seo = obj(o.seo), tema = obj(o.tema), marca = obj(o.marca), menu = obj(o.menu), rodape = obj(o.rodape), login = obj(o.login)
   return {
     versao_schema: 2,
     seo: { titulo_aba: txt(seo.titulo_aba, p.seo.titulo_aba), descricao: txt(seo.descricao) },
@@ -249,6 +255,10 @@ export function lerConteudo(dados: unknown): ConteudoSite {
     rodape: {
       links: lista(rodape.links, (x) => lerLink(x), p.rodape.links), contato: txt(rodape.contato),
       copyright: txt(rodape.copyright, p.rodape.copyright), instalar_app: bool(rodape.instalar_app, true),
+    },
+    login: {
+      titulo: txt(login.titulo, p.login.titulo), subtitulo: txt(login.subtitulo, p.login.subtitulo),
+      pergunta: txt(login.pergunta, p.login.pergunta), cadastro: lerLink(login.cadastro, p.login.cadastro),
     },
   }
 }
@@ -272,6 +282,7 @@ export function validarConteudo(c: ConteudoSite): string | null {
   const links: [string, string][] = [
     ...c.menu.links.map((l) => [`Menu · ${l.texto || 'link'}`, l.link] as [string, string]),
     ['Menu · botão de cadastro', c.menu.cadastro.link],
+    ['Tela de login · link de cadastro', c.login.cadastro.link],
     ...c.rodape.links.map((l) => [`Rodapé · ${l.texto || 'link'}`, l.link] as [string, string]),
   ]
   c.secoes.forEach((s, i) => {

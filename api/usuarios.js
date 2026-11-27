@@ -19,7 +19,7 @@ async function acaoMaster(body,eu,chamar,env,res) {
 
   // Exclusão do login, seja cliente ou master. Só não deixa excluir a si mesmo (perderia o acesso no meio da sessão).
   // As tabelas ligadas ao usuário usam "on delete cascade" (vínculos, permissão master, push) ou "set null" (autoria);
-  // as organizações e os dados delas continuam no sistema.
+  // a organização que fica sem nenhum usuário é excluída pelo banco (trigger org_sem_membros) ou suspensa se tiver financeiro.
   if(body.acao==='excluir_usuario') {
     if(id===eu.id) return res.status(400).json({error:'Você não pode excluir a sua própria conta por aqui.'})
     const [master]=await chamar(`/rest/v1/platform_admins?select=user_id&user_id=eq.${id}`).catch(()=>[])
@@ -113,7 +113,10 @@ export default async function handler(req,res) {
 
   let criado=null, orgId=null
   try {
-    const eu=await chamar('/auth/v1/user',{},false)
+    // Token de uma sessão já encerrada no servidor: 401 para o app renovar o login e tentar de novo.
+    let eu
+    try { eu=await chamar('/auth/v1/user',{},false) }
+    catch(e) { if(e.status===401 || e.status===403) return res.status(401).json({error:'Sua sessão expirou. Entre novamente.'}); throw e }
     const admin=await chamar('/rest/v1/rpc/is_platform_admin',{method:'POST',body:'{}'},false)
     if(admin!==true) return res.status(403).json({error:'Acesso restrito ao master'})
 

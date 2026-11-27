@@ -1,9 +1,8 @@
 import { InstalarApp } from '@/components/InstalarApp'
 import { useEffect, useState, type CSSProperties, type MouseEvent, type ReactNode } from 'react'
 import { useCatalogoPlanos } from '@/hooks/useCatalogoPlanos'
-import { useQuery } from '@tanstack/react-query'
-import { supabase } from '@/lib/supabase'
-import { comDias, imagemSegura, lerConteudo, linkSeguro, type ConteudoSite, type SecaoSite } from '@/lib/conteudoSite'
+import { useConteudoSite } from '@/hooks/useConteudoSite'
+import { comDias, imagemSegura, linkSeguro, type ConteudoSite, type SecaoSite } from '@/lib/conteudoSite'
 import { Link } from 'react-router-dom'
 import { AnimatePresence, motion, useScroll, useSpring } from 'framer-motion'
 import { ArrowRight, Check, ChevronDown, Menu, X } from 'lucide-react'
@@ -577,15 +576,7 @@ export function PaginaLanding({ conteudo: c, previa, secaoAtiva }: { conteudo: C
 }
 
 export default function Landing() {
-  const conteudoQ = useQuery({
-    queryKey: ['site-publico'], staleTime: 60_000, retry: 1,
-    queryFn: async () => {
-      const { data, error } = await supabase.rpc('site_publico')
-      if (error) throw error
-      return data
-    },
-  })
-  const conteudo = lerConteudo(conteudoQ.data)
+  const { conteudo, carregando } = useConteudoSite()
   const tituloAba = conteudo.seo.titulo_aba
   const descricao = conteudo.seo.descricao
 
@@ -611,6 +602,6 @@ export default function Landing() {
   }, [tituloAba, descricao])
 
   // Enquanto o conteúdo publicado carrega, não mostra a versão padrão (evita "piscar" textos antigos).
-  if (conteudoQ.isLoading) return <div className="min-h-screen bg-slate-950" />
+  if (carregando) return <div className="min-h-screen bg-slate-950" />
   return <PaginaLanding conteudo={conteudo} />
 }

@@ -2,13 +2,12 @@ import { useState, type FormEvent } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { KeyRound, Mail, Send } from 'lucide-react'
-import { supabase, mensagemErro } from '@/lib/supabase'
+import { supabase, mensagemErro, fetchComSessao } from '@/lib/supabase'
 import { Button, Campo, Input, Select } from '@/components/ui'
 
 /** Chama as ações do master em /api/usuarios (editar login, redefinição de senha, liberação da conta). */
 export async function acaoUsuarioMaster(dados: Record<string, unknown>) {
-  const { data } = await supabase.auth.getSession()
-  const r = await fetch('/api/usuarios', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${data.session?.access_token ?? ''}` }, body: JSON.stringify(dados) })
+  const r = await fetchComSessao('/api/usuarios', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(dados) })
   const j = await r.json().catch(() => ({}))
   if (!r.ok) throw new Error(j.error || 'Não foi possível concluir agora')
   return j as { ok: true; para?: string }
