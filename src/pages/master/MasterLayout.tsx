@@ -1,5 +1,7 @@
-import { useEffect } from 'react'
-import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { Suspense, useEffect, type ReactNode } from 'react'
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { LimiteDeErro } from '@/components/LimiteDeErro'
+import { Carregando } from '@/components/ui'
 import { Settings, Wallet, Plug, CreditCard, Headphones, Megaphone, BarChart3, Activity, FileText, History, Building2, LayoutDashboard, LogOut, ShieldCheck, Users, Repeat, Receipt, Trophy, ExternalLink, Download, ToggleRight, Bot, Ticket, ScrollText, Volume2 } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
@@ -108,8 +110,14 @@ export default function MasterLayout() {
       </header>
       <main id="conteudo-principal" className="min-h-0 min-w-0 flex-1 overflow-y-auto">
         <AvisoAppAntigo master />
-        <div className="painel-conteudo mx-auto w-full min-w-0 max-w-7xl p-4 lg:p-8"><Outlet /></div>
+        <div className="painel-conteudo mx-auto w-full min-w-0 max-w-7xl p-4 lg:p-8"><LimiteDeErroMaster><Outlet /></LimiteDeErroMaster></div>
       </main>
     </div>
   )
+}
+
+/** Erro numa página do master mostra aviso no lugar dela, sem apagar o menu; trocar de página limpa o erro. */
+function LimiteDeErroMaster({ children }: { children: ReactNode }) {
+  const { pathname } = useLocation()
+  return <LimiteDeErro chave={pathname}><Suspense fallback={<Carregando />}>{children}</Suspense></LimiteDeErro>
 }

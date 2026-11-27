@@ -8,6 +8,7 @@ import { InstalacaoProvider } from './providers/InstalacaoProvider'
 import './index.css'
 import { tocarPing } from './lib/ping'
 import { iniciarRegistroUso } from './lib/registroUso'
+import { recarregarParaVersaoNova } from './components/LimiteDeErro'
 
 // Propostas do botão favorito do Compras.gov.br chegam depois do # do endereço. Guarda antes do login,
 // que pode trocar de página e perder o #; a página /app/importar-propostas lê daqui.
@@ -18,6 +19,12 @@ if (window.location.hash.startsWith('#lf-propostas=')) {
 
 // Registro de uso, erros e lentidão por usuário (master → Logs → Uso dos clientes).
 iniciarRegistroUso()
+
+// Deploy novo apaga os arquivos da versão antiga: quem estava com o app aberto pede um arquivo que não
+// existe mais e a página não abre. Recarrega uma vez para pegar a versão nova (src/components/LimiteDeErro.tsx).
+window.addEventListener('vite:preloadError', (e) => {
+  if (navigator.onLine && recarregarParaVersaoNova()) e.preventDefault()
+})
 
 const queryClient = new QueryClient({
   defaultOptions: {

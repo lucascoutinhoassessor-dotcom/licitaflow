@@ -8,6 +8,7 @@ import { useEhAdmin } from '@/hooks/useAdmin'
 import { Carregando } from '@/components/ui'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { GuardaModulo } from '@/components/GuardaModulo'
+import { LimiteDeErro } from '@/components/LimiteDeErro'
 import { ConfiguracaoPendente } from '@/pages/ConfiguracaoPendente'
 import { ContaSuspensa } from '@/pages/ContaSuspensa'
 import { AcessoNegadoMaster } from '@/pages/master/AcessoNegado'
@@ -92,11 +93,19 @@ function ExigeOrganizacao() {
   if (!org || empresas.length === 0) return <Navigate to="/onboarding" replace />
   return (
     <AppLayout>
-      <Suspense fallback={<Carregando />}>
-        <GuardaModulo><Outlet /></GuardaModulo>
-      </Suspense>
+      <LimiteDeErroDaRota>
+        <Suspense fallback={<Carregando />}>
+          <GuardaModulo><Outlet /></GuardaModulo>
+        </Suspense>
+      </LimiteDeErroDaRota>
     </AppLayout>
   )
+}
+
+/** Erro numa página não apaga o app inteiro; trocar de página limpa o erro. */
+function LimiteDeErroDaRota({ children }: { children: ReactNode }) {
+  const { pathname } = useLocation()
+  return <LimiteDeErro chave={pathname}>{children}</LimiteDeErro>
 }
 
 /** Guarda do console master: independente do app do cliente (não exige organização). */
@@ -137,6 +146,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <TrocaDeEndereco />
+      <LimiteDeErroDaRota>
       <Suspense fallback={<Carregando telaCheia />}>
         <Routes>
           <Route path="/" element={<Landing />} />
@@ -214,6 +224,7 @@ export default function App() {
           <Route path="*" element={<NaoEncontrada />} />
         </Routes>
       </Suspense>
+      </LimiteDeErroDaRota>
     </BrowserRouter>
   )
 }
