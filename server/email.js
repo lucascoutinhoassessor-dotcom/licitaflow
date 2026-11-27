@@ -113,3 +113,11 @@ ${nota(`Esqueceu a senha depois? <a href="${URL_SITE}/recuperar-senha" style="co
 export function emailTeste() {
   return { assunto: 'Teste de e-mail do LicitaForce', html: layout('Envio funcionando', '<p>Este é um e-mail de teste enviado pelo Painel Master. Se chegou com o nome e o logo do LicitaForce, está tudo certo.</p>'), texto: 'Este é um e-mail de teste enviado pelo Painel Master.' }
 }
+
+/** Lembrete de pendência ou aviso do LicitaForce para quem não recebe push. */
+export function emailNotificacao({ nome, titulo, texto, link }) {
+  const url = URL_SITE + (String(link || '/app').startsWith('/') ? link || '/app' : '/app')
+  const paragrafos = String(texto ?? '').split('\n').filter(Boolean).map((l) => `<p style="margin:0 0 8px">${esc(l)}</p>`).join('')
+  const html = layout(titulo, `<p>${esc(ola(nome))}</p>${paragrafos}${botao(url, 'Abrir o LicitaForce')}${nota('Para não receber estes e-mails, desmarque “Lembretes de pendências” ou “E-mail e WhatsApp” em Configurações, no LicitaForce.')}`)
+  return { assunto: `${titulo} · LicitaForce`, html, texto: `${ola(nome)}\n\n${texto}\n\nAbrir: ${url}` }
+}

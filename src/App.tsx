@@ -76,6 +76,7 @@ const MasterConsumoIA = lazy(() => import('@/pages/master/ConsumoIA'))
 const MasterCupons = lazy(() => import('@/pages/master/Cupons'))
 const MasterLogs = lazy(() => import('@/pages/master/Logs'))
 const MasterSomAviso = lazy(() => import('@/pages/master/SomAviso'))
+const MasterNotificacoes = lazy(() => import('@/pages/master/Notificacoes'))
 const NaoEncontrada = lazy(() => import('@/pages/NaoEncontrada'))
 
 function ExigeLogin({ children }: { children: ReactNode }) {
@@ -228,6 +229,7 @@ export default function App() {
             <Route path="cupons" element={<MasterCupons />} />
             <Route path="logs" element={<MasterLogs />} />
             <Route path="som-aviso" element={<MasterSomAviso />} />
+            <Route path="notificacoes" element={<MasterNotificacoes />} />
           </Route>
 
           <Route path="*" element={<NaoEncontrada />} />

@@ -13,6 +13,7 @@ import { useOrg } from '@/providers/OrgProvider'
 import { useInstalacao } from '@/hooks/useInstalacao'
 import { supabase } from '@/lib/supabase'
 import PedirNotificacoes from '@/components/PedirNotificacoes'
+import RastreioAparelho from '@/components/RastreioAparelho'
 import AvisoAppAntigo from '@/components/AvisoAppAntigo'
 
 function alternarTema() {
@@ -310,6 +311,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
         )}
         <div className="painel-conteudo mx-auto w-full min-w-0 max-w-6xl p-4 lg:p-8">{children}</div>
         <PedirNotificacoes />
+
+        <RastreioAparelho />
       </main>
 
       <BarraInferior />

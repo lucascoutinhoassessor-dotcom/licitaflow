@@ -2,7 +2,7 @@ import { Suspense, useEffect, type ReactNode } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { LimiteDeErro } from '@/components/LimiteDeErro'
 import { Carregando } from '@/components/ui'
-import { Settings, Wallet, Plug, CreditCard, Headphones, Megaphone, BarChart3, Activity, FileText, History, Building2, LayoutDashboard, LogOut, ShieldCheck, Users, Repeat, Receipt, Trophy, ExternalLink, Download, ToggleRight, Bot, Ticket, ScrollText, Volume2 } from 'lucide-react'
+import { Settings, Wallet, Plug, CreditCard, Headphones, Megaphone, BarChart3, Activity, FileText, History, Building2, LayoutDashboard, LogOut, ShieldCheck, Users, Repeat, Receipt, Trophy, ExternalLink, Download, ToggleRight, Bot, Ticket, ScrollText, Volume2, BellRing } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { useFinanceiro } from './Financeiro'
@@ -38,6 +38,7 @@ const grupos: { titulo: string; abas: { rota: string; rotulo: string; icone: typ
   { titulo: 'Relacionamento', abas: [
     { rota: '/master/suporte', rotulo: 'Suporte e sugestões', icone: Headphones },
     { rota: '/master/avisos', rotulo: 'Avisos aos clientes', icone: Megaphone },
+    { rota: '/master/notificacoes', rotulo: 'Notificações e lembretes', icone: BellRing },
     { rota: '/master/som-aviso', rotulo: 'Som do aviso', icone: Volume2 },
     { rota: '/master/conteudo', rotulo: 'Landing page', icone: FileText },
   ] },

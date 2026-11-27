@@ -10,8 +10,8 @@ import { TIPOS_LOG,type LogPlataforma } from '@/lib/logsPlataforma'
 import { SONS_AVISO,type SomAviso } from '@/lib/somAviso'
 import { tocarPing } from '@/lib/ping'
 
-interface Comunicado {id:string;titulo:string;texto:string;org_id:string|null;org_ids:string[]|null;ativo:boolean;expira_em:string|null;created_at:string;publicar_em:string;enviar_push:boolean;push_enviado_em:string|null;som?:SomAviso}
-const FORM_VAZIO={titulo:'',texto:'',dest:'todos' as 'todos'|'alguns',orgs:[] as string[],busca:'',quando:'agora' as 'agora'|'agendar',data:'',push:true,som:'principal' as SomAviso,expira:''}
+interface Comunicado {id:string;titulo:string;texto:string;org_id:string|null;org_ids:string[]|null;ativo:boolean;expira_em:string|null;created_at:string;publicar_em:string;enviar_push:boolean;push_enviado_em:string|null;som?:SomAviso;canal_reserva?:boolean;reserva_enfileirada_em?:string|null}
+const FORM_VAZIO={titulo:'',texto:'',dest:'todos' as 'todos'|'alguns',orgs:[] as string[],busca:'',quando:'agora' as 'agora'|'agendar',data:'',push:true,reserva:true,som:'principal' as SomAviso,expira:''}
 /** Agora no formato do campo datetime-local, no fuso do aparelho. */
 const agoraLocal=()=>{const d=new Date();d.setSeconds(0,0);return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,16)}
 
@@ -46,12 +46,14 @@ export default function Avisos({master=false}:{master?:boolean}) {
     if(quando && (isNaN(quando.getTime()) || quando.getTime()<Date.now()-60000)){toast.error('Escolha uma data e um horário futuros para o envio.');return}
     if(f.expira && new Date(f.expira).getTime()<=(quando?.getTime() ?? Date.now())){toast.error('A expiração deve ser depois do envio.');return}
     const para=f.dest==='todos'?'todos os clientes':f.orgs.length===1?nomeOrg(f.orgs[0]):`${f.orgs.length} clientes`
-    const como=f.push?'no painel e por push':'só no painel, sem push'
+    const como=(f.push?'no painel e por push':'só no painel, sem push')+(f.reserva?', com e-mail/WhatsApp para quem não tem push':'')
     if(!confirm(quando?`Agendar este aviso para ${para}, ${como}, em ${formatarDataHora(quando.toISOString())}?`:`Publicar agora este aviso para ${para}, ${como}?`))return
     setOcupado(true)
     try{
       const {data:id,error}=await supabase.rpc('admin_publicar_aviso',{p_titulo:f.titulo,p_texto:f.texto,p_orgs:f.dest==='alguns'?f.orgs:null,p_publicar_em:quando?.toISOString() ?? null,p_push:f.push,p_som:f.som,p_expira_em:f.expira?new Date(f.expira).toISOString():null})
       if(error)throw error
+      // Canal de reserva marcado antes do push: o agendador enfileira e-mail/WhatsApp de quem não tem aparelho com push.
+      if(f.reserva){const {error:er}=await supabase.rpc('admin_aviso_reserva',{p_aviso:id,p_reserva:true});if(er)toast.error(`Aviso publicado, mas o envio por e-mail/WhatsApp não foi agendado: ${mensagemErro(er)}`)}
       await qc.invalidateQueries({queryKey:['plataforma-avisos']});setNovo(false);setF(FORM_VAZIO)
       if(quando){toast.success(`Aviso agendado para ${formatarDataHora(quando.toISOString())}.${f.push?' O push sai automaticamente nesse horário.':''}`);return}
       if(!f.push){toast.success('Aviso publicado no painel, sem push.');return}
@@ -97,7 +99,7 @@ export default function Avisos({master=false}:{master?:boolean}) {
     try{const {error}=await supabase.from('aviso_leituras').upsert({aviso_id:id,user_id:user!.id},{onConflict:'aviso_id,user_id',ignoreDuplicates:true});if(error)throw error;await qc.invalidateQueries({queryKey:['aviso-leituras']})}
     catch(e){toast.error(mensagemErro(e))}finally{setOcupado(false)}
   }
-  return <><CabecalhoPagina titulo={master?'Avisos aos clientes':'Avisos do LicitaForce'} descricao={master?'Publique agora ou agende data e horário, para todos ou para clientes escolhidos. Quem ativou as notificações recebe o aviso por push.':'Comunicados no painel, com histórico recente de até 100 avisos. Quem ativa as notificações recebe cada aviso na hora, por push.'} acoes={<><Button variante="contorno" onClick={()=>q.refetch()}>Atualizar</Button>{(master||push==='ativo') && <Button variante="contorno" carregando={testando} onClick={testar}>Testar push</Button>}{master && <Button onClick={()=>setNovo(true)}>Publicar aviso</Button>}</>}/>
+  return <><CabecalhoPagina titulo={master?'Avisos aos clientes':'Avisos do LicitaForce'} descricao={master?'Publique agora ou agende data e horário, para todos ou para clientes escolhidos. Quem ativou as notificações recebe o aviso por push.':'Comunicados no painel, com histórico recente de até 100 avisos. Quem ativa as notificações recebe cada aviso na hora, por push.'} acoes={<><Button variante="contorno" onClick={()=>q.refetch()}>Atualizar</Button>{master && <Button variante="contorno" carregando={testando} onClick={testar}>Testar push</Button>}{master && <Button onClick={()=>setNovo(true)}>Publicar aviso</Button>}</>}/>
     {q.isLoading && <Carregando/>}{q.isError && <Aviso>Não foi possível consultar os avisos. Tente atualizar a página.</Aviso>}{leituras.isError && <Aviso>Não foi possível consultar seus registros de leitura.</Aviso>}
     {!master && push && push!=='sem-suporte' && <Card className="mb-4 flex flex-wrap items-center gap-3 p-4"><div className="min-w-0 flex-1"><p className="font-medium">{push==='ativo'?'Notificações ativadas neste aparelho':'Receber os avisos na hora'}</p><p className="text-sm text-muted-foreground">{push==='negado'?'As notificações deste site estão bloqueadas. Libere nas configurações do navegador e toque em Ativar.':push==='ativo'?'Cada aviso novo chega como notificação, mesmo com o app fechado.':'Ative para receber cada aviso como notificação no celular ou no computador, mesmo com o app fechado.'}</p></div><Button tamanho="sm" variante={push==='ativo'?'contorno':'primario'} carregando={ocupado} onClick={alternarPush}>{push==='ativo'?'Desativar':'Ativar notificações'}</Button></Card>}
     {!master && push==='sem-suporte' && precisaInstalar() && <div className="mb-4"><Aviso>No iPhone, as notificações só funcionam com o LicitaForce instalado: toque em Compartilhar → Adicionar à Tela de Início e abra por lá.</Aviso></div>}
@@ -107,7 +109,7 @@ export default function Avisos({master=false}:{master?:boolean}) {
       const agendado=new Date(a.publicar_em)>new Date()
       return <Card key={a.id} className="space-y-3 p-5"><div className="flex flex-wrap items-center gap-2"><h2 className="min-w-0 flex-1 font-semibold">{a.titulo}</h2>{master?<>
           {a.ativo && agendado?<Badge cor="amarelo">Agendado · {formatarDataHora(a.publicar_em)}</Badge>:<Badge cor={a.ativo&&!expirado?'verde':'neutro'}>{!a.ativo?(agendado?'Cancelado':'Arquivado'):expirado?'Expirado':'Publicado'}</Badge>}
-          <Badge cor={a.enviar_push&&a.push_enviado_em?'azul':'neutro'}>{!a.enviar_push?'Sem push':a.push_enviado_em?'Push enviado':'Push pendente'}</Badge>{master && a.enviar_push && a.som && a.som!=='principal' && <Badge>{SONS_AVISO.find(s=>s.valor===a.som)?.rotulo}</Badge>}
+          <Badge cor={a.enviar_push&&a.push_enviado_em?'azul':'neutro'}>{!a.enviar_push?'Sem push':a.push_enviado_em?'Push enviado':'Push pendente'}</Badge>{a.canal_reserva && <Badge cor={a.reserva_enfileirada_em?'azul':'neutro'}>{a.reserva_enfileirada_em?'E-mail/WhatsApp na fila':'E-mail/WhatsApp pendente'}</Badge>}{master && a.enviar_push && a.som && a.som!=='principal' && <Badge>{SONS_AVISO.find(s=>s.valor===a.som)?.rotulo}</Badge>}
         </>:<Badge cor={lido?'neutro':'azul'}>{lido?'Lido':'Não lido'}</Badge>}</div>
         <p className="whitespace-pre-wrap text-sm">{a.texto}</p>
         <p className="text-xs text-muted-foreground">{master?`Criado ${formatarDataHora(a.created_at)}${!agendado && Math.abs(new Date(a.publicar_em).getTime()-new Date(a.created_at).getTime())>60000?` · publicado ${formatarDataHora(a.publicar_em)}`:''} · ${destinatarios(a)}`:formatarDataHora(a.publicar_em)}{a.expira_em?` · expira ${formatarDataHora(a.expira_em)}`:''}</p>
@@ -141,6 +143,7 @@ export default function Avisos({master=false}:{master?:boolean}) {
         {f.quando==='agendar' && <p className="text-xs text-muted-foreground">O aviso fica oculto para os clientes até esse horário{f.push?' e o push sai automaticamente, com até 1 minuto de diferença.':'.'}</p>}
       </fieldset>
       <label className="flex items-start gap-2 text-sm"><input type="checkbox" className="mt-0.5" checked={f.push} onChange={e=>setF({...f,push:e.target.checked})}/><span><span className="font-medium">Enviar notificação push</span><span className="block text-xs text-muted-foreground">Chega no celular ou no computador de quem ativou as notificações, mesmo com o app fechado.</span></span></label>
+      <label className="flex items-start gap-2 text-sm"><input type="checkbox" className="mt-0.5" checked={f.reserva} onChange={e=>setF({...f,reserva:e.target.checked})}/><span><span className="font-medium">E-mail ou WhatsApp para quem não tem push</span><span className="block text-xs text-muted-foreground">Quem não ativou as notificações em nenhum aparelho recebe pelo canal padrão definido em Notificações e lembretes.</span></span></label>
       {f.push && <div className="space-y-1.5 rounded-lg border p-3"><label htmlFor="aviso-som" className="text-sm font-medium">Som do aviso</label><div className="flex gap-2"><select id="aviso-som" className="h-10 min-w-0 flex-1 rounded-md border bg-background px-3 text-sm" value={f.som} onChange={e=>setF({...f,som:e.target.value as SomAviso})}>{SONS_AVISO.map(s=><option key={s.valor} value={s.valor}>{s.rotulo}</option>)}</select><Button type="button" variante="contorno" disabled={f.som==='silencio'} onClick={()=>void tocarPing(f.som)}>Ouvir</Button></div><p className="text-xs text-muted-foreground">{SONS_AVISO.find(s=>s.valor===f.som)?.ajuda}. Toca quando o aviso chega com o app aberto; com o app fechado, o aparelho usa o som de notificação dele.</p></div>}
       <Campo rotulo="Expiração (opcional)" htmlFor="av-expira"><Input id="av-expira" type="datetime-local" value={f.expira} onChange={e=>setF({...f,expira:e.target.value})}/></Campo>
       <Button type="submit" carregando={ocupado} disabled={orgs.isError}>{f.quando==='agendar'?'Agendar aviso':'Publicar agora'}</Button>

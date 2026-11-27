@@ -6,6 +6,7 @@ self.addEventListener('install', event => {
 })
 self.addEventListener('activate', event => {
   event.waitUntil(Promise.all([
+    enderecoAntigo() ? largarInscricaoAntiga() : Promise.resolve(),
     caches.keys().then(keys => Promise.all(keys.filter(k => k.startsWith('licitaflow-offline-') && k !== CACHE).map(k => caches.delete(k)))),
     self.clients.claim(),
   ]))
@@ -16,8 +17,22 @@ self.addEventListener('fetch', event => {
   }
 })
 
-// Nome que aparece no topo de toda notificação (trocar aqui quando virar LicitaForce).
+// Nome que aparece no topo de toda notificação.
 const NOME_APP = 'LicitaForce'
+// Endereços antigos (marca LicitaFlow). O Chrome mostra o endereço dono da inscrição embaixo de cada notificação,
+// então uma inscrição feita neles aparece como "licitaflow-prod.vercel.app". Ao receber um push num endereço
+// antigo, a inscrição é cancelada aqui e apagada no servidor: os avisos passam a sair só pelo endereço novo.
+const HOSTS_ANTIGOS = ['licitaflow-prod.vercel.app', 'licitaflow-master.vercel.app']
+const enderecoAntigo = () => HOSTS_ANTIGOS.includes(self.location.hostname)
+function largarInscricaoAntiga() {
+  return self.registration.pushManager.getSubscription().then(sub => {
+    if (!sub) return
+    const endpoint = sub.endpoint
+    return sub.unsubscribe().catch(() => undefined).then(() => fetch('/api/push', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ acao: 'cancelar-antigo', endpoint }),
+    }).catch(() => undefined))
+  }).catch(() => undefined)
+}
 
 // Avisos por push: aparece na hora, mesmo com o app fechado. Estilo "app de mensagens": o título é
 // sempre o nome do app e o assunto do aviso vem no corpo, antes do texto.
@@ -44,6 +59,7 @@ self.addEventListener('push', event => {
     // Com o app aberto na tela, ele mesmo toca o som escolhido no aviso (src/lib/ping.ts, chamado em src/main.tsx).
     self.clients.matchAll({ type: 'window', includeUncontrolled: true })
       .then(lista => lista.forEach(c => c.postMessage({ tipo: 'push-ping', som: d.som || 'principal' }))).catch(() => undefined),
+    enderecoAntigo() ? largarInscricaoAntiga() : Promise.resolve(),
   ]))
 })
 self.addEventListener('notificationclick', event => {

@@ -73,6 +73,22 @@ describe('push', () => {
     expect(ins.auth).toBe('Bearer servico')
   })
 
+  it('endereço antigo não inscreve aparelhos (o Chrome mostraria licitaflow-prod na notificação)', async () => {
+    const { fetcher, chamadas } = banco()
+    const { r, res } = resposta()
+    await criarHandler({ webpush: webpushFalso(), fetcher } as never)({ method: 'POST', headers: { authorization: 'Bearer t', origin: 'https://licitaflow-prod.vercel.app' }, body: { acao: 'inscrever', inscricao: { endpoint: 'https://fcm.googleapis.com/x', keys: { p256dh: 'p', auth: 'a' } } } }, res)
+    expect(r.status).toBe(409)
+    expect(chamadas.some(c => c.url.startsWith('/rest/v1/push_inscricoes') && c.method === 'POST')).toBe(false)
+  })
+
+  it('service worker do endereço antigo apaga a própria inscrição sem login', async () => {
+    const { fetcher, chamadas } = banco()
+    const { r, res } = resposta()
+    await criarHandler({ webpush: webpushFalso(), fetcher } as never)({ method: 'POST', headers: {}, body: { acao: 'cancelar-antigo', endpoint: 'https://fcm.googleapis.com/velho' } }, res)
+    expect(r.status).toBe(200)
+    expect(chamadas.find(c => c.method === 'DELETE')?.url).toContain('endpoint=eq.https%3A%2F%2Ffcm.googleapis.com%2Fvelho')
+  })
+
   it('só o master envia', async () => {
     const { fetcher } = banco({ admin: false })
     const { r, res } = resposta()
@@ -131,8 +147,17 @@ describe('push', () => {
     expect(r.body).toEqual({ avisos: 0, enviados: 0, falhas: 0 })
     expect(wp.sendNotification).not.toHaveBeenCalled()
   })
+  it('o teste de push é só do master', async () => {
+    const { fetcher } = banco({ admin: false })
+    const wp = webpushFalso()
+    const { r, res } = resposta()
+    await criarHandler({ webpush: wp, fetcher } as never)({ method: 'POST', headers: { authorization: 'Bearer t' }, body: { acao: 'testar' } }, res)
+    expect(r.status).toBe(403)
+    expect(wp.sendNotification).not.toHaveBeenCalled()
+  })
+
   it('o teste vai só para os aparelhos de quem pediu e mostra o resultado de cada um', async () => {
-    const { fetcher, chamadas } = banco()
+    const { fetcher, chamadas } = banco({ admin: true })
     const wp = webpushFalso()
     const { r, res } = resposta()
     await criarHandler({ webpush: wp, fetcher } as never)({ method: 'POST', headers: { authorization: 'Bearer t' }, body: { acao: 'testar' } }, res)

@@ -1,5 +1,6 @@
 import { InstalarApp } from '@/components/InstalarApp'
-import { useState, type FormEvent } from 'react'
+import PreferenciasLembretes from '@/components/PreferenciasLembretes'
+import { useEffect, useState, type FormEvent } from 'react'
 import { toast } from 'sonner'
 import { supabase, mensagemErro } from '@/lib/supabase'
 import { useAuth } from '@/providers/AuthProvider'
@@ -13,15 +14,22 @@ export default function Configuracoes() {
   const [nome, setNome] = useState((user?.user_metadata?.nome as string) ?? '')
   const [orgNome, setOrgNome] = useState(org?.nome ?? '')
   const [orgTipo, setOrgTipo] = useState<TipoOrg>(org?.tipo ?? 'fornecedor')
+  const [telefone, setTelefone] = useState('')
   const [salvandoPerfil, setSalvandoPerfil] = useState(false)
+  useEffect(() => {
+    if (!user) return
+    void supabase.from('profiles').select('telefone').eq('id', user.id).maybeSingle().then(({ data }) => { if (data?.telefone) setTelefone(data.telefone) })
+  }, [user])
   const [salvandoOrg, setSalvandoOrg] = useState(false)
 
   async function salvarPerfil(e: FormEvent) {
     e.preventDefault()
+    const digitos = telefone.replace(/\D/g, '')
+    if (digitos && (digitos.length < 10 || digitos.length > 13)) return toast.error('Informe o celular com DDD, por exemplo (11) 91234-5678.')
     setSalvandoPerfil(true)
     const [{ error: e1 }, { error: e2 }] = await Promise.all([
       supabase.auth.updateUser({ data: { nome: nome.trim() } }),
-      supabase.from('profiles').update({ nome: nome.trim() }).eq('id', user!.id),
+      supabase.from('profiles').update({ nome: nome.trim(), telefone: telefone.trim() || null }).eq('id', user!.id),
     ])
     setSalvandoPerfil(false)
     if (e1 || e2) return toast.error(mensagemErro(e1 || e2))
@@ -52,6 +60,10 @@ export default function Configuracoes() {
             <Campo rotulo="E-mail" htmlFor="email">
               <Input id="email" value={user?.email ?? ''} disabled />
             </Campo>
+            <Campo rotulo="Celular (WhatsApp)" htmlFor="telefone">
+              <Input id="telefone" type="tel" inputMode="tel" autoComplete="tel" placeholder="(11) 91234-5678" maxLength={20} value={telefone} onChange={(e) => setTelefone(e.target.value)} />
+              <p className="mt-1 text-xs text-muted-foreground">Usado para alertas urgentes quando as notificações do app não estiverem ativas.</p>
+            </Campo>
             <Button type="submit" carregando={salvandoPerfil}>
               Salvar perfil
             </Button>
@@ -81,6 +93,7 @@ export default function Configuracoes() {
           </form>
         </Card>
       </div>
+      <PreferenciasLembretes />
     </>
   )
 }

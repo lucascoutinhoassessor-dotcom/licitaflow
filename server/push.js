@@ -7,9 +7,13 @@
 // POST {acao:'agendados'}  → (pg_cron, sem login) manda os pushes agendados que já venceram
 // As chaves VAPID são geradas no primeiro uso e guardadas em push_vapid (só a chave de serviço lê).
 import webpushPadrao from 'web-push'
+import { entregarNotificacoes, enviarWhatsapp, telefoneWhatsapp } from './notificacoes.js'
+import { cifrar, decifrar } from './asaas.js'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const CONTATO = 'https://licitaforce-app.vercel.app'
+/** Endereços da marca antiga (LicitaFlow): não recebem inscrições novas. */
+const ENDERECOS_ANTIGOS = /^https:\/\/licitaflow-(prod|master)\.vercel\.app$/
 
 /** Texto curto para caber na notificação do celular. */
 export function resumo(texto, max = 180) {
@@ -110,6 +114,23 @@ export function criarHandler({ webpush = webpushPadrao, fetcher = fetch } = {}) 
       if (req.method === 'GET') return res.status(200).json({ chave: (await chaves()).publica })
       if (req.method !== 'POST') return res.status(405).json({ error: 'Método não permitido' })
       const corpo = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : req.body ?? {}
+      // Service worker de um endereço antigo largando a própria inscrição (public/sw.js). Sem login: o endpoint
+      // é uma URL secreta do serviço de push, e quem a conhece só consegue apagar aquela inscrição.
+      if (corpo.acao === 'cancelar-antigo') {
+        const endpoint = String(corpo.endpoint ?? '')
+        if (!/^https:\/\/\S+$/.test(endpoint) || endpoint.length > 1000) return res.status(400).json({ error: 'Aparelho inválido' })
+        await chamar(`/rest/v1/push_inscricoes?endpoint=eq.${encodeURIComponent(endpoint)}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } })
+        return res.status(200).json({ ok: true })
+      }
+      if (corpo.acao === 'lembretes') {
+        const coleta = String(req.headers['x-coleta'] ?? '')
+        if (!/^[0-9a-f]{32,128}$/.test(coleta)) return res.status(401).json({ error: 'Não autorizado' })
+        try {
+          return res.status(200).json(await entregarNotificacoes({ token: coleta, chamar, webpush, fetcher }))
+        } catch (e) {
+          return res.status(/token/i.test(e.message) ? 401 : 502).json({ error: 'Não foi possível entregar os lembretes' })
+        }
+      }
       // Chamado pelo pg_cron a cada minuto quando há push vencido. Não precisa de login: só dispara o que
       // já está na hora e ainda não saiu (cada aviso é reservado antes de enviar, então nunca sai duas vezes).
       if (corpo.acao === 'agendados') {
@@ -130,6 +151,8 @@ export function criarHandler({ webpush = webpushPadrao, fetcher = fetch } = {}) 
       if (body.acao === 'inscrever') {
         const s = body.inscricao
         if (!inscricaoValida(s)) return res.status(400).json({ error: 'Inscrição inválida' })
+        // O Chrome mostra o endereço dono da inscrição em cada notificação: só o endereço novo inscreve.
+        if (ENDERECOS_ANTIGOS.test(String(req.headers.origin ?? ''))) return res.status(409).json({ error: 'Ative as notificações pelo endereço novo: licitaforce-app.vercel.app' })
         // O mesmo aparelho pode trocar de conta: a inscrição passa a ser de quem está logado agora.
         await chamar('/rest/v1/push_inscricoes?on_conflict=endpoint', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
           body: JSON.stringify({ user_id: eu.id, endpoint: s.endpoint, p256dh: s.keys.p256dh, auth: s.keys.auth, aparelho: String(req.headers['user-agent'] ?? '').slice(0, 300) }) })
@@ -144,6 +167,9 @@ export function criarHandler({ webpush = webpushPadrao, fetcher = fetch } = {}) 
 
       // Teste: manda uma notificação só para os aparelhos de quem pediu e devolve o resultado de cada um.
       if (body.acao === 'testar') {
+        // Diagnóstico técnico (aparelhos, códigos do serviço de push): só o master usa, pelo painel master.
+        const admin = await chamar('/rest/v1/rpc/is_platform_admin', { method: 'POST', body: '{}' }, false)
+        if (admin !== true) return res.status(403).json({ error: 'Acesso restrito ao master' })
         const inscricoes = await chamar(`/rest/v1/push_inscricoes?select=id,endpoint,p256dh,auth,aparelho&user_id=eq.${eu.id}`)
         if (!inscricoes?.length) return res.status(200).json({ enviados: 0, falhas: 0, resultados: [], removidos: 0 })
         const r = await disparar(inscricoes, { titulo: 'Teste de notificação', texto: 'Se você está vendo isto, o push chegou neste aparelho.', url: '/app/avisos', tag: `licitaforce-teste-${Date.now()}` })
@@ -156,6 +182,36 @@ export function criarHandler({ webpush = webpushPadrao, fetcher = fetch } = {}) 
         if (!UUID.test(String(body.aviso ?? ''))) return res.status(400).json({ error: 'Aviso inválido' })
         const r = await enviarAviso(body.aviso)
         return res.status(200).json(r ?? { enviados: 0, falhas: 0, motivo: 'já enviado, agendado ou arquivado' })
+      }
+
+      // WhatsApp (API oficial da Meta) do canal de reserva: o token é cifrado aqui e nunca volta ao navegador.
+      if (body.acao === 'whatsapp_salvar' || body.acao === 'whatsapp_testar') {
+        const admin = await chamar('/rest/v1/rpc/is_platform_admin', { method: 'POST', body: '{}' }, false)
+        if (admin !== true) return res.status(403).json({ error: 'Acesso restrito ao master' })
+        const [linha] = await chamar('/rest/v1/notificacoes_config?select=*&id=eq.true')
+        if (body.acao === 'whatsapp_salvar') {
+          const dados = { updated_at: new Date().toISOString() }
+          const phone = String(body.phone_id ?? '').trim(), tk = String(body.token ?? '').trim()
+          const template = String(body.template ?? '').trim(), idioma = String(body.idioma ?? '').trim()
+          if (phone) { if (!/^[0-9]{5,30}$/.test(phone)) return res.status(400).json({ error: 'ID do número inválido (só dígitos)' }); dados.whatsapp_phone_id = phone }
+          if (tk) { if (tk.length < 20 || tk.length > 1000) return res.status(400).json({ error: 'Token do WhatsApp inválido' }); dados.whatsapp_token_cifrado = cifrar(tk, process.env); dados.whatsapp_testado_em = null }
+          if (template) { if (!/^[a-z0-9_]{1,250}$/.test(template)) return res.status(400).json({ error: 'Nome do modelo: só letras minúsculas, números e _' }); dados.whatsapp_template = template }
+          if (idioma) { if (!/^[a-z]{2}(_[A-Z]{2})?$/.test(idioma)) return res.status(400).json({ error: 'Idioma inválido (ex.: pt_BR)' }); dados.whatsapp_idioma = idioma }
+          if (typeof body.ativo === 'boolean') dados.whatsapp_ativo = body.ativo
+          const completo = (dados.whatsapp_phone_id || linha?.whatsapp_phone_id) && (dados.whatsapp_token_cifrado || linha?.whatsapp_token_cifrado)
+          if (dados.whatsapp_ativo && !completo) return res.status(400).json({ error: 'Informe o ID do número e o token antes de ativar' })
+          await chamar('/rest/v1/notificacoes_config?id=eq.true', { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(dados) })
+          return res.status(200).json({ ok: true })
+        }
+        const para = telefoneWhatsapp(body.telefone)
+        if (!para) return res.status(400).json({ error: 'Informe um celular com DDD' })
+        if (!linha?.whatsapp_phone_id || !linha?.whatsapp_token_cifrado) return res.status(400).json({ error: 'Salve o ID do número e o token primeiro' })
+        try {
+          await enviarWhatsapp({ phoneId: linha.whatsapp_phone_id, token: decifrar(linha.whatsapp_token_cifrado, process.env), template: linha.whatsapp_template, idioma: linha.whatsapp_idioma },
+            { para, titulo: 'Teste do LicitaForce', texto: 'Se você recebeu esta mensagem, o WhatsApp dos lembretes está funcionando.' }, fetcher)
+        } catch (e) { return res.status(400).json({ error: e.message }) }
+        await chamar('/rest/v1/notificacoes_config?id=eq.true', { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ whatsapp_testado_em: new Date().toISOString() }) })
+        return res.status(200).json({ ok: true })
       }
 
       return res.status(400).json({ error: 'Ação inválida' })

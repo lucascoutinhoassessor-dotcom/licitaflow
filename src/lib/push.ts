@@ -3,8 +3,17 @@ import { supabase } from '@/lib/supabase'
 
 export type EstadoPush = 'ativo' | 'inativo' | 'negado' | 'sem-suporte'
 
+/**
+ * Endereços antigos (marca LicitaFlow). O Chrome mostra o endereço dono da inscrição em cada notificação, então
+ * push nunca é ativado neles: quem abre o app instalado pelo endereço antigo vê o aviso para instalar o novo.
+ */
+export const enderecoAntigoPush = () => typeof location !== 'undefined' && /^licitaflow-(prod|master)\.vercel\.app$/.test(location.hostname)
+
 export const pushSuportado = () =>
-  typeof window !== 'undefined' && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window
+  typeof window !== 'undefined' && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window && !enderecoAntigoPush()
+
+/** Avisa o rastreio do aparelho (RastreioAparelho) que a permissão ou a inscrição mudou. */
+const avisarMudanca = () => { if (typeof window !== 'undefined') window.dispatchEvent(new Event('lf-push-mudou')) }
 
 /** No iPhone o push só existe com o app instalado na Tela de Início. */
 export const precisaInstalar = () =>
@@ -41,6 +50,7 @@ export async function estadoPush(): Promise<EstadoPush> {
 export async function ativarPush(): Promise<EstadoPush> {
   if (!pushSuportado()) return 'sem-suporte'
   const permissao = await Notification.requestPermission()
+  avisarMudanca()
   if (permissao !== 'granted') return permissao === 'denied' ? 'negado' : 'inativo'
   const r = await fetch('/api/push', { cache: 'no-store' })
   if (!r.ok) throw new Error('Não foi possível ativar agora')
@@ -54,6 +64,7 @@ export async function ativarPush(): Promise<EstadoPush> {
   sub = sub || (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: chaveParaBytes(chave) }))
   await chamar({ acao: 'inscrever', inscricao: sub.toJSON() })
   reg.showNotification('Notificações ativadas', { body: 'Os avisos do LicitaForce vão chegar aqui na hora, mesmo com o app fechado.', icon: '/icons/icone-192.png', badge: '/icons/badge-96.png', tag: 'licitaforce-ativado' }).catch(() => undefined)
+  avisarMudanca()
   return 'ativo'
 }
 
@@ -62,6 +73,7 @@ export async function ativarPush(): Promise<EstadoPush> {
  * apagado uma inscrição vencida, ou outra pessoa usou o aparelho). Não pede permissão nem mostra nada.
  */
 export async function sincronizarPush(): Promise<EstadoPush> {
+  if (enderecoAntigoPush()) { await largarInscricaoAntiga(); return 'sem-suporte' }
   const estado = await estadoPush()
   if (estado !== 'ativo') return estado
   const reg = await navigator.serviceWorker.getRegistration()
@@ -80,12 +92,23 @@ export function observarPermissao(aoMudar: () => void) {
   return () => { if (status) status.onchange = null; document.removeEventListener('visibilitychange', visivel) }
 }
 
+/** Endereço antigo: cancela a inscrição deste aparelho (aqui e no servidor) sem pedir nada. */
+async function largarInscricaoAntiga() {
+  if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return
+  const reg = await navigator.serviceWorker.getRegistration().catch(() => undefined)
+  const sub = await reg?.pushManager?.getSubscription().catch(() => null)
+  if (!sub) return
+  await chamar({ acao: 'cancelar', endpoint: sub.endpoint }).catch(() => undefined)
+  await sub.unsubscribe().catch(() => undefined)
+}
+
 export async function desativarPush() {
   const reg = await navigator.serviceWorker.getRegistration()
   const sub = await reg?.pushManager.getSubscription()
   if (!sub) return
   await chamar({ acao: 'cancelar', endpoint: sub.endpoint }).catch(() => undefined)
   await sub.unsubscribe().catch(() => undefined)
+  avisarMudanca()
 }
 
 export interface ErroPush { status: number; motivo: string }
@@ -113,3 +136,7 @@ export function explicarErroPush(status: number) {
   if (status >= 500) return 'serviço de push do navegador fora do ar; tente de novo'
   return 'sem resposta do serviço de push'
 }
+
+/** Master: WhatsApp do canal de reserva (o token é cifrado no servidor e nunca volta ao navegador). */
+export const salvarWhatsapp = (dados: { phone_id?: string; token?: string; template?: string; idioma?: string; ativo?: boolean }) => chamar({ acao: 'whatsapp_salvar', ...dados }) as Promise<{ ok: true }>
+export const testarWhatsapp = (telefone: string) => chamar({ acao: 'whatsapp_testar', telefone }) as Promise<{ ok: true }>
