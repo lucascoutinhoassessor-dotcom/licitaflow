@@ -1,7 +1,9 @@
 import { useState, type FormEvent } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Ticket } from 'lucide-react'
+import { Link2, Ticket } from 'lucide-react'
+import { linkCupom } from '@/lib/cupom'
+import { URL_SITE } from '@/lib/pwa'
 import { supabase, mensagemErro } from '@/lib/supabase'
 import { formatarDataHora, formatarMoeda } from '@/lib/format'
 import { useCatalogoPlanos } from '@/hooks/useCatalogoPlanos'
@@ -70,7 +72,8 @@ export default function Cupons() {
           <p className="mt-1 text-xs text-muted-foreground">Usos: {c.usos}{c.max_usos ? ` de ${c.max_usos}` : ' (sem limite)'}{c.valido_ate ? ` · válido até ${new Date(`${c.valido_ate}T12:00:00`).toLocaleDateString('pt-BR')}` : ''} · criado {formatarDataHora(c.created_at)}</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button tamanho="sm" variante="contorno" onClick={() => { void navigator.clipboard?.writeText(c.codigo); toast.success('Código copiado.') }}>Copiar</Button>
+          <Button tamanho="sm" variante="contorno" onClick={() => { void navigator.clipboard?.writeText(c.codigo); toast.success('Código copiado.') }}>Copiar código</Button>
+          <Button tamanho="sm" variante="contorno" onClick={() => { void navigator.clipboard?.writeText(linkCupom(URL_SITE, { codigo: c.codigo, tipo: c.tipo, plano: c.plano_id })); toast.success(c.tipo === 'dias' ? 'Link copiado: abre o cadastro com o cupom aplicado.' : 'Link copiado: abre o checkout com o cupom aplicado.') }}><Link2 className="mr-1 h-4 w-4" />Copiar link</Button>
           <Button tamanho="sm" variante="contorno" onClick={() => editar(c)}>Editar</Button>
           <Button tamanho="sm" variante="contorno" onClick={() => alternar(c)}>{c.ativo ? 'Desativar' : 'Ativar'}</Button>
           <Button tamanho="sm" variante="perigo" onClick={() => excluir(c)}>Excluir</Button>
@@ -91,7 +94,7 @@ export default function Cupons() {
         </div>
         <Campo rotulo="Descrição interna (opcional)" htmlFor="cp-desc"><Input id="cp-desc" maxLength={300} value={f.descricao} onChange={(e) => setF({ ...f, descricao: e.target.value })} placeholder="Ex.: parceria com a associação X" /></Campo>
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={f.ativo} onChange={(e) => setF({ ...f, ativo: e.target.checked })} />Cupom ativo</label>
-        <p className="text-xs text-muted-foreground">{f.tipo === 'dias' ? 'O cliente usa em Meu plano → “Tenho um cupom”. Os dias somam ao prazo de acesso e a confirmação vai para o e-mail cadastrado.' : 'O cliente informa o cupom ao assinar. O desconto vale para todas as cobranças da assinatura (mínimo de R$ 1,00).'} Cada organização usa um cupom uma vez.</p>
+        <p className="text-xs text-muted-foreground">{f.tipo === 'dias' ? 'Pelo link, o cliente cria a conta e os dias entram sozinhos; quem já tem conta usa em Meu plano → “Tenho um cupom” ou no checkout. Os dias somam ao prazo de acesso, liberam a conta bloqueada e a confirmação vai para o e-mail cadastrado.' : 'Pelo link, o checkout abre com o cupom aplicado; o cliente também pode digitar o código no checkout. O desconto vale para todas as cobranças da assinatura (mínimo de R$ 1,00).'} Cada organização usa um cupom uma vez.</p>
         <Button type="submit" carregando={salvando}>Salvar cupom</Button>
       </form>
     </Modal>

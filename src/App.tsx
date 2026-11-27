@@ -12,6 +12,7 @@ import { GuardaModulo } from '@/components/GuardaModulo'
 import { LimiteDeErro } from '@/components/LimiteDeErro'
 import { ConfiguracaoPendente } from '@/pages/ConfiguracaoPendente'
 import { ContaSuspensa } from '@/pages/ContaSuspensa'
+import { AplicarCupomPendente } from '@/components/CupomPendente'
 import { AcessoNegadoMaster } from '@/pages/master/AcessoNegado'
 
 const Landing = lazy(() => import('@/pages/landing/Landing'))
@@ -100,6 +101,7 @@ function ExigeOrganizacao() {
   return (
     <AppLayout>
       <PreCarregarPaginas />
+      <AplicarCupomPendente />
       <LimiteDeErroDaRota>
         <Suspense fallback={<Carregando />}>
           <GuardaModulo><Outlet /></GuardaModulo>

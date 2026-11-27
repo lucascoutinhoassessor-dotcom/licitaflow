@@ -1,5 +1,6 @@
-import { Link } from 'react-router-dom'
-import { Lock, Sparkles } from 'lucide-react'
+import { Link, Navigate } from 'react-router-dom'
+import { Loader2, Lock, Sparkles } from 'lucide-react'
+import { useAplicarCupomPendente } from '@/components/CupomPendente'
 import { useAuth } from '@/providers/AuthProvider'
 import { useOrg } from '@/providers/OrgProvider'
 import { AssinaturaPainel } from '@/components/AssinaturaPainel'
@@ -14,10 +15,16 @@ export function ContaSuspensa() {
   const { org, organizacoes, trocarOrg, podeAdministrar } = useOrg()
   const outras = organizacoes.filter((o) => o.id !== org?.id && !o.suspensa)
   const teste = org?.motivo_suspensao === TESTE_VENCIDO
-  const contratacao = org?.motivo_suspensao === 'Contratação pendente (automático)'
+  const contratacao = org?.motivo_suspensao === 'Contratação pendente (automático)' || org?.motivo_suspensao === 'Aguardando o primeiro pagamento'
   const atraso = org?.motivo_suspensao === ATRASO
-  // Teste vencido ou atraso: quem administra a conta regulariza aqui mesmo e o acesso volta ao pagar.
+  // Atraso: quem administra a conta paga a fatura aqui mesmo e o acesso volta ao pagar.
   const regularizar = (teste || atraso || contratacao) && podeAdministrar && !!org
+  const cupom = useAplicarCupomPendente()
+
+  // Cupom de dias vindo de um link pode liberar a conta agora: espera antes de mandar para o checkout.
+  if (cupom === 'aplicando') return <div className="flex min-h-full items-center justify-center gap-3 px-4 py-10 text-sm text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" />Aplicando seu cupom…</div>
+  // Teste encerrado ou conta sem plano: quem administra vai direto para o checkout contratar o plano.
+  if ((teste || contratacao) && podeAdministrar && org) return <Navigate to={`/checkout?org=${org.id}`} replace />
 
   return (
     <div className="flex min-h-full items-center justify-center px-4 py-10">

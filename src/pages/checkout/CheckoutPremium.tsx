@@ -2,12 +2,13 @@ import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } 
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Check, CheckCircle2, Copy, CreditCard, Loader2, Lock, QrCode, ShieldCheck, Sparkles, Zap } from 'lucide-react'
+import { Check, CheckCircle2, Copy, CreditCard, Loader2, Lock, QrCode, ShieldCheck, Sparkles, Ticket, Zap } from 'lucide-react'
+import { descontoCupom, guardarCupomPendente, lerCupomPendente, normalizarCupom, previaCupom, rotuloCupomCliente } from '@/lib/cupom'
 import { useAuth } from '@/providers/AuthProvider'
 import { useCatalogoPlanos, type PlanoCatalogo } from '@/hooks/useCatalogoPlanos'
 import { supabase, mensagemErro } from '@/lib/supabase'
 import { carregarAssinatura, pagamentoAPI } from '@/lib/pagamentos'
-import { formatarMoeda, apenasDigitos } from '@/lib/format'
+import { formatarData, formatarMoeda, apenasDigitos } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { Logo } from '@/components/ui'
 import {
@@ -70,8 +71,24 @@ export default function CheckoutPremium() {
   const [enviando, setEnviando] = useState(false)
   const [tentouEnviar, setTentouEnviar] = useState(false)
   const [org, setOrg] = useState(params.get('org') || '')
-  const [pedido, setPedido] = useState<{ id: string; plano: string; ciclo: Ciclo } | null>(null)
+  const [pedido, setPedido] = useState<{ id: string; plano: string; ciclo: Ciclo; cupom: string | null } | null>(null)
   const [metodo, setMetodo] = useState<Metodo>('pix')
+
+  // ------------------------------------------------ cupom (digitado ou vindo do link ?cupom=)
+  const [cupomCodigo, setCupomCodigo] = useState<string | null>(() => normalizarCupom(params.get('cupom')) ?? lerCupomPendente())
+  const [cupomCampo, setCupomCampo] = useState(cupomCodigo ?? '')
+  useEffect(() => { if (cupomCodigo) guardarCupomPendente(cupomCodigo) }, [cupomCodigo])
+  const previa = useQuery({ queryKey: ['previa-cupom', cupomCodigo], enabled: !!cupomCodigo, retry: false, staleTime: 300_000, queryFn: () => previaCupom(cupomCodigo!) })
+  const cupomInfo = cupomCodigo ? previa.data ?? null : null
+  const cupomOutroPlano = !!cupomInfo && cupomInfo.tipo !== 'dias' && !!cupomInfo.plano && !!plano && cupomInfo.plano !== plano.id
+  const cupomNoPedido = cupomInfo && cupomInfo.tipo !== 'dias' && !cupomOutroPlano ? cupomInfo.codigo : null
+  function aplicarCupom(e?: FormEvent) {
+    e?.preventDefault()
+    const c = normalizarCupom(cupomCampo)
+    if (!c) { toast.error('Digite um código de cupom válido.'); return }
+    setCupomCodigo(c)
+  }
+  function removerCupom() { setCupomCodigo(null); setCupomCampo(''); guardarCupomPendente(null) }
 
   // Conta logada: descobre a organização administrada e um pedido em aberto, para continuar de onde parou.
   const conta = useQuery({
@@ -94,7 +111,7 @@ export default function CheckoutPremium() {
     if (c.org !== org) setOrg(c.org)
     const a = c.assinatura
     if (a && a.status === 'pendente' && a.gateway_assinatura_id && !pedido) {
-      setPedido({ id: a.id, plano: a.plano_id, ciclo: a.ciclo })
+      setPedido({ id: a.id, plano: a.plano_id, ciclo: a.ciclo, cupom: null })
       if (!params.get('plano')) { setPlanoId(a.plano_id); setCiclo(a.ciclo) }
     }
   }, [conta.data]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -109,7 +126,9 @@ export default function CheckoutPremium() {
   }, [plano?.id, ciclo, org]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const assinaturaAtiva = conta.data?.assinatura && ['ativa', 'atrasada'].includes(conta.data.assinatura.status)
-  const desatualizado = !!pedido && !!plano && (pedido.plano !== plano.id || pedido.ciclo !== ciclo)
+  const cupomMudou = !!pedido && pedido.cupom !== cupomNoPedido && !(previa.isFetching && !!cupomCodigo)
+  const desatualizado = !!pedido && !!plano && (pedido.plano !== plano.id || pedido.ciclo !== ciclo || cupomMudou)
+  const desconto = plano && preco ? descontoCupom(cupomInfo, preco.cobrado, plano.id) : 0
 
   // ------------------------------------------------ cobrança (Asaas)
   const cobranca = useQuery<PagamentoAsaas>({
@@ -132,6 +151,7 @@ export default function CheckoutPremium() {
     if (!pago || concluiu.current) return
     concluiu.current = true
     for (const k of ['assinatura', 'organizacoes', 'plano-cliente', 'checkout-cliente']) void qc.invalidateQueries({ queryKey: [k] })
+    guardarCupomPendente(null)
     toast.success('Pagamento confirmado!')
     setTimeout(() => navigate(`/obrigado?org=${org}`, { replace: true }), 900)
   }, [pago, org, navigate, qc])
@@ -143,8 +163,8 @@ export default function CheckoutPremium() {
   const dadosOk = docOk && telOk && (!!user || (dados.nome.trim().length >= 2 && emailOk && dados.empresa.trim().length >= 2))
 
   async function gerarPedido(orgId: string) {
-    const r = await pagamentoAPI({ acao: 'assinar', org: orgId, plano: plano!.id, ciclo, forma: 'UNDEFINED', documento: apenasDigitos(dados.documento), telefone: apenasDigitos(dados.telefone) })
-    setPedido({ id: r.id, plano: plano!.id, ciclo })
+    const r = await pagamentoAPI({ acao: 'assinar', org: orgId, plano: plano!.id, ciclo, forma: 'UNDEFINED', documento: apenasDigitos(dados.documento), telefone: apenasDigitos(dados.telefone), cupom: cupomNoPedido ?? undefined })
+    setPedido({ id: r.id, plano: plano!.id, ciclo, cupom: cupomNoPedido })
     void qc.invalidateQueries({ queryKey: ['checkout-conta'] })
   }
   async function continuar(e?: FormEvent) {
@@ -174,6 +194,20 @@ export default function CheckoutPremium() {
     } catch (err) {
       setErroDados(mensagemErro(err))
     } finally { setEnviando(false) }
+  }
+  // Cupom de dias: quem já tem conta ativa os dias aqui mesmo e entra no sistema; quem não tem cria a conta pelo cadastro.
+  const [ativandoDias, setAtivandoDias] = useState(false)
+  async function ativarDias() {
+    const destino = conta.data?.org || org
+    if (!cupomInfo || !destino) return
+    setAtivandoDias(true)
+    try {
+      const r = await pagamentoAPI({ acao: 'resgatar_cupom', org: destino, codigo: cupomInfo.codigo })
+      guardarCupomPendente(null)
+      await qc.invalidateQueries({ queryKey: ['organizacoes'] })
+      toast.success(`Cupom aplicado: ${r.valor} dias de acesso, até ${formatarData(r.ate)}.`)
+      navigate('/app', { replace: true })
+    } catch (err) { toast.error(mensagemErro(err)) } finally { setAtivandoDias(false) }
   }
   // Troca de plano ou ciclo depois do pedido criado: refaz a cobrança com o valor novo.
   const [atualizando, setAtualizando] = useState(false)
@@ -250,9 +284,9 @@ export default function CheckoutPremium() {
             </div>
             {tentouEnviar && !dadosOk && <p className="text-sm text-destructive">Confira os campos destacados{!docOk && dados.documento ? ' (CPF/CNPJ inválido)' : ''}.</p>}
             {erroDados && <Erro>{erroDados}</Erro>}
-            {(!pedido || desatualizado) && preco && <div className="flex items-baseline justify-between rounded-lg bg-muted/40 px-4 py-2.5 text-sm lg:hidden"><span className="text-muted-foreground">Total hoje · {plano?.nome} {ciclo}</span><strong className="tabular-nums">{brl(preco.cobrado)}</strong></div>}
+            {(!pedido || desatualizado) && preco && <div className="flex items-baseline justify-between rounded-lg bg-muted/40 px-4 py-2.5 text-sm lg:hidden"><span className="text-muted-foreground">Total hoje · {plano?.nome} {ciclo}</span><strong className="tabular-nums">{brl(preco.cobrado - desconto)}</strong></div>}
             {(!pedido || desatualizado) && <BotaoPrincipal carregando={enviando || atualizando} onClick={pedido ? atualizarPedido : undefined} type={pedido ? 'button' : 'submit'}>
-              {pedido ? `Atualizar para ${plano?.nome} ${ciclo}` : 'Continuar para o pagamento'}
+              {!pedido ? 'Continuar para o pagamento' : cupomMudou && pedido.plano === plano?.id && pedido.ciclo === ciclo ? (cupomNoPedido ? 'Atualizar o pedido com o cupom' : 'Atualizar o pedido sem cupom') : `Atualizar para ${plano?.nome} ${ciclo}`}
             </BotaoPrincipal>}
             {!user && !pedido && <p className="text-center text-xs text-muted-foreground">Já tem conta? <Link className="text-primary hover:underline" to={`/entrar?voltar=${encodeURIComponent(`/checkout?plano=${plano?.id ?? ''}&ciclo=${ciclo}`)}`}>Entre para assinar</Link></p>}
           </form>
@@ -262,7 +296,7 @@ export default function CheckoutPremium() {
         <div id="pagamento" className="scroll-mt-6">
           <Bloco numero={3} titulo="Pagamento" apagado={!pedido || desatualizado}>
             {!pedido ? <p className="text-sm text-muted-foreground">Preencha seus dados para liberar Pix e cartão de crédito.</p>
-              : desatualizado ? <p className="text-sm text-muted-foreground">Você mudou o plano ou o ciclo. Atualize o pedido acima para gerar a cobrança com o novo valor.</p>
+              : desatualizado ? <p className="text-sm text-muted-foreground">Você mudou o plano, o ciclo ou o cupom. Atualize o pedido acima para gerar a cobrança com o novo valor.</p>
               : <>
                 <div role="tablist" className="mb-5 grid grid-cols-2 gap-2 rounded-xl bg-muted/60 p-1">
                   {([['pix', 'Pix', QrCode, 'Aprovação imediata'], ['cartao', 'Cartão de crédito', CreditCard, ciclo === 'anual' ? 'Cobrança anual' : 'Cobrança mensal']] as const).map(([id, t, I, sub]) =>
@@ -285,7 +319,29 @@ export default function CheckoutPremium() {
 
       {/* resumo */}
       <aside className="lg:sticky lg:top-6 lg:self-start">
-        <Resumo plano={plano!} ciclo={ciclo} preco={preco!} />
+        <Resumo plano={plano!} ciclo={ciclo} preco={preco!} desconto={desconto} cupom={cupomNoPedido}>
+          <div className="space-y-2 border-t border-border/70 p-6">
+            {!cupomCodigo || previa.isError ? <form onSubmit={aplicarCupom} className="space-y-1.5">
+              <Rotulo htmlFor="ck-cupom">Cupom</Rotulo>
+              <div className="flex gap-2">
+                <Entrada id="ck-cupom" className="h-10 font-mono uppercase" maxLength={40} placeholder="Tem um cupom?" value={cupomCampo} onChange={e => setCupomCampo(e.target.value.toUpperCase().replace(/\s/g, ''))} />
+                <button type="submit" className="h-10 shrink-0 rounded-lg border border-border px-4 text-sm font-medium transition hover:bg-muted">Aplicar</button>
+              </div>
+              {previa.isError && <p className="text-xs text-destructive">{mensagemErro(previa.error)}</p>}
+            </form>
+            : previa.isLoading ? <p className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Conferindo o cupom {cupomCodigo}…</p>
+            : cupomInfo && <div className="space-y-2">
+              <div className="flex items-center justify-between gap-2 text-sm">
+                <span className="flex min-w-0 items-center gap-2"><Ticket className="h-4 w-4 shrink-0 text-success" /><span className="truncate"><strong className="font-mono">{cupomInfo.codigo}</strong> · {rotuloCupomCliente(cupomInfo)}</span></span>
+                <button type="button" onClick={removerCupom} className="shrink-0 text-xs text-muted-foreground underline hover:text-foreground">Remover</button>
+              </div>
+              {cupomOutroPlano && <p className="text-xs text-warning">Este cupom vale só para o plano {planos.find(p => p.id === cupomInfo.plano)?.nome ?? cupomInfo.plano}. <button type="button" className="underline" onClick={() => setPlanoId(cupomInfo.plano!)}>Trocar para ele</button></p>}
+              {cupomInfo.tipo === 'dias' && (user && (conta.data?.org || org)
+                ? <BotaoPrincipal type="button" carregando={ativandoDias} onClick={ativarDias}>Ativar {cupomInfo.valor} dias grátis</BotaoPrincipal>
+                : <p className="text-xs text-muted-foreground">Este cupom libera dias de acesso grátis. <Link className="font-medium text-primary underline" to={`/cadastro?cupom=${encodeURIComponent(cupomInfo.codigo)}`}>Crie sua conta</Link> ou <Link className="font-medium text-primary underline" to={`/entrar?voltar=${encodeURIComponent(`/checkout?cupom=${cupomInfo.codigo}`)}`}>entre</Link> para usar.</p>)}
+            </div>}
+          </div>
+        </Resumo>
       </aside>
     </div>
   </Moldura>
@@ -314,7 +370,7 @@ function SeletorCiclo({ ciclo, aoTrocar, pct }: { ciclo: Ciclo; aoTrocar: (c: Ci
   </div>
 }
 
-function Resumo({ plano, ciclo, preco }: { plano: PlanoCatalogo; ciclo: Ciclo; preco: ReturnType<typeof precoCiclo> }) {
+function Resumo({ plano, ciclo, preco, desconto, cupom, children }: { plano: PlanoCatalogo; ciclo: Ciclo; preco: ReturnType<typeof precoCiclo>; desconto: number; cupom: string | null; children?: ReactNode }) {
   const itens = [
     lim(plano.limite_empresas, 'empresa (CNPJ)', 'empresas (CNPJs)'),
     lim(plano.limite_usuarios, 'usuário', 'usuários'),
@@ -335,12 +391,14 @@ function Resumo({ plano, ciclo, preco }: { plano: PlanoCatalogo; ciclo: Ciclo; p
         <div className="flex justify-between text-muted-foreground"><span>12 × {brl(plano.mensal_centavos)}</span><span className="tabular-nums line-through">{brl(plano.mensal_centavos * 12)}</span></div>
         <div className="flex justify-between text-success"><span>Desconto do plano anual</span><span className="tabular-nums">−{brl(preco.economia)}</span></div>
       </>}
+      {desconto > 0 && <div className="flex justify-between text-success"><span>Cupom {cupom}</span><span className="tabular-nums">−{brl(desconto)}</span></div>}
       <div className="flex items-baseline justify-between pt-1">
         <span className="font-medium">Total hoje</span>
-        <span className="text-2xl font-semibold tabular-nums tracking-tight">{brl(preco.cobrado)}</span>
+        <span className="text-2xl font-semibold tabular-nums tracking-tight">{brl(preco.cobrado - desconto)}</span>
       </div>
-      <p className="text-xs text-muted-foreground">{ciclo === 'anual' ? `Equivale a ${brl(preco.porMes)}/mês. Renova a cada 12 meses.` : 'Renova todo mês.'} Cancele quando quiser, sem multa.</p>
+      <p className="text-xs text-muted-foreground">{ciclo === 'anual' ? `Equivale a ${brl(Math.round((preco.cobrado - desconto) / 12))}/mês. Renova a cada 12 meses.` : 'Renova todo mês.'}{desconto > 0 && ' O desconto do cupom vale em todas as renovações.'} Cancele quando quiser, sem multa.</p>
     </div>
+    {children}
     <div className="grid gap-3 border-t border-border/70 p-6 text-xs text-muted-foreground">
       <span className="flex items-center gap-2"><Zap className="h-4 w-4 text-accent" />Acesso liberado na hora após a confirmação</span>
       <span className="flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-accent" />Pagamento processado pelo Asaas, instituição autorizada pelo Banco Central</span>

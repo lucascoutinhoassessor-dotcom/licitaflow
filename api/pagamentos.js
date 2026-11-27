@@ -4,6 +4,10 @@ import {asaas,cifrar,corpoAssinatura,ErroAsaas,hojeSP,montarConfig} from '../ser
 import {emailCupomAcesso,emailTeste,enviarEmail,montarSmtp} from '../server/email.js'
 import {enviarAcessoPago} from '../server/acesso-pago.js'
 import {URL_SITE} from '../server/email.js'
+import {previaCupom} from '../server/cupom-publico.js'
+
+// Bloqueios que um cupom de dias resolve: libera o acesso na hora (o teste passa a contar até a nova data).
+const BLOQUEIOS_DE_CONTRATACAO=['Teste grátis encerrado (automático)','Contratação pendente (automático)','Aguardando o primeiro pagamento']
 
 export const config={maxDuration:120}
 
@@ -19,6 +23,14 @@ export default async function handler(req,res) {
   const anon=env.SUPABASE_ANON_KEY || env.VITE_SUPABASE_ANON_KEY
   const token=req.headers.authorization
   if(!base || !anon) return res.status(503).json({error:'Configuração Supabase ausente no servidor'})
+  // Prévia do cupom no checkout e no cadastro: pública, antes do login.
+  if(!token) {
+    let corpo={}
+    try { corpo=typeof req.body==='string'?JSON.parse(req.body):req.body ?? {} } catch { /* corpo inválido */ }
+    if(corpo.acao==='previa_cupom') {
+      try { return await previaCupom(corpo,req,res,env) } catch { return res.status(502).json({error:'Não foi possível conferir o cupom agora.'}) }
+    }
+  }
   if(!/^Bearer \S+$/.test(token ?? '')) return res.status(401).json({error:'Entre na sua conta'})
   const headers={apikey:anon,Authorization:token,'Content-Type':'application/json'}
   async function banco(path,options={},service=false) {
@@ -110,6 +122,9 @@ export default async function handler(req,res) {
       let r
       try { r=await rpc('resgatar_cupom_dias',{p_codigo:String(body.codigo ?? ''),p_org:body.org}) }
       catch(e) { return res.status(400).json({error:e.message}) }
+      // Conta bloqueada por falta de contratação (teste encerrado, sem teste ou checkout sem pagamento): o cupom libera.
+      const motivos=BLOQUEIOS_DE_CONTRATACAO.map(m=>`"${m}"`).join(',')
+      await patchSv(`/rest/v1/organizations?id=eq.${body.org}&suspensa=eq.true&motivo_suspensao=in.(${encodeURIComponent(motivos)})`,{suspensa:false,motivo_suspensao:null}).catch(()=>{})
       // Confirma o acesso no e-mail cadastrado. Sem SMTP configurado, o cupom vale do mesmo jeito.
       let emailEnviado=false
       try {
@@ -226,13 +241,22 @@ export default async function handler(req,res) {
           for(const p of lista.data) await rpc('processar_pagamento_asaas',{p_evento:'SYNC',p_pagamento:p},true)
           return res.status(409).json({error:'O pagamento deste pedido já foi confirmado. Atualize a página.',pago:true})
         }
-        if(existente.plano_id===String(body.plano ?? '') && existente.ciclo===ciclo && !String(body.cupom ?? '').trim()) {
+        // Cupom já aplicado neste mesmo pedido conta como "sem mudança": reaproveita em vez de recusar por "já usou".
+        const cupomPedido=String(body.cupom ?? '').trim().toUpperCase()
+        const [jaComCupom]=cupomPedido?await sv(`/rest/v1/cupom_resgates?select=id&assinatura_id=eq.${existente.id}&cupom=eq.${encodeURIComponent(cupomPedido)}`):[]
+        if(existente.plano_id===String(body.plano ?? '') && existente.ciclo===ciclo && (!cupomPedido || jaComCupom)) {
           return res.json({id:existente.id,url:existente.link_pagamento,valor_centavos:existente.valor_centavos,reaproveitada:true})
         }
         const [tentando]=await sv(`/rest/v1/assinatura_faturas?select=id&assinatura_id=eq.${existente.id}&pagamento_iniciado_em=gt.${encodeURIComponent(new Date(Date.now()-120000).toISOString())}`)
         if(tentando) return res.status(409).json({error:'Há um pagamento com cartão em processamento neste pedido. Aguarde alguns instantes.'})
         await asaas(cfg,`/subscriptions/${gidE}`,{method:'DELETE'}).catch(e=>{ if(e.status!==404) throw e })
         await patchSv(`/rest/v1/assinaturas?id=eq.${existente.id}`,{status:'cancelada',cancelada_em:new Date().toISOString(),motivo_cancelamento:'Substituída por outro plano ou ciclo no checkout'})
+        // O cupom do pedido descartado (nunca pago) volta a valer para o pedido novo.
+        const soltos=await sv(`/rest/v1/cupom_resgates?assinatura_id=eq.${existente.id}`,{method:'DELETE',headers:{Prefer:'return=representation'}}).catch(()=>[])
+        for(const r of soltos ?? []) {
+          const [c]=await sv(`/rest/v1/cupons?select=usos&codigo=eq.${encodeURIComponent(r.cupom)}`).catch(()=>[])
+          if(c?.usos>0) await patchSv(`/rest/v1/cupons?codigo=eq.${encodeURIComponent(r.cupom)}&usos=eq.${c.usos}`,{usos:c.usos-1}).catch(()=>{})
+        }
       }
       // Cupom de desconto: confere antes de preparar o pedido (código errado não deixa pedido pela metade).
       let cupom=null

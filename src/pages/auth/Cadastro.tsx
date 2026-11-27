@@ -1,6 +1,8 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { MailCheck } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
+import { MailCheck, Ticket } from 'lucide-react'
+import { guardarCupomPendente, normalizarCupom, previaCupom, rotuloCupomCliente, useCupomPendente } from '@/lib/cupom'
 import { supabase, mensagemErro } from '@/lib/supabase'
 import { contaEmailAPI } from '@/lib/contaEmail'
 import { Aviso, Button, Campo, Input, InputSenha } from '@/components/ui'
@@ -21,6 +23,11 @@ export default function Cadastro() {
   const [params] = useSearchParams()
   const voltar = params.get('voltar')
   const destino = voltar && voltar.startsWith('/') && !voltar.startsWith('//') ? voltar : '/onboarding'
+  // Link de campanha (?cupom=): guarda o cupom e aplica sozinho quando a conta da empresa for criada.
+  const cupomLink = normalizarCupom(params.get('cupom'))
+  const cupomGuardado = useCupomPendente()
+  const cupom = useQuery({ queryKey: ['previa-cupom', cupomGuardado], enabled: !!cupomGuardado, retry: false, staleTime: 300_000, queryFn: () => previaCupom(cupomGuardado!) })
+  useEffect(() => { if (cupomLink) guardarCupomPendente(cupomLink) }, [cupomLink])
 
   async function enviar(e: FormEvent) {
     e.preventDefault()
@@ -85,6 +92,8 @@ export default function Cadastro() {
     >
       <form onSubmit={enviar} className="space-y-4">
         {erro && <Aviso>{erro}</Aviso>}
+        {cupomGuardado && cupom.data && <p role="status" className="flex items-start gap-2 rounded-md border border-success/30 bg-success/10 px-3 py-2 text-sm text-success"><Ticket className="mt-0.5 h-4 w-4 shrink-0" /><span>Cupom <strong>{cupom.data.codigo}</strong>: {rotuloCupomCliente(cupom.data)}. {cupom.data.tipo === 'dias' ? 'Entra sozinho assim que você criar a conta da sua empresa.' : 'Já fica aplicado na hora de contratar o plano.'}</span></p>}
+        {cupomGuardado && cupom.isError && <p className="text-sm text-destructive">Cupom {cupomGuardado}: {mensagemErro(cupom.error)} <button type="button" className="underline" onClick={() => guardarCupomPendente(null)}>Remover</button></p>}
         <Campo rotulo="Seu nome" htmlFor="nome">
           <Input id="nome" autoComplete="name" required value={nome} onChange={(e) => setNome(e.target.value)} />
         </Campo>
