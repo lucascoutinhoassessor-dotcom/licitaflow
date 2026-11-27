@@ -10,7 +10,7 @@ import { SeletorEmpresa, useEmpresaPadrao } from '@/components/Situacoes'
 import { useOrg } from '@/providers/OrgProvider'
 import { useLista, useSalvar } from '@/hooks/useDados'
 import { dadosProcesso, rotaOportunidade, type CompraPNCP } from '@/lib/pncp'
-import { comUfs, filtrosExtras, MODALIDADES, nomeModoDisputa, PERIODOS_ABERTURA, periodoAbertura, periodoEntre, resumoFiltros, ufsDe, validarFiltros, type FiltrosOportunidades as Filtros } from '@/lib/filtrosOportunidades'
+import { comUfs, filtrosExtras, MODALIDADES, nomeModoDisputa, atualizarPeriodoRapido, PERIODOS_ABERTURA, PERIODOS_PUBLICACAO, periodoAbertura, periodoEntre, periodoPublicacao, periodoRapidoDe, resumoFiltros, ufsDe, validarFiltros, type FiltrosOportunidades as Filtros } from '@/lib/filtrosOportunidades'
 import {buscaHistorica,pesquisarIndice,pesquisarOrgaos,type ResultadoIndice} from '@/lib/buscaIndice'
 import CategoriasObjeto from '@/components/CategoriasObjeto'
 import FiltrosOportunidades from '@/components/FiltrosOportunidades'
@@ -30,19 +30,19 @@ import { formatarMoeda } from '@/lib/format'
 import type { Processo } from '@/types/db'
 import ContagemDisputa from '@/components/ContagemDisputa'
 
-function dataLocal(d: Date) {
-  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
-}
 const CHAVE_BUSCA='lf-oportunidades-busca',CHAVE_ABA='lf-oportunidades-aba'
 type Aba='abertas'|'desertas'|'localizar'
 function lerAba():Aba{try{const a=sessionStorage.getItem(CHAVE_ABA);return a==='desertas'||a==='localizar'?a:'abertas'}catch{return 'abertas'}}
 /** Abas da tela e o recurso (liberado pelo master) que cada uma exige. */
 const ABAS:[Aba,string,`recurso-${string}`|null][]=[['abertas','Editais',null],['desertas','Itens sem vencedor','recurso-sem-vencedor'],['localizar','Localizar edital','recurso-localizar-edital']]
-function lerBuscaSalva():{f:Partial<Filtros>;consulta:Partial<Filtros>|null;pagina:number}|null {
+/** Período rápido escolhido (7, 15, 30 ou todo o período) é guardado junto: ao reabrir em outro dia, as datas andam com ele. */
+type Rapido=number|null|undefined
+const lerRapido=(v:unknown):Rapido=>v===null?null:typeof v==='number'&&Number.isInteger(v)?v:undefined
+function lerBuscaSalva():{f:Partial<Filtros>;consulta:Partial<Filtros>|null;pagina:number;rapidoF:Rapido;rapidoC:Rapido}|null {
   try{
     const s=JSON.parse(sessionStorage.getItem(CHAVE_BUSCA)??'null')
     if(!s||typeof s.f!=='object'||!s.f)return null
-    return {f:s.f,consulta:s.consulta&&typeof s.consulta==='object'?s.consulta:null,pagina:Number.isInteger(s.pagina)&&s.pagina>0?s.pagina:1}
+    return {f:s.f,consulta:s.consulta&&typeof s.consulta==='object'?s.consulta:null,pagina:Number.isInteger(s.pagina)&&s.pagina>0?s.pagina:1,rapidoF:lerRapido(s.rapidoF),rapidoC:lerRapido(s.rapidoC)}
   }catch{return null}
 }
 // Guarda a última página de resultados desta aba: ao voltar para a lista, ela aparece na hora,
@@ -62,15 +62,18 @@ export default function Oportunidades() {
   // Padrão: sessões dos próximos 15 dias, em dias úteis; a lista já abre carregada.
   // Ao voltar de uma oportunidade, recupera os filtros e a página da última busca desta aba.
   const [inicial]=useState(()=>{
-    const hoje=new Date(),inicio=new Date();inicio.setDate(inicio.getDate()-30)
-    const padraoFiltros:Filtros={...filtrosExtras,inicio:dataLocal(inicio),fim:dataLocal(hoje),situacao:'abertas',modalidade:'6',uf:'',...periodoAbertura(15)}
-    const resumo=filtrosResumoHoje(parametros,diaBrasilia(hoje))
+    const padraoFiltros:Filtros={...filtrosExtras,...periodoPublicacao(30),situacao:'abertas',modalidade:'6',uf:'',...periodoAbertura(15)}
+    const resumo=filtrosResumoHoje(parametros,diaBrasilia(new Date()))
     if(resumo){
       const hojeFiltros:Filtros={...padraoFiltros,...resumo}
       return {f:hojeFiltros,consulta:hojeFiltros,pagina:1}
     }
     const salvo=lerBuscaSalva()
-    return salvo?{f:{...padraoFiltros,...salvo.f},consulta:salvo.consulta&&{...padraoFiltros,...salvo.consulta},pagina:salvo.pagina}:{f:padraoFiltros,consulta:padraoFiltros,pagina:1}
+    if(!salvo)return {f:padraoFiltros,consulta:padraoFiltros,pagina:1}
+    const consultaSalva=salvo.consulta&&{...padraoFiltros,...salvo.consulta},consulta=consultaSalva&&atualizarPeriodoRapido(consultaSalva,salvo.rapidoC)
+    // Datas que andaram para hoje: a página guardada era de outro período.
+    const pagina=consulta&&JSON.stringify(consulta)!==JSON.stringify(consultaSalva)?1:salvo.pagina
+    return {f:atualizarPeriodoRapido({...padraoFiltros,...salvo.f},salvo.rapidoF),consulta,pagina}
   })
   const [f,setF]=useState<Filtros>(inicial.f)
   const [consulta,setConsulta]=useState<Filtros|null>(inicial.consulta)
@@ -90,7 +93,7 @@ export default function Oportunidades() {
     setAba('desertas');setAtalho(x=>({portal:a.portal,vez:(x?.vez??0)+1}))
   }
   useEffect(()=>{try{sessionStorage.setItem(CHAVE_ABA,aba)}catch{/* armazenamento indisponível */}},[aba])
-  useEffect(()=>{try{sessionStorage.setItem(CHAVE_BUSCA,JSON.stringify({f,consulta,pagina}))}catch{/* armazenamento indisponível */}},[f,consulta,pagina])
+  useEffect(()=>{try{sessionStorage.setItem(CHAVE_BUSCA,JSON.stringify({f,consulta,pagina,rapidoF:periodoRapidoDe(f),rapidoC:consulta?periodoRapidoDe(consulta):undefined}))}catch{/* armazenamento indisponível */}},[f,consulta,pagina])
   const navigate=useNavigate()
   const processos=useLista<Processo>('processos',{porEmpresa:false})
   const {salvar}=useSalvar('processos',['processo_eventos','prazos'])
@@ -126,9 +129,9 @@ export default function Oportunidades() {
     if(consulta&&JSON.stringify(f)===JSON.stringify(consulta)&&pagina===1)void q.refetch()
     else setConsulta({...f})
   }
-  /** Período rápido: troca as datas e já pesquisa. */
+  /** Período rápido: troca as datas do modo atual (próximos N dias na abertura, últimos N na publicação) e já pesquisa. */
   function escolherPeriodo(dias:number|null) {
-    const novo={...f,situacao:'abertas' as const,...periodoAbertura(dias)}
+    const novo:Filtros=fv.situacao==='publicacoes'?{...f,...periodoPublicacao(dias)}:{...f,situacao:'abertas',...periodoAbertura(dias)}
     setF(novo);setPagina(1);setConsulta(novo)
   }
   /** Tira um filtro aplicado e refaz a busca mantendo os demais. */
@@ -143,7 +146,8 @@ export default function Oportunidades() {
     setF(novo);setPagina(1);setConsulta(novo)
   }
   const encerradosAtual=(()=>{const p=periodoEntre(-30,-1);return p.aberturaDe===f.aberturaDe&&p.aberturaAte===f.aberturaAte})()
-  const periodoAtual=PERIODOS_ABERTURA.find(([d])=>{const p=periodoAbertura(d);return p.aberturaDe===f.aberturaDe&&p.aberturaAte===f.aberturaAte})?.[0]
+  // O botão aceso é o que bate exatamente com as datas da tela, inclusive quando o usuário digita as datas.
+  const periodoAtual=periodoRapidoDe(fv)
   async function importar(c:CompraPNCP) {
     if(!empresaId){toast.error('Selecione a empresa para importar.');return}
     try{const p=await salvar.mutateAsync({dados:dadosProcesso(c,empresaId)});toast.success('Oportunidade importada.');navigate(`/app/processos/${p.id}`)}catch{/* useSalvar apresenta o erro */}
@@ -175,6 +179,11 @@ export default function Oportunidades() {
           <div className="grid gap-3 sm:grid-cols-2"><Campo rotulo="Abertura a partir de" htmlFor="busca-abertura-de"><Input id="busca-abertura-de" type="date" value={f.aberturaDe} max={f.aberturaAte||undefined} onChange={set('aberturaDe')} /></Campo><Campo rotulo="Abertura até" htmlFor="busca-abertura-ate"><Input id="busca-abertura-ate" type="date" min={f.aberturaDe||undefined} value={f.aberturaAte} onChange={set('aberturaAte')} /></Campo></div>
           <p className="text-xs text-muted-foreground">Para ver editais já encerrados, escolha uma data passada. O histórico cobre os últimos 12 meses, sem dispensa e inexigibilidade.</p>
         </>}
+        {fv.situacao==='publicacoes'&&<div className="flex flex-wrap items-center gap-2" role="group" aria-label="Período de publicação">
+          <span className="text-sm text-muted-foreground">Publicados nos últimos</span>
+          {PERIODOS_PUBLICACAO.map(([d,rotulo])=><button key={rotulo} type="button" onClick={()=>escolherPeriodo(d)} aria-pressed={periodoAtual===d}
+            className={`h-9 rounded-full border px-4 text-sm font-semibold transition-colors ${periodoAtual===d?'border-primary bg-primary text-primary-foreground':'bg-card text-muted-foreground hover:text-foreground'}`}>{rotulo}</button>)}
+        </div>}
         {fv.situacao==='publicacoes'&&<div className="grid gap-3 sm:grid-cols-2"><Campo rotulo="Publicado desde" htmlFor="busca-inicio"><Input id="busca-inicio" type="date" required value={f.inicio} max={f.fim} onChange={set('inicio')} /></Campo><Campo rotulo="Publicado até" htmlFor="busca-fim"><Input id="busca-fim" type="date" required min={f.inicio} value={f.fim} onChange={set('fim')} /></Campo></div>}
       </form>
     </Card>

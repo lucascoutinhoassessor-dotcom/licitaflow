@@ -42,16 +42,45 @@ export interface ItemCompra {
   numeroGrupo?: string | number; numeroLote?: string | number; grupo?: string | number; lote?: string | number
   materialOuServico?: string; materialOuServicoNome?: string; informacaoComplementar?: string | null; temResultado?: boolean
 }
-/** Períodos rápidos de abertura: quantidade de dias a partir de hoje (null = todo o período). */
+/** Períodos rápidos: quantidade de dias corridos contando hoje (null = todo o período). */
 export const PERIODOS_ABERTURA = [[7,'7 dias'],[15,'15 dias'],[30,'30 dias'],[null,'Todo o período']] as const
+/** Na busca por publicação, "todo o período" é o que o histórico guarda: 12 meses. */
+export const PERIODOS_PUBLICACAO = [[7,'7 dias'],[15,'15 dias'],[30,'30 dias'],[null,'12 meses']] as const
+/** Data de Brasília (AAAA-MM-DD) de hoje + n dias. */
+function diaSP(n: number, hoje: Date) { const d = new Date(hoje); d.setDate(d.getDate() + n); return d.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }) }
+/** Abertura nos próximos N dias, contando hoje: 7 dias = hoje e os 6 seguintes. */
 export function periodoAbertura(dias: number | null, hoje = new Date()) {
   if (dias === null) return { aberturaDe: '', aberturaAte: '' }
-  const fim = new Date(hoje); fim.setDate(fim.getDate() + dias)
-  const iso = (d: Date) => d.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
-  return { aberturaDe: iso(hoje), aberturaAte: iso(fim) }
+  return { aberturaDe: diaSP(0, hoje), aberturaAte: diaSP(dias - 1, hoje) }
 }
+/** Publicação nos últimos N dias, contando hoje (null = 12 meses). */
+export function periodoPublicacao(dias: number | null, hoje = new Date()) {
+  return { inicio: dias === null ? diaSP(-365, hoje) : diaSP(1 - dias, hoje), fim: diaSP(0, hoje) }
+}
+type CamposPeriodo = Pick<FiltrosOportunidades, 'situacao' | 'aberturaDe' | 'aberturaAte' | 'inicio' | 'fim'>
+/** Período rápido que bate exatamente com as datas pesquisadas (undefined = datas escolhidas à mão). */
+export function periodoRapidoDe(f: CamposPeriodo, hoje = new Date()): number | null | undefined {
+  if (f.situacao === 'publicacoes') return PERIODOS_PUBLICACAO.find(([d]) => { const p = periodoPublicacao(d, hoje); return p.inicio === f.inicio && p.fim === f.fim })?.[0]
+  return PERIODOS_ABERTURA.find(([d]) => { const p = periodoAbertura(d, hoje); return p.aberturaDe === f.aberturaDe && p.aberturaAte === f.aberturaAte })?.[0]
+}
+const diasEntre = (de: string, ate: string) => Math.round((Date.parse(`${ate}T12:00:00Z`) - Date.parse(`${de}T12:00:00Z`)) / 86400_000)
+/**
+ * Refaz as datas de uma busca guardada. Com o período rápido escolhido (7, 15, 30 ou todo o período), as datas voltam
+ * a contar a partir de hoje: uma aba ou o app instalado aberto de um dia para o outro não fica com dias que já
+ * passaram nem com o botão apagado. Sem ele, só converte o formato antigo (hoje + N, um dia a mais).
+ * Datas escolhidas à mão ficam como estão.
+ */
+export function atualizarPeriodoRapido<T extends CamposPeriodo>(f: T, rapido?: number | null, hoje = new Date()): T {
+  if (rapido !== undefined) return f.situacao === 'publicacoes' ? { ...f, ...periodoPublicacao(rapido, hoje) } : { ...f, ...periodoAbertura(rapido, hoje) }
+  const hojeIso = diaSP(0, hoje)
+  const antigo = (de: string, ate: string) => DATA.test(de ?? '') && DATA.test(ate ?? '') ? [7, 15, 30].find((d) => diasEntre(de, ate) === d) : undefined
+  if (f.situacao === 'publicacoes') { const d = f.fim === hojeIso ? antigo(f.inicio, f.fim) : undefined; return d ? { ...f, ...periodoPublicacao(d, hoje) } : f }
+  const d = f.aberturaDe === hojeIso ? antigo(f.aberturaDe, f.aberturaAte) : undefined
+  return d ? { ...f, ...periodoAbertura(d, hoje) } : f
+}
+const DATA = /^\d{4}-\d{2}-\d{2}$/
 /** Atalhos de "Próximas disputas": dia inicial e final contados a partir de hoje (0 = hoje). */
-export const PROXIMAS_DISPUTAS = [[0,0,'Hoje'],[1,1,'Amanhã'],[0,7,'7 dias'],[0,30,'30 dias']] as const
+export const PROXIMAS_DISPUTAS = [[0,0,'Hoje'],[1,1,'Amanhã'],[0,6,'7 dias'],[0,29,'30 dias']] as const
 /** Período de abertura entre hoje+de e hoje+ate (datas de Brasília). */
 export function periodoEntre(de: number, ate: number, hoje = new Date()) {
   const iso = (n: number) => { const d = new Date(hoje); d.setDate(d.getDate() + n); return d.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }) }
@@ -90,7 +119,7 @@ export interface FiltroAplicado { rotulo: string; remover?: Partial<FiltrosOport
  * `modalidadesPossiveis` é quantas modalidades o cliente pode usar (todas marcadas = não mostra).
  * Rótulos sem `remover` já são o padrão (Brasil inteiro, todo o período) ou são obrigatórios (publicação).
  */
-export function resumoFiltros(f: FiltrosOportunidades, modalidadesPossiveis: number, portaisPossiveis: number): FiltroAplicado[] {
+export function resumoFiltros(f: FiltrosOportunidades, modalidadesPossiveis: number, portaisPossiveis: number, hoje = new Date()): FiltroAplicado[] {
   const r: FiltroAplicado[] = []
   const add = (rotulo: string, remover?: Partial<FiltrosOportunidades>) => { r.push({ rotulo, remover }) }
   const data = (iso: string) => iso.split('-').reverse().join('/')
@@ -99,10 +128,14 @@ export function resumoFiltros(f: FiltrosOportunidades, modalidadesPossiveis: num
   if (f.busca.trim()) add(`Busca: ${f.busca.trim()}`, { busca: '' })
   const ufs = ufsDe(f)
   if (ufs.length) add(ufs.length <= 4 ? `UF: ${ufs.join(', ')}` : `${ufs.length} estados`, { uf: '', ufs: [] }); else add('Brasil inteiro')
+  // Período rápido aparece pelo nome e com as datas, para casar com os botões de 7, 15 e 30 dias.
+  const rapido = periodoRapidoDe(f, hoje)
   if (f.situacao === 'publicacoes') {
-    if (f.inicio || f.fim) add(`Publicação: ${f.inicio ? data(f.inicio) : '…'} a ${f.fim ? data(f.fim) : '…'}`)
+    const datas = `${f.inicio ? data(f.inicio) : '…'} a ${f.fim ? data(f.fim) : '…'}`
+    if (f.inicio || f.fim) add(typeof rapido === 'number' ? `Publicação: últimos ${rapido} dias (${datas})` : rapido === null ? `Publicação: últimos 12 meses` : `Publicação: ${datas}`)
   } else if (f.aberturaDe || f.aberturaAte) {
-    add(f.aberturaDe === f.aberturaAte ? `Abertura em ${data(f.aberturaDe)}` : `Abertura: ${f.aberturaDe ? data(f.aberturaDe) : '…'} a ${f.aberturaAte ? data(f.aberturaAte) : '…'}`, { aberturaDe: '', aberturaAte: '' })
+    const datas = `${f.aberturaDe ? data(f.aberturaDe) : '…'} a ${f.aberturaAte ? data(f.aberturaAte) : '…'}`
+    add(f.aberturaDe === f.aberturaAte ? `Abertura em ${data(f.aberturaDe)}` : typeof rapido === 'number' ? `Abertura: próximos ${rapido} dias (${datas})` : `Abertura: ${datas}`, { aberturaDe: '', aberturaAte: '' })
   } else add('Abertura: todo o período')
   if (f.diasUteis) add('Só dias úteis', { diasUteis: false })
   if (f.modalidades.length && f.modalidades.length < modalidadesPossiveis) {

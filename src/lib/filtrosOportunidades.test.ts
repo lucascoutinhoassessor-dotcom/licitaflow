@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { comUfs, consultarItens, filtrosExtras, MODALIDADES, periodoAbertura, periodoEntre, resumoFiltros, ufsDe, validarFiltros, type FiltrosOportunidades } from './filtrosOportunidades'
+import { atualizarPeriodoRapido, comUfs, consultarItens, filtrosExtras, MODALIDADES, periodoAbertura, periodoEntre, periodoPublicacao, periodoRapidoDe, resumoFiltros, ufsDe, validarFiltros, type FiltrosOportunidades } from './filtrosOportunidades'
 import { portalCompra, urlOrigem, PORTAIS } from './portais'
 import type { CompraPNCP } from './pncp'
 const f: FiltrosOportunidades={...filtrosExtras,modalidades:['6','8'],busca:'computadores',inicio:'2026-11-09',fim:'2026-11-16',uf:'',modalidade:'6'}
@@ -18,10 +18,11 @@ describe('filtros de oportunidades',()=>{
    expect(filtrosExtras.modalidades).toHaveLength(13)
  })
 
- it('períodos rápidos de abertura contam dias a partir de hoje',()=>{
+ it('períodos rápidos de abertura: N dias corridos contando hoje',()=>{
    const hoje=new Date('2026-11-20T15:00:00-03:00')
-   expect(periodoAbertura(7,hoje)).toEqual({aberturaDe:'2026-11-20',aberturaAte:'2026-11-27'})
-   expect(periodoAbertura(30,hoje).aberturaAte).toBe('2026-12-20')
+   expect(periodoAbertura(7,hoje)).toEqual({aberturaDe:'2026-11-20',aberturaAte:'2026-11-26'})
+   expect(periodoAbertura(15,hoje).aberturaAte).toBe('2026-12-04')
+   expect(periodoAbertura(30,hoje).aberturaAte).toBe('2026-12-19')
    expect(periodoAbertura(null,hoje)).toEqual({aberturaDe:'',aberturaAte:''})
    expect(filtrosExtras.diasUteis).toBe(true)
  })
@@ -31,6 +32,34 @@ describe('filtros de oportunidades',()=>{
    expect(periodoEntre(0,0,hoje)).toEqual({aberturaDe:'2026-11-30',aberturaAte:'2026-11-30'})
    expect(periodoEntre(1,1,hoje)).toEqual({aberturaDe:'2026-12-01',aberturaAte:'2026-12-01'})
    expect(periodoEntre(0,7,hoje).aberturaAte).toBe('2026-12-07')
+ })
+
+ it('publicação: últimos N dias contando hoje; 12 meses no "todo o período"',()=>{
+   const hoje=new Date('2026-11-27T10:00:00-03:00')
+   expect(periodoPublicacao(7,hoje)).toEqual({inicio:'2026-11-21',fim:'2026-11-27'})
+   expect(periodoPublicacao(30,hoje)).toEqual({inicio:'2026-10-29',fim:'2026-11-27'})
+   expect(periodoPublicacao(null,hoje).inicio).toBe('2025-11-27')
+ })
+
+ it('o botão aceso casa exatamente com as datas pesquisadas',()=>{
+   const hoje=new Date('2026-11-27T10:00:00-03:00')
+   const ab=(aberturaDe:string,aberturaAte:string)=>periodoRapidoDe({situacao:'abertas',aberturaDe,aberturaAte,inicio:'',fim:''},hoje)
+   expect(ab('2026-11-27','2026-12-03')).toBe(7)
+   expect(ab('2026-11-27','2026-12-11')).toBe(15)
+   expect(ab('2026-11-27','2026-12-04')).toBeUndefined()
+   expect(ab('','')).toBeNull()
+   expect(periodoRapidoDe({situacao:'publicacoes',aberturaDe:'',aberturaAte:'',inicio:'2026-11-13',fim:'2026-11-27'},hoje)).toBe(15)
+ })
+
+ it('busca guardada de outro dia: o período rápido volta a contar de hoje; datas à mão ficam',()=>{
+   const hoje=new Date('2026-11-27T10:00:00-03:00')
+   const ontem={situacao:'abertas' as const,aberturaDe:'2026-11-26',aberturaAte:'2026-12-10',inicio:'',fim:''}
+   expect(atualizarPeriodoRapido(ontem,15,hoje)).toMatchObject({aberturaDe:'2026-11-27',aberturaAte:'2026-12-11'})
+   expect(atualizarPeriodoRapido(ontem,undefined,hoje)).toBe(ontem)
+   // Formato antigo (hoje + 15): passa a ser 15 dias contando hoje.
+   expect(atualizarPeriodoRapido({...ontem,aberturaDe:'2026-11-27',aberturaAte:'2026-12-12'},undefined,hoje)).toMatchObject({aberturaAte:'2026-12-11'})
+   const pub={situacao:'publicacoes' as const,aberturaDe:'',aberturaAte:'',inicio:'2026-10-20',fim:'2026-11-20'}
+   expect(atualizarPeriodoRapido(pub,7,hoje)).toMatchObject({inicio:'2026-11-21',fim:'2026-11-27'})
  })
 
  it('rejeita seleção vazia e intervalos inválidos',()=>{
