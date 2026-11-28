@@ -11,6 +11,7 @@ const AJUDA: Record<string, string> = {
   radar: 'Empresas com palavras-chave e Radar ligado, monitoradas ao mesmo tempo.',
   cotador: 'Cada processo conta uma vez por mês, na primeira importação ou pesquisa de preço. Renova no dia 1º.',
   juridico: 'Cada peça redigida pela IA conta uma. As minutas pelo formulário do Jurídico não contam. Renova no dia 1º.',
+  'pregao-ao-vivo': 'Sessões de disputa acompanhadas ao mesmo tempo pelo programa instalado no computador.',
   termometro: 'Nota CAPAG do Tesouro Nacional no edital, no Leitor, no Radar e no processo.',
 }
 

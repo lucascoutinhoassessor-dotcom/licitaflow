@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useRef } from 'react'
 import { Link, Navigate, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { CalendarPlus, Check, Copy, Download, RotateCcw, Scale } from 'lucide-react'
@@ -117,6 +117,16 @@ function Editor({ tipo, modelo }: { tipo: TipoPeca; modelo: Modelo | null }) {
   const [agendado, setAgendado] = useState(false)
 
   useEffect(() => { if (!empresaId && empresas[0]) setEmpresaId(empresaAtual?.id ?? empresas[0].id) }, [empresas, empresaAtual, empresaId])
+  // Vindo do cartão do Kanban (Criar peça jurídica): o processo já chega escolhido.
+  const [parametros] = useSearchParams()
+  const processoDoCartao = parametros.get('processo')
+  const cartaoAplicado = useRef(false)
+  useEffect(() => {
+    if (cartaoAplicado.current || !processoDoCartao || !processos.data?.some((x) => x.id === processoDoCartao)) return
+    cartaoAplicado.current = true
+    escolherProcesso(processoDoCartao)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [processoDoCartao, processos.data])
 
   const empresa = empresas.find((e) => e.id === empresaId) ?? null
   const dados: DadosPeca = useMemo(() => ({

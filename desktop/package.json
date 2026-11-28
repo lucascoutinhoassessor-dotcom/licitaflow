@@ -1,0 +1,56 @@
+{
+  "name": "licitaforce-pregao-ao-vivo",
+  "productName": "LicitaForce Pregão ao Vivo",
+  "version": "0.1.0",
+  "description": "Acompanha ao vivo a sala de disputa dos pregões com a sessão do próprio usuário e envia os eventos ao LicitaForce.",
+  "author": "LicitaForce",
+  "private": true,
+  "main": "src/main.cjs",
+  "scripts": {
+    "config": "node scripts/config.mjs",
+    "start": "node scripts/config.mjs && electron .",
+    "dist": "node scripts/config.mjs && electron-builder --win nsis",
+    "release": "node scripts/config.mjs && electron-builder --win nsis --publish always"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.105.4",
+    "electron-updater": "^6.3.9"
+  },
+  "devDependencies": {
+    "electron": "^45.2.3",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "br.com.licitaforce.pregaoaovivo",
+    "productName": "LicitaForce Pregão ao Vivo",
+    "executableName": "LicitaForce Pregao ao Vivo",
+    "artifactName": "LicitaForce-Pregao-ao-Vivo-${version}.${ext}",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "src/**/*",
+      "!src/**/*.test.*",
+      "build/icon.png",
+      "package.json"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "shortcutName": "Pregão ao Vivo",
+      "runAfterFinish": true
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "lucascoutinhoassessor-dotcom",
+      "repo": "licitaflow",
+      "releaseType": "release"
+    }
+  }
+}

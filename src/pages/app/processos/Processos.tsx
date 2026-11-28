@@ -2,12 +2,13 @@ import { useEffect, useMemo, useRef, useState, type DragEvent, type TouchEvent a
 import { createPortal } from 'react-dom'
 import { Link, useNavigate } from 'react-router-dom'
 import * as Menu from '@radix-ui/react-dropdown-menu'
-import { Archive, ArchiveRestore, ArrowLeft, ArrowRight, CalendarClock, Check, Gavel, KanbanSquare, List, MoreHorizontal, Pencil, Plus, Radar, Search, Trash2 } from 'lucide-react'
+import { Archive, ArchiveRestore, ArrowLeft, ArrowRight, CalendarClock, Check, ChevronRight, FileText, Gavel, KanbanSquare, List, MoreHorizontal, Pencil, Plus, Radar, Search, Trash2 } from 'lucide-react'
 import MenuFiltros, { ChipFiltro, SecaoFiltro } from '@/components/MenuFiltros'
 import { AnimatePresence, LayoutGroup, motion } from 'framer-motion'
 import { toast } from 'sonner'
 import { Badge, Button, CabecalhoPagina, Card, Carregando, Input, Modal, Select, Vazio } from '@/components/ui'
 import { BadgeEtapa } from '@/components/Situacoes'
+import { PECAS } from '@/lib/juridico'
 import { ETAPAS, ETAPAS_ATIVAS, ETAPAS_FINAIS, MODALIDADES, type Etapa } from '@/lib/dominio'
 import { formatarDataHora, formatarMoeda } from '@/lib/format'
 import { resumoProcessos } from '@/lib/contagemProcessos'
@@ -104,9 +105,12 @@ function MenuCartao({
   aoMonitorar,
   aoArquivar,
   aoExcluir,
+  aoCriarPeca,
 }: {
   p: Processo
   estadoMonitor: string
+  /** Abre o Jurídico já preenchido com este processo; ausente = módulo Jurídico indisponível. */
+  aoCriarPeca?: (tipo: string) => void
   /** Estado real da Sentinela neste processo (do banco); mostra se está mesmo ativa e, se não, por quê. */
   sentinela?: StatusAgente
   aoMonitorar: (ligar: boolean) => void
@@ -151,6 +155,24 @@ function MenuCartao({
                 <Check className="h-4 w-4 text-primary" />
               </Menu.ItemIndicator>
             </Menu.CheckboxItem>
+          )}
+          {aoCriarPeca && (
+            <Menu.Sub>
+              <Menu.SubTrigger className={itemMenu}>
+                <Gavel className="h-4 w-4" />
+                <span className="flex-1">Criar peça jurídica</span>
+                <ChevronRight className="h-4 w-4 text-muted-foreground" />
+              </Menu.SubTrigger>
+              <Menu.Portal>
+                <Menu.SubContent sideOffset={6} collisionPadding={8} className="z-50 min-w-[13rem] rounded-xl border bg-card p-1.5 text-card-foreground shadow-xl">
+                  {PECAS.map((peca) => (
+                    <Menu.Item key={peca.id} className={itemMenu} onSelect={() => aoCriarPeca(peca.id)}>
+                      <FileText className="h-4 w-4" /> {peca.rotulo}
+                    </Menu.Item>
+                  ))}
+                </Menu.SubContent>
+              </Menu.Portal>
+            </Menu.Sub>
           )}
           <Menu.Item className={itemMenu} onSelect={() => aoArquivar(!p.arquivado_em)}>
             {p.arquivado_em ? <ArchiveRestore className="h-4 w-4" /> : <Archive className="h-4 w-4" />}
@@ -341,6 +363,7 @@ export default function Processos() {
   // Selos dos agentes só com o módulo "agentes" liberado para a organização (senão o Kanban não fala de IA).
   const { estado: estadoModulo } = useModulos()
   const agentesLiberados = estadoModulo('/app/agentes') === 'liberado'
+  const juridicoLiberado = estadoModulo('/app/juridico/impugnacao') === 'liberado'
   const estadosAgentes = useEstadosAgentes(agentesLiberados || estadoMonitor === 'liberado')
   const agentesDe = (p: Processo) => (agentesLiberados ? estadosAgentes.data?.[p.id] : undefined)
   const qc = useQueryClient()
@@ -569,6 +592,7 @@ export default function Processos() {
         aoMonitorar={(v) => monitorar(p, v)}
         aoArquivar={(v) => arquivar(p, v)}
         aoExcluir={() => apagar(p)}
+        aoCriarPeca={juridicoLiberado ? (tipo) => navigate(`/app/juridico/${tipo}?aba=minuta&processo=${p.id}`) : undefined}
       />
     ) : undefined
 

@@ -6,6 +6,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useModulos } from '@/hooks/useModulos'
 import { rotaLeitor } from '@/lib/leitor'
 import { SeloTermometroAuto } from '@/components/Termometro'
+import { SessaoDoProcesso } from '@/components/PregaoAoVivo'
 import { alvoPeloNome } from '@/lib/termometro'
 import { ArrowLeft, Calculator, Check, ExternalLink, FileSearch, FileSignature, FileText, MessageSquarePlus, Pencil, Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -21,7 +22,7 @@ import type { Documento, Prazo, Processo, ProcessoEvento, ProcessoItem } from '@
 import NaoEncontrada from '@/pages/NaoEncontrada'
 import { ProcessoForm } from './ProcessoForm'
 
-type Aba = 'resumo' | 'itens' | 'prazos' | 'documentos' | 'historico'
+type Aba = 'resumo' | 'itens' | 'prazos' | 'documentos' | 'historico' | 'sessao'
 
 const num = (s: string) => (s.trim() === '' ? null : Number(s.replace(/\./g, '').replace(',', '.')))
 const str = (n: number | null | undefined) => (n == null ? '' : String(n).replace('.', ','))
@@ -444,6 +445,7 @@ export default function ProcessoDetalhe() {
           { id: 'prazos', rotulo: 'Prazos' },
           { id: 'documentos', rotulo: 'Documentos' },
           { id: 'historico', rotulo: 'Histórico' },
+          ...(estadoModulo('/app/pregao-ao-vivo') === 'liberado' ? [{ id: 'sessao' as const, rotulo: 'Sessão ao vivo' }] : []),
         ]}
       />
 
@@ -495,6 +497,7 @@ export default function ProcessoDetalhe() {
       {aba === 'prazos' && <Prazos processo={p} podeEditar={podeEditar} />}
       {aba === 'documentos' && <Documentos processo={p} podeEditar={podeEditar} />}
       {aba === 'historico' && <Historico processoId={p.id} podeEditar={podeEditar} />}
+      {aba === 'sessao' && <SessaoDoProcesso processoId={p.id} />}
 
       <Modal aberto={editando} aoFechar={() => setEditando(false)} titulo="Editar processo">
         <ProcessoForm processo={p} aoSalvar={() => setEditando(false)} />

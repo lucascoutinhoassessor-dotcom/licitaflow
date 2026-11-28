@@ -11,6 +11,7 @@ import {
   Gavel,
   LayoutDashboard,
   Radar,
+  Radio,
   Settings,
   Users,
   Wallet,
@@ -80,6 +81,12 @@ export const GRUPOS_NAV: GrupoNav[] = [
         rotulo: 'Processos',
         icone: Gavel,
         descricao: 'Funil e kanban dos processos: captação, análise, proposta, disputa, habilitação, recurso e resultado, com itens, preços-limite e linha do tempo.',
+      },
+      {
+        rota: '/app/pregao-ao-vivo',
+        rotulo: 'Pregão ao Vivo',
+        icone: Radio,
+        descricao: 'Programa instalado que acompanha a sala de disputa em tempo real: mensagens do pregoeiro, convocações com prazo, fases, lances e posição.',
       },
       {
         rota: '/app/prazos',

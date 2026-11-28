@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; media-src 'self'; img-src 'self' data:" />
+  <title>LicitaForce Pregão ao Vivo</title>
+  <link rel="stylesheet" href="estilo.css" />
+</head>
+<body>
+  <header>
+    <div class="marca"><span class="ponto" id="ponto"></span><strong>LicitaForce</strong> Pregão ao Vivo</div>
+    <div class="topo-dir" id="topoDir"></div>
+  </header>
+
+  <main id="entrar" class="oculto">
+    <section class="cartao estreito">
+      <h1>Entre com a sua conta do LicitaForce</h1>
+      <p class="mudo">É a mesma conta do site. O programa nunca pede nem guarda a senha dos portais de compras.</p>
+      <form id="formEntrar">
+        <label>E-mail<input id="email" type="email" autocomplete="username" required /></label>
+        <label>Senha<input id="senha" type="password" autocomplete="current-password" required /></label>
+        <button type="submit" id="botaoEntrar">Entrar</button>
+        <p class="erro" id="erroEntrar"></p>
+      </form>
+    </section>
+  </main>
+
+  <main id="painel" class="oculto">
+    <p class="erro faixa oculto" id="erroGeral"></p>
+    <section class="cartao">
+      <h2>1. Abra o portal e faça o login</h2>
+      <p class="mudo">O login e o captcha são sempre seus, na janela oficial do portal. Depois, abra a sala de disputa do pregão:
+        o programa reconhece a compra sozinho e passa a acompanhar.</p>
+      <div class="portais" id="portais"></div>
+    </section>
+
+    <section class="cartao">
+      <div class="linha-titulo"><h2>2. Sessões acompanhadas</h2><button class="link" id="verSite">Ver no site</button></div>
+      <ul class="sessoes" id="sessoes"></ul>
+    </section>
+
+    <section class="cartao">
+      <h2>3. O que aconteceu na sala</h2>
+      <ul class="eventos" id="eventos"></ul>
+    </section>
+    <footer class="mudo" id="rodape"></footer>
+  </main>
+
+  <audio id="som" src="sons/aviso.mp3" preload="auto"></audio>
+  <script src="ui.js"></script>
+</body>
+</html>

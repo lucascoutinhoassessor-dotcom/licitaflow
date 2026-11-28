@@ -15,6 +15,8 @@ export const AGENTES_IA: AgenteIA[] = [
   { id: 'radar', nome: 'Radar', unidade: 'empresas monitoradas', tipo: 'simultaneo' },
   { id: 'cotador', nome: 'Cotador', unidade: 'processos cotados', tipo: 'mensal' },
   { id: 'juridico', nome: 'Jurídico com IA', unidade: 'peças redigidas', tipo: 'mensal' },
+  // Programa instalado (desktop/): sessões de disputa acompanhadas ao mesmo tempo, sem IA.
+  { id: 'pregao-ao-vivo', nome: 'Pregão ao Vivo', unidade: 'sessões acompanhadas', tipo: 'simultaneo' },
   // Consulta sem custo: não conta uso; o plano só define se está incluído (sem limite) ou não (0).
   { id: 'termometro', nome: 'Termômetro de Pagamento', unidade: 'consultas', tipo: 'mensal', semContagem: true },
 ]
