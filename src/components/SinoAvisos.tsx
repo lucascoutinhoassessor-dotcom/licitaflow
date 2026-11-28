@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useEffect, useRef, useState } from 'react'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { itensDaTela, notificacoesDosItens } from '@/lib/sinoSincronia'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import * as Popover from '@radix-ui/react-popover'
 import { Bell, Check, CheckCheck, Sparkles } from 'lucide-react'
@@ -67,7 +68,14 @@ function sincronizarAparelho(n: number) {
   }
 }
 
-const linkInterno = (l: string | null) => (l && /^\/app(\/[a-z0-9/_-]*)?$/.test(l) ? l : null)
+/** Fecha na barra do celular as notificações que levam às telas dos itens lidos: o número do ícone desce junto. */
+function fecharNaBarra(lista: ItemSino[]) {
+  if (!('serviceWorker' in navigator)) return
+  navigator.serviceWorker.getRegistration().then((reg) => reg?.getNotifications())
+    .then((abertas) => notificacoesDosItens(abertas ?? [], lista, location.origin).forEach((x) => x.close())).catch(() => undefined)
+}
+
+const linkInterno =(l: string | null) => (l && /^\/app(\/[a-z0-9/_-]*)?$/.test(l) ? l : null)
 const botaoIcone = 'relative inline-flex h-10 w-10 items-center justify-center rounded-lg text-sidebar-foreground/85 outline-none hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-white/40 data-[state=open]:bg-white/10'
 const botaoAcao = 'inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-white/15 px-2.5 text-xs font-medium text-white outline-none hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-white/40 disabled:opacity-50'
 
@@ -98,6 +106,24 @@ export default function SinoAvisos() {
     }
   }, [refetch])
 
+  // Veio de um push (public/sw.js abre a tela com ?de=push): os itens do sino desta tela viram lidos
+  // e o parâmetro sai do endereço.
+  const { pathname, search } = useLocation()
+  const navigate = useNavigate()
+  const tratado = useRef<string | null>(null)
+  useEffect(() => {
+    const p = new URLSearchParams(search)
+    if (p.get('de') !== 'push' || !q.isSuccess) return
+    const chave = pathname + search
+    if (tratado.current === chave) return
+    tratado.current = chave
+    p.delete('de')
+    navigate({ pathname, search: p.toString() ? `?${p}` : '' }, { replace: true })
+    // Consulta de novo antes de marcar: com o app já aberto, a lista pode ser de antes do push.
+    void q.refetch().then((r) => marcar(itensDaTela(r.data ?? [], pathname)))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname, search, q.isSuccess])
+
   async function marcar(lista: ItemSino[]) {
     if (!lista.length || !user) return
     setOcupado(true)
@@ -110,6 +136,7 @@ export default function SinoAvisos() {
       ])
       if (a?.error) throw a.error
       if (m?.error) throw m.error
+      fecharNaBarra(lista)
       await qc.invalidateQueries({ queryKey: ['aviso-leituras'] })
     } catch (e) {
       toast.error(mensagemErro(e))

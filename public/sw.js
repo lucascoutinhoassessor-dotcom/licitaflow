@@ -80,7 +80,10 @@ self.addEventListener('push', event => {
 })
 self.addEventListener('notificationclick', event => {
   event.notification.close()
-  const url = new URL((event.notification.data && event.notification.data.url) || '/app/avisos', self.location.origin).href
+  // de=push: o app marca no sino, como lido, o item desta tela (src/components/SinoAvisos.tsx).
+  const destino = new URL((event.notification.data && event.notification.data.url) || '/app/avisos', self.location.origin)
+  destino.searchParams.set('de', 'push')
+  const url = destino.href
   event.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(lista => {
     const aberta = lista.find(c => c.url.startsWith(self.location.origin))
     if (aberta) return aberta.focus().then(c => (c || aberta).navigate(url)).catch(() => self.clients.openWindow(url))
