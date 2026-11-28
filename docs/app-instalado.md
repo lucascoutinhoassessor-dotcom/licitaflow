@@ -125,3 +125,13 @@ Além de `estrategias_lance`, `lances_disputa` e `maquinas_lances` do plano ante
 - O lance é enviado **pela própria página do portal** (`codigoEnviarLance`): `POST …/comprasnet-disputa/api/v1/compras/{compra}/itens/{n}/lances`, com o token que já está na página. O token não sai da janela.
 - As estratégias ficam no computador (`userData/estrategias.json`).
 - **A conferir na primeira disputa de treinamento:** os nomes dos campos da sala (fase, melhor valor, meu valor, posição, `faseItem`). As amostras ficam em `userData/descoberta/`.
+
+## 9. Passo a passo no programa e publicação automática (0.2.1, 28/11/2026)
+
+- **Passo a passo no topo do programa:** conta conectada, entrar no portal, abrir a sala de disputa e configurar e ligar.
+  - O passo atual fica destacado, com o botão certo: "Abrir Compras.gov.br" ou "Ir para as minhas compras", que leva a janela do portal à lista de compras do fornecedor.
+  - "Como o Pregão ao Vivo funciona" explica acompanhar, dar lances, simulação, Parar tudo e segurança.
+- **Publicação:** enviar uma tag `vX.Y.Z` (igual à versão do `desktop/package.json`) dispara `.github/workflows/pregao-ao-vivo.yml`.
+  - No Windows do GitHub, o workflow monta o instalador e publica a versão com `LicitaForce-Pregao-ao-Vivo-Setup.exe`, `latest.yml` e `.blockmap`.
+  - O endereço e a chave pública do Supabase são lidos do site publicado (`scripts/config.mjs`). Sem `.env`, nenhum segredo é necessário.
+- O autoteste (`LICITAFORCE_AUTOTESTE`) usa um perfil separado, para não mexer no programa instalado.

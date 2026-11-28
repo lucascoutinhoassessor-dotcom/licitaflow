@@ -19,13 +19,34 @@ function lerEnv(arquivo) {
 }
 
 const env = { ...lerEnv(join(raiz, '.env')), ...lerEnv(join(raiz, '.env.local')), ...process.env }
-const supabaseUrl = env.LICITAFORCE_SUPABASE_URL || env.VITE_SUPABASE_URL
-const supabaseAnonKey = env.LICITAFORCE_SUPABASE_ANON_KEY || env.VITE_SUPABASE_ANON_KEY
+const papel = (jwt) => { try { return JSON.parse(Buffer.from(String(jwt).split('.')[1], 'base64url').toString()).role } catch { return null } }
+
+/** Sem .env (por exemplo, no GitHub Actions): lê o endereço e a chave pública do site publicado, que já os entrega ao navegador. */
+async function doSitePublicado(site) {
+  const html = await (await fetch(site)).text()
+  for (const js of [...new Set(html.match(/\/assets\/[^"']+\.js/g) ?? [])]) {
+    const codigo = await (await fetch(new URL(js, site))).text()
+    const url = codigo.match(/https:\/\/[a-z0-9]+\.supabase\.co/)?.[0]
+    // Chave pública no formato novo (sb_publishable_…) ou no antigo (JWT com papel "anon"). Nunca a de serviço.
+    const chave = codigo.match(/sb_publishable_[A-Za-z0-9_-]{10,}/)?.[0]
+      ?? (codigo.match(/eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/g) ?? []).find((j) => papel(j) === 'anon')
+    if (url && chave) return { url, chave }
+  }
+  return {}
+}
+
+let supabaseUrl = env.LICITAFORCE_SUPABASE_URL || env.VITE_SUPABASE_URL
+let supabaseAnonKey = env.LICITAFORCE_SUPABASE_ANON_KEY || env.VITE_SUPABASE_ANON_KEY
+if (!supabaseUrl || !supabaseAnonKey) {
+  const p = await doSitePublicado(env.LICITAFORCE_SITE_URL || 'https://licitaforce-app.vercel.app').catch(() => ({}))
+  supabaseUrl ||= p.url
+  supabaseAnonKey ||= p.chave
+}
 if (!supabaseUrl || !supabaseAnonKey) {
   console.error('Faltam o endereço e a chave pública do Supabase (VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY).')
   process.exit(1)
 }
-if (/service_role/.test(Buffer.from(String(supabaseAnonKey).split('.')[1] ?? '', 'base64').toString())) {
+if (String(supabaseAnonKey).startsWith('sb_secret_') || /service_role/.test(Buffer.from(String(supabaseAnonKey).split('.')[1] ?? '', 'base64').toString())) {
   console.error('A chave informada é a de serviço, não a pública. Use a anon key.')
   process.exit(1)
 }

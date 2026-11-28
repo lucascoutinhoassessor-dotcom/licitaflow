@@ -1,0 +1,33 @@
+# Monta o instalador do LicitaForce Pregão ao Vivo para Windows e publica a versão no GitHub Releases.
+# Dispara quando uma tag vX.Y.Z é enviada (a mesma versão do desktop/package.json) ou à mão em Actions.
+# O site baixa sempre de releases/latest/download/LicitaForce-Pregao-ao-Vivo-Setup.exe e os programas
+# instalados se atualizam sozinhos a partir daqui (latest.yml).
+name: Pregão ao Vivo (instalador)
+
+on:
+  push:
+    tags: ['v*.*.*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - run: npm ci
+      # Endereço e chave pública do Supabase lidos do site publicado (são os mesmos que o navegador recebe).
+      - run: node scripts/config.mjs
+      - run: npx electron-builder --win nsis --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

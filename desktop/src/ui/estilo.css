@@ -71,3 +71,18 @@ select { padding: 7px 9px; border-radius: 10px; border: 1px solid #334155; backg
 button.play { min-width: 110px; }
 button.play.ligado { background: #7f1d1d; border-color: #b91c1c; }
 .motivo { margin: 0; }
+
+/* passo a passo */
+.guia { display: grid; gap: 8px; margin-top: 10px; }
+.passo { display: flex; gap: 12px; align-items: flex-start; padding: 10px 12px; border: 1px solid #263248; border-radius: 12px; opacity: .65; }
+.passo p { margin: 4px 0 0; }
+.passo .acoes { margin-top: 8px; }
+.passo.atual { opacity: 1; border-color: var(--azul); background: rgba(14,165,233,.06); }
+.passo.feito { opacity: .9; }
+.passo .numero { flex: 0 0 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; background: #1f2937; color: var(--mudo); }
+.passo.atual .numero { background: var(--azul); color: #fff; }
+.passo.feito .numero { background: var(--verde); color: #fff; }
+.ajuda { margin-top: 12px; font-size: 13px; }
+.ajuda summary { cursor: pointer; color: var(--azul); font-weight: 600; }
+.ajuda ul { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 6px; color: var(--mudo); list-style: disc; }
+.ajuda strong { color: var(--texto); }

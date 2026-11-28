@@ -28,6 +28,21 @@
   <main id="painel" class="oculto">
     <p class="erro faixa oculto" id="erroGeral"></p>
     <section class="cartao">
+      <h2>Passo a passo</h2>
+      <div class="guia" id="guia"></div>
+      <details class="ajuda">
+        <summary>Como o Pregão ao Vivo funciona</summary>
+        <ul>
+          <li><strong>Acompanhar:</strong> o programa lê o que a sala de disputa mostra na janela do portal (mensagens do pregoeiro, convocações, fases, lances e a sua posição), avisa com som e notificação e manda tudo para o site LicitaForce.</li>
+          <li><strong>Dar lances:</strong> em cada item você define o lance mínimo e o desconto. Ligada, a máquina cobre o melhor lance, nunca abaixo do seu mínimo, respeitando o intervalo do portal. "Só no fim" espera o encerramento aleatório ou a prorrogação.</li>
+          <li><strong>Modo simulação:</strong> mostra o lance que daria, sem enviar. Use para testar antes de uma disputa real. Desligue para dar lances de verdade.</li>
+          <li><strong>Parar tudo:</strong> desliga todos os itens na hora. Fechar a janela principal deixa o programa na bandeja, ao lado do relógio; a janela do portal precisa ficar aberta durante a disputa.</li>
+          <li><strong>Segurança:</strong> o programa não guarda a senha do portal nem resolve captcha. O lance sai pela própria página do portal, com a sua sessão.</li>
+        </ul>
+      </details>
+    </section>
+
+    <section class="cartao">
       <h2>1. Abra o portal e faça o login</h2>
       <p class="mudo">O login e o captcha são sempre seus, na janela oficial do portal. Depois, abra a sala de disputa do pregão:
         o programa reconhece a compra sozinho e passa a acompanhar.</p>
@@ -59,6 +74,7 @@
   </main>
 
   <audio id="som" src="sons/aviso.mp3" preload="auto"></audio>
+  <script src="guia.js"></script>
   <script src="disputa.js"></script>
   <script src="ui.js"></script>
 </body>

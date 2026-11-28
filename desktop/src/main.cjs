@@ -27,6 +27,8 @@ function registrar(...partes) {
 process.on('uncaughtException', (e) => registrar('erro', e))
 process.on('unhandledRejection', (e) => registrar('promessa', e))
 
+// Autoteste usa um perfil separado: não mexe na conta nem nas estratégias do programa instalado.
+if (process.env.LICITAFORCE_AUTOTESTE) app.setPath('userData', path.join(os.tmpdir(), 'licitaforce-pav-autoteste'))
 if (!app.requestSingleInstanceLock()) app.quit()
 app.setAppUserModelId('br.com.licitaforce.pregaoaovivo')
 
@@ -54,9 +56,23 @@ function estadoUi() {
       ...PORTAIS_FUTUROS.map((p) => ({ ...p, disponivel: false })),
     ],
     pendentes: nuvem?.pendentes() ?? 0,
+    guia: guiaUi(),
     simulacao: estrategias?.simulacao ?? true,
     disputa: disputaUi(),
     historico: historico.slice(0, 40),
+  }
+}
+
+/** Em que passo o usuário está (para o passo a passo do topo da tela). */
+function guiaUi() {
+  const regs = [...portais.values()]
+  const itens = regs.flatMap((r) => [...r.ctx.estado.values()])
+  return {
+    conta: !!nuvem?.org,
+    portalAberto: regs.length > 0,
+    portalLogado: regs.some((r) => r.logado),
+    salaAberta: itens.length > 0,
+    maquinaLigada: itens.some((it) => it.chave && estrategias?.de(CONECTORES.comprasgov.id, it.chave, it.item).ligado),
   }
 }
 
@@ -141,7 +157,7 @@ function abrirPortal(idConector, ambiente = 'producao') {
     : { action: 'deny' })
 
   const ctx = { estado: new Map(), apis: new Map(), empresas: [] }
-  const reg = { janela, logado: false, ctx, parar: null }
+  const reg = { janela, logado: false, ctx, parar: null, ambiente }
   portais.set(idConector, reg)
   const amostrar = criarAmostrador(path.join(app.getPath('userData'), 'descoberta', idConector))
 
@@ -262,6 +278,13 @@ function registrarIpc() {
     avaliar(portal); atualizarUi()
     return r
   })
+  ipcMain.handle('irParaDisputas', (_e, id) => {
+    const reg = portais.get(String(id))
+    const conector = CONECTORES[String(id)]
+    if (!reg || reg.janela.isDestroyed() || !conector?.disputas) throw new Error('Abra o portal primeiro.')
+    reg.janela.loadURL(conector.disputas[reg.ambiente] ?? conector.disputas.producao)
+    reg.janela.show(); reg.janela.focus()
+  })
   ipcMain.handle('simulacao', (_e, ligada) => { estrategias.definirSimulacao(ligada !== false); atualizarUi() })
   ipcMain.handle('pararTudo', () => { estrategias.pararTudo(); for (const id of portais.keys()) avaliar(id); atualizarUi() })
   ipcMain.handle('abrirSite', (_e, rota) => shell.openExternal(config.siteUrl + (typeof rota === 'string' && rota.startsWith('/') ? rota : '/app/pregao-ao-vivo')))
@@ -323,6 +346,8 @@ app.whenReady().then(async () => {
             { tipo: 'lance', item: '3', autor: 'Sistema', texto: 'Item 3: melhor lance R$ 10,20 · seu lance R$ 10,35', quando: agora, sessao: 'Pregão 90012/2026' },
           ],
           simulacao: true,
+          guia: { conta: true, portalAberto: true, portalLogado: true, salaAberta: false, maquinaLigada: false },
+          portais: [{ id: 'comprasgov', nome: 'Compras.gov.br', disponivel: true, aberto: true, logado: true }, { id: 'bll', nome: 'BLL Compras', disponivel: false }],
           disputa: [{ portal: 'comprasgov', chave: '15841905900122026', titulo: 'UASG 158419 · Pregão 90012/2026', itens: [
             { item: '1', descricao: 'Papel A4 75 g/m²', fase: 'Em disputa aberta', melhor: 5, meu: 18.59, posicao: 4, estrategia: { ligado: true, minimo: 3.99, desconto: 0.5, tipoDesconto: 'valor', casas4: false, soNoFim: false, intervaloSeg: 20 }, decisao: { motivo: 'Intervalo mínimo: próximo lance em 12 s.' } },
             { item: '2', descricao: 'Caneta esferográfica azul', fase: 'Aguardando disputa', melhor: null, meu: null, posicao: null, estrategia: { ligado: false, minimo: null, desconto: 0.01, tipoDesconto: 'valor', casas4: true, soNoFim: true, intervaloSeg: 20 }, decisao: null },

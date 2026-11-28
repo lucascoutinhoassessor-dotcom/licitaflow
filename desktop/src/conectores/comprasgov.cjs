@@ -13,6 +13,11 @@ const entradas = {
   producao: 'https://www.comprasnet.gov.br/seguro/loginPortal.asp',
   treinamento: 'https://treinamento.comprasnet.gov.br/seguro/loginPortal.asp',
 }
+// Lista de compras do fornecedor no Compras.gov.br novo (de onde se abre a sala de disputa), depois do login.
+const disputas = {
+  producao: 'https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/seguro/fornecedor/compras',
+  treinamento: 'https://tre-cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/seguro/fornecedor/compras',
+}
 
 const HOSTS = /(^|\.)(estaleiro\.serpro\.gov\.br|comprasnet\.gov\.br|compras\.gov\.br)$/
 const SERVICOS = /\/(comprasnet-disputa|comprasnet-mensagem|comprasnet-fase-externa|comprasnet-julgamento|comprasnet-habilitacao)\//
@@ -209,4 +214,4 @@ function codigoEnviarLance({ apiBase, chave, item, valor, faseBruta }) {
   })()`
 }
 
-module.exports = { id, nome, entradas, chaveDaUrl, interessa, interessaWs, indicaLogin, tituloDaChave, lerResposta, lerQuadroWs, itensDe, faseAberta, faseFinal, codigoEnviarLance, apiBaseDe }
+module.exports = { id, nome, entradas, disputas, chaveDaUrl, interessa, interessaWs, indicaLogin, tituloDaChave, lerResposta, lerQuadroWs, itensDe, faseAberta, faseFinal, codigoEnviarLance, apiBaseDe }

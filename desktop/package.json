@@ -1,7 +1,7 @@
 {
   "name": "licitaforce-pregao-ao-vivo",
   "productName": "LicitaForce Pregão ao Vivo",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Acompanha ao vivo a sala de disputa dos pregões com a sessão do próprio usuário e envia os eventos ao LicitaForce.",
   "author": "LicitaForce",
   "private": true,

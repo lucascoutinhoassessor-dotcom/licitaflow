@@ -67,6 +67,7 @@ function desenhar(s) {
     ev.append(li)
   }
 
+  window.desenharGuia?.(s)
   window.desenharDisputa?.(s)
 
   $('rodape').textContent = `Computador ${s.computador} · versão ${s.versao}` + (s.pendentes ? ` · ${s.pendentes} evento(s) aguardando envio` : '') +
