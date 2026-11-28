@@ -6,7 +6,6 @@ import { Building, Check, ChevronDown, ChevronsUpDown, CircleHelp, Download, Lay
 import { cn } from '@/lib/utils'
 import { IA, rotaAtiva, type GrupoNav, type ItemNav } from '@/lib/navegacao'
 import { useModulos, useNavegacao } from '@/hooks/useModulos'
-import { LINK_DOWNLOAD } from '@/lib/pregaoAoVivo'
 import { Logo } from '@/components/ui'
 import { useAuth } from '@/providers/AuthProvider'
 import { useOrg } from '@/providers/OrgProvider'
@@ -244,9 +243,9 @@ export function AppLayout({ children }: { children: ReactNode }) {
           {!instalacao.ocultar && <button type="button" onClick={() => { void instalacao.instalar() }} className="inline-flex h-9 items-center gap-1.5 rounded-full border border-white/15 px-3 text-sm font-medium text-white outline-none hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-white/40" aria-label="Instalar aplicativo">
             <Download className="h-4 w-4" /><span className="hidden sm:inline">Instalar app</span>
           </button>}
-          {instalarPregao && <a href={LINK_DOWNLOAD} download className="hidden h-9 items-center gap-1.5 rounded-full border border-emerald-400/40 px-3 text-sm font-medium text-white outline-none hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-white/40 lg:inline-flex" title="Baixe e abra o instalador: ele instala o Pregão ao Vivo sozinho">
+          {instalarPregao && <Link to="/app/pregao-ao-vivo/instalar" className="hidden h-9 items-center gap-1.5 rounded-full border border-emerald-400/40 px-3 text-sm font-medium text-white outline-none hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-white/40 lg:inline-flex" title="Baixar o instalador do Pregão ao Vivo">
             <MonitorDown className="h-4 w-4" />Instalar Pregão ao Vivo
-          </a>}
+          </Link>}
           <SinoAvisos />
           <Link to="/suporte" className={cn(botaoIcone, 'hidden sm:inline-flex')} aria-label="Ajuda e suporte"><CircleHelp className="h-5 w-5" /></Link>
           <MenuUsuario />

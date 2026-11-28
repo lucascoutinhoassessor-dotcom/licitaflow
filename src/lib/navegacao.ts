@@ -12,6 +12,7 @@ import {
   LayoutDashboard,
   Radar,
   Radio,
+  MonitorDown,
   Settings,
   Users,
   Wallet,
@@ -83,12 +84,6 @@ export const GRUPOS_NAV: GrupoNav[] = [
         descricao: 'Funil e kanban dos processos: captação, análise, proposta, disputa, habilitação, recurso e resultado, com itens, preços-limite e linha do tempo.',
       },
       {
-        rota: '/app/pregao-ao-vivo',
-        rotulo: 'Pregão ao Vivo',
-        icone: Radio,
-        descricao: 'Programa instalado que acompanha a sala de disputa em tempo real: mensagens do pregoeiro, convocações com prazo, fases, lances e posição.',
-      },
-      {
         rota: '/app/prazos',
         rotulo: 'Agenda e prazos',
         icone: CalendarClock,
@@ -144,6 +139,25 @@ export const GRUPOS_NAV: GrupoNav[] = [
       { rota: '/app/juridico/intencao-recurso', rotulo: 'Intenção de recurso', icone: FileText, descricao: JURIDICO },
       { rota: '/app/juridico/recurso', rotulo: 'Recurso', icone: FileText, descricao: JURIDICO },
       { rota: '/app/juridico/contrarrazoes', rotulo: 'Contrarrazões', icone: FileText, descricao: JURIDICO },
+    ],
+  },
+  {
+    id: 'disputa',
+    rotulo: 'Disputa',
+    icone: Radio,
+    itens: [
+      {
+        rota: '/app/pregao-ao-vivo',
+        rotulo: 'Pregão ao Vivo',
+        icone: Radio,
+        descricao: 'Programa instalado que acompanha a sala de disputa em tempo real e dá os lances: mensagens do pregoeiro, convocações com prazo, fases, lances e posição.',
+      },
+      {
+        rota: '/app/pregao-ao-vivo/instalar',
+        rotulo: 'Instalar o programa',
+        icone: MonitorDown,
+        descricao: 'Baixe o instalador do Pregão ao Vivo para Windows: um arquivo só, que abre e instala tudo.',
+      },
     ],
   },
 ]

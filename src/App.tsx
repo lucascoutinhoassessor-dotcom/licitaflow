@@ -53,6 +53,7 @@ const CotadorInicio = lazy(() => import('@/pages/app/CotadorInicio'))
 const Cotador = lazy(() => import('@/pages/app/Cotador'))
 const TermometroPagamento = lazy(() => import('@/pages/app/TermometroPagamento'))
 const PregaoAoVivo = lazy(() => import('@/pages/app/PregaoAoVivo'))
+const InstalarPregaoAoVivo = lazy(() => import('@/pages/app/InstalarPregaoAoVivo'))
 const MasterEntrar = lazy(() => import('@/pages/master/MasterEntrar'))
 const MasterLayout = lazy(() => import('@/pages/master/MasterLayout'))
 const MasterVisaoGeral = lazy(() => import('@/pages/master/VisaoGeral'))
@@ -210,6 +211,7 @@ export default function App() {
             <Route path="agentes/cotador/:processoId" element={<Cotador />} />
             <Route path="agentes/termometro" element={<TermometroPagamento />} />
             <Route path="pregao-ao-vivo" element={<PregaoAoVivo />} />
+            <Route path="pregao-ao-vivo/instalar" element={<InstalarPregaoAoVivo />} />
             <Route path="avisos" element={<Avisos />} />
             <Route path="quadro" element={<QuadroInformativo />} />
             <Route path="sugestoes" element={<SugestoesCliente />} />
