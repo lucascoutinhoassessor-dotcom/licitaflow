@@ -1,6 +1,7 @@
 import { useState } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
 import { useQueryClient } from '@tanstack/react-query'
-import { Bot, CheckCircle2, ExternalLink, KeyRound, Sparkles, Trash2 } from 'lucide-react'
+import { CheckCircle2, ExternalLink, KeyRound, MessageSquarePlus, Sparkles, Trash2, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { supabase } from '@/lib/supabase'
 import { useOrg } from '@/providers/OrgProvider'
@@ -8,38 +9,91 @@ import { useModulos } from '@/hooks/useModulos'
 import { cn } from '@/lib/utils'
 import { PROVEDORES_IA, type ChaveIA, type ProvedorIA } from '@/lib/minhaIA'
 import { useChavesIA } from '@/hooks/useMinhaIA'
-import { Aviso, Button, Campo, Input, InputSenha, Modal } from '@/components/ui'
+import { Aviso, Button, Campo, Input, InputSenha } from '@/components/ui'
+import { RoboIA } from '@/components/RoboIA'
+import { ChatMinhaIA, useConversa } from '@/components/ChatMinhaIA'
 
 /**
- * Botão flutuante "Minha IA": o cliente liga a chave de API da conta dele (Claude, Gemini ou ChatGPT).
- * Com uma chave ativa, o Leitor de editais e o Jurídico com IA usam a conta dele, sem contar no limite do plano.
- * A chave vai direto ao servidor, que testa, cifra e guarda; o navegador nunca recebe a chave de volta.
+ * Robozinho flutuante "Minha IA". Sem a IA do cliente ligada, abre a tela de conexão (Claude, Gemini ou ChatGPT);
+ * com ela ligada, abre a conversa, já com os dados da conta. A chave vai direto ao servidor, que testa, cifra e
+ * guarda; o navegador nunca recebe a chave de volta.
  */
 export default function MinhaIA() {
   const { org, podeAdministrar } = useOrg()
   const { estado } = useModulos()
   const liberado = estado('/app/agentes') === 'liberado'
   const [aberto, setAberto] = useState(false)
+  const [conexoes, setConexoes] = useState(false)
   const qc = useQueryClient()
   const chaves = useChavesIA(liberado)
+  const conversa = useConversa(org?.id)
   if (!org || !liberado) return null
   const ativa = chaves.data?.find((c) => c.ativa)
+  const mostrarConexoes = conexoes || !ativa
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setAberto(true)}
-        aria-label="Minha IA: ligar Claude, Gemini ou ChatGPT"
-        className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] right-4 z-30 flex items-center gap-2 rounded-full border border-emerald-500/40 bg-gradient-to-br from-emerald-500 to-sky-500 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-900/30 transition-transform hover:scale-105 lg:bottom-6 lg:right-6"
-      >
-        <Bot className="h-5 w-5" />
-        <span className="hidden sm:inline">{ativa ? PROVEDORES_IA[ativa.provedor].curto : 'Minha IA'}</span>
-        {ativa && <span className="h-2 w-2 rounded-full bg-white" />}
-      </button>
-      <Modal aberto={aberto} aoFechar={() => setAberto(false)} titulo="Minha IA" largo>
-        <PainelMinhaIA chaves={chaves.data ?? []} podeAdministrar={podeAdministrar} org={org.id} aoMudar={() => qc.invalidateQueries({ queryKey: ['ia-chaves', org.id] })} />
-      </Modal>
+      <AnimatePresence>
+        {!aberto && (
+          <motion.button
+            type="button"
+            key="robo"
+            drag
+            dragMomentum={false}
+            dragElastic={0.1}
+            dragConstraints={{ top: -window.innerHeight + 140, left: -window.innerWidth + 90, right: 0, bottom: 0 }}
+            onTap={() => setAberto(true)}
+            initial={{ opacity: 0, scale: 0.6 }}
+            animate={{ opacity: 1, scale: 1, y: [0, -8, 0] }}
+            exit={{ opacity: 0, scale: 0.6 }}
+            transition={{ y: { duration: 3, repeat: Infinity, ease: 'easeInOut' }, default: { duration: 0.25 } }}
+            whileHover={{ scale: 1.08 }}
+            aria-label={ativa ? `Conversar com a sua IA (${PROVEDORES_IA[ativa.provedor].nome})` : 'Minha IA: ligar Claude, Gemini ou ChatGPT'}
+            title={ativa ? `Conversar com o seu ${PROVEDORES_IA[ativa.provedor].nome}` : 'Ligar a sua IA'}
+            className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] right-4 z-30 cursor-grab touch-none rounded-full outline-none focus-visible:ring-2 focus-visible:ring-primary active:cursor-grabbing lg:bottom-6 lg:right-6"
+          >
+            {ativa && <motion.span className="absolute inset-1 rounded-full bg-emerald-400/40" animate={{ scale: [1, 1.35], opacity: [0.6, 0] }} transition={{ duration: 2, repeat: Infinity }} />}
+            <span className="relative block drop-shadow-[0_8px_16px_rgba(14,165,233,0.35)]"><RoboIA tamanho={60} ligado={!!ativa} /></span>
+          </motion.button>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {aberto && (
+          <motion.aside
+            key="painel"
+            initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }} transition={{ type: 'spring', damping: 30, stiffness: 260 }}
+            className="fixed inset-y-0 right-0 z-50 flex w-full flex-col border-l bg-card text-card-foreground shadow-2xl sm:w-[440px]"
+            aria-label="Minha IA"
+          >
+            <header className="flex items-center gap-3 border-b px-4 py-3">
+              <RoboIA tamanho={36} ligado={!!ativa} />
+              <div className="min-w-0 flex-1">
+                <p className="font-semibold leading-tight">Minha IA</p>
+                <p className="truncate text-xs text-muted-foreground">{ativa ? `${PROVEDORES_IA[ativa.provedor].nome} · ${ativa.modelo}` : 'Nenhuma IA conectada'}</p>
+              </div>
+              {ativa && !mostrarConexoes && conversa.mensagens.length > 0 && (
+                <button type="button" onClick={conversa.limpar} className="rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="Nova conversa" title="Nova conversa"><MessageSquarePlus className="h-5 w-5" /></button>
+              )}
+              {ativa && (
+                <button type="button" onClick={() => setConexoes(!conexoes)} className={cn('rounded-md p-2 hover:bg-muted', conexoes ? 'text-primary' : 'text-muted-foreground hover:text-foreground')} aria-label="Conexões de IA" title="Conexões de IA"><KeyRound className="h-5 w-5" /></button>
+              )}
+              <button type="button" onClick={() => setAberto(false)} className="rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="Fechar"><X className="h-5 w-5" /></button>
+            </header>
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              {mostrarConexoes ? (
+                <div className="p-4">
+                  {!ativa && <p className="mb-4 text-sm text-muted-foreground">Ligue a sua conta do Claude, do Gemini ou do ChatGPT. Assim que conectar, esta tela vira uma conversa com a sua IA, já sabendo dos seus processos, prazos e editais no LicitaForce.</p>}
+                  <PainelMinhaIA chaves={chaves.data ?? []} podeAdministrar={podeAdministrar} org={org.id}
+                    aoMudar={async () => { await qc.invalidateQueries({ queryKey: ['ia-chaves', org.id] }); setConexoes(false) }} />
+                </div>
+              ) : (
+                <ChatMinhaIA org={org.id} conversa={conversa} ia={ativa!} />
+              )}
+            </div>
+          </motion.aside>
+        )}
+      </AnimatePresence>
     </>
   )
 }

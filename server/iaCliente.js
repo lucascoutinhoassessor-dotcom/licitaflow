@@ -173,3 +173,40 @@ export async function atenderChave({ req, res, org, usuario, banco, segredo, fet
   } })
   return res.status(200).json({ ok: true, provedor, modelo, final: chave.slice(-4) })
 }
+
+/**
+ * Conversa (texto livre) com a IA do cliente, para o chat "Minha IA".
+ * mensagens: [{ papel: 'usuario' | 'ia', texto }]. Devolve { texto, modelo, entrada, saida }.
+ */
+export async function conversarIA({ provedor, chave, modelo, sistema, mensagens, fetcher = fetch, maxTokens = 4000 }) {
+  const m = MODELO_VALIDO.test(modelo ?? '') ? modelo : PROVEDORES[provedor]?.modeloPadrao
+  const lista = mensagens.map((x) => ({ papel: x.papel === 'ia' ? 'ia' : 'usuario', texto: String(x.texto ?? '') }))
+  if (provedor === 'anthropic') {
+    const j = await chamar(fetcher, 'https://api.anthropic.com/v1/messages', {
+      method: 'POST', headers: { 'x-api-key': chave, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: m, max_tokens: maxTokens, system: sistema, messages: lista.map((x) => ({ role: x.papel === 'ia' ? 'assistant' : 'user', content: x.texto })) }),
+    }, PROVEDORES.anthropic.nome)
+    return { texto: (j?.content ?? []).filter((b) => b.type === 'text').map((b) => b.text).join('\n').trim(), modelo: j?.model ?? m, entrada: j?.usage?.input_tokens ?? 0, saida: j?.usage?.output_tokens ?? 0 }
+  }
+  if (provedor === 'openai') {
+    const j = await chamar(fetcher, 'https://api.openai.com/v1/chat/completions', {
+      method: 'POST', headers: { Authorization: `Bearer ${chave}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: m, max_completion_tokens: maxTokens, messages: [{ role: 'system', content: sistema }, ...lista.map((x) => ({ role: x.papel === 'ia' ? 'assistant' : 'user', content: x.texto }))] }),
+    }, PROVEDORES.openai.nome)
+    const msg = j?.choices?.[0]?.message ?? {}
+    return { texto: String(msg.refusal ?? msg.content ?? '').trim(), modelo: j?.model ?? m, entrada: j?.usage?.prompt_tokens ?? 0, saida: j?.usage?.completion_tokens ?? 0 }
+  }
+  if (provedor === 'google') {
+    const j = await chamar(fetcher, `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(m)}:generateContent`, {
+      method: 'POST', headers: { 'x-goog-api-key': chave, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: sistema }] },
+        contents: lista.map((x) => ({ role: x.papel === 'ia' ? 'model' : 'user', parts: [{ text: x.texto }] })),
+        generationConfig: { maxOutputTokens: maxTokens },
+      }),
+    }, PROVEDORES.google.nome)
+    const c = j?.candidates?.[0]
+    return { texto: (c?.content?.parts ?? []).map((p) => p.text ?? '').join('').trim(), modelo: j?.modelVersion ?? m, entrada: j?.usageMetadata?.promptTokenCount ?? 0, saida: j?.usageMetadata?.candidatesTokenCount ?? 0 }
+  }
+  throw erro(400, 'Provedor inválido')
+}

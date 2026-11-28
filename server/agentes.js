@@ -6,6 +6,7 @@ import { avisarRadar } from './radar.js'
 import { atualizarCapag } from './termometro.js'
 import { atenderJuridico } from './juridicoIA.js'
 import { atenderChave, chaveAtiva, criarClienteIA } from './iaCliente.js'
+import { atenderChat } from './chatIA.js'
 import { atualizarFederal } from './termometroFederal.js'
 // Agentes de IA (Claude API). Uma rota só para todos os agentes, por causa do limite de funções da Vercel.
 //
@@ -324,7 +325,7 @@ export function criarHandler({ fetcher = fetch, cliente, webpush } = {}) {
     }
 
     if (!/^Bearer \S+$/.test(token ?? '')) return res.status(401).json({ error: 'Entre na sua conta' })
-    if (!['leitor', 'juridico', 'chave'].includes(q.agente)) return res.status(400).json({ error: 'Agente inválido' })
+    if (!['leitor', 'juridico', 'chave', 'chat'].includes(q.agente)) return res.status(400).json({ error: 'Agente inválido' })
     const org = String(q.org ?? '')
     const controle = String(q.controle ?? '').trim()
     if (!/^[0-9a-f-]{36}$/i.test(org)) return res.status(400).json({ error: 'Organização inválida' })
@@ -357,12 +358,15 @@ export function criarHandler({ fetcher = fetch, cliente, webpush } = {}) {
       const propria = req.method === 'POST' ? await chaveAtiva({ banco, org, segredo: servico }) : null
       const clienteProprio = propria ? criarClienteIA({ ...propria, fetcher }) : null
 
+      // Leituras com o login do cliente (respeitam o RLS da organização).
+      const comoUsuario = (caminho, { metodo = 'GET', corpo } = {}) => fetcher(`${base}/rest/v1/${caminho}`, {
+        method: metodo, headers: { apikey: anon, Authorization: token, 'Content-Type': 'application/json' },
+        body: corpo ? JSON.stringify(corpo) : undefined, signal: AbortSignal.timeout(15000),
+      })
+      // Chat Minha IA: só com a IA do cliente.
+      if (q.agente === 'chat') return await atenderChat({ req, res, org, usuario, banco, comoUsuario, propria, fetcher, excedeuLimite })
+
       if (q.agente === 'juridico') {
-        // Leituras com o login do cliente (respeitam o RLS da organização).
-        const comoUsuario = (caminho, { metodo = 'GET', corpo } = {}) => fetcher(`${base}/rest/v1/${caminho}`, {
-          method: metodo, headers: { apikey: anon, Authorization: token, 'Content-Type': 'application/json' },
-          body: corpo ? JSON.stringify(corpo) : undefined, signal: AbortSignal.timeout(15000),
-        })
         return await atenderJuridico({ req, res, org, usuario, banco, comoUsuario, env, cliente: clienteProprio ?? cliente, modelo: MODELOS.juridico, propria })
       }
 
