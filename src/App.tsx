@@ -83,6 +83,7 @@ const MasterSugestoes = lazy(() => import('@/pages/master/Sugestoes'))
 const SugestoesCliente = lazy(() => import('@/pages/relacionamento/SugestoesCliente'))
 const MasterSomAviso = lazy(() => import('@/pages/master/SomAviso'))
 const MasterNotificacoes = lazy(() => import('@/pages/master/Notificacoes'))
+const MasterMensagensIA = lazy(() => import('@/pages/master/MensagensIA'))
 const NaoEncontrada = lazy(() => import('@/pages/NaoEncontrada'))
 
 function ExigeLogin({ children }: { children: ReactNode }) {
@@ -247,6 +248,7 @@ export default function App() {
             <Route path="logs" element={<MasterLogs />} />
             <Route path="som-aviso" element={<MasterSomAviso />} />
             <Route path="notificacoes" element={<MasterNotificacoes />} />
+            <Route path="mensagens-ia" element={<MasterMensagensIA />} />
           </Route>
 
           <Route path="*" element={<NaoEncontrada />} />

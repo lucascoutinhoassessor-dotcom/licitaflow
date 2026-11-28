@@ -5,11 +5,13 @@
 // POST {acao:'testar'}     → manda uma notificação de teste para os aparelhos do usuário logado
 // POST {acao:'enviar'}     → (só master) manda o push de um aviso recém-publicado, uma vez só
 // POST {acao:'agendados'}  → (pg_cron, sem login) manda os pushes agendados que já venceram
+// POST {acao:'ia_previa'}  → (só master) a IA redige, para cada cliente escolhido, a mensagem pedida na instrução
 // As chaves VAPID são geradas no primeiro uso e guardadas em push_vapid (só a chave de serviço lê).
 import webpushPadrao from 'web-push'
 import { entregarNotificacoes, enviarWhatsapp, telefoneWhatsapp } from './notificacoes.js'
 import { cifrar, decifrar } from './asaas.js'
 import { enviarResumoAgentes } from './pushAgentes.js'
+import { previaMensagens } from './mensagensIA.js'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const CONTATO = 'https://licitaforce-app.vercel.app'
@@ -29,7 +31,7 @@ export function inscricaoValida(s) {
     && typeof s.keys?.auth === 'string' && s.keys.auth.length > 0 && s.keys.auth.length <= 100
 }
 
-export function criarHandler({ webpush = webpushPadrao, fetcher = fetch } = {}) {
+export function criarHandler({ webpush = webpushPadrao, fetcher = fetch, redigir = null } = {}) {
   return async function handler(req, res) {
     res.setHeader('Cache-Control', 'no-store')
     const env = process.env
@@ -192,6 +194,24 @@ export function criarHandler({ webpush = webpushPadrao, fetcher = fetch } = {}) 
         if (!UUID.test(String(body.aviso ?? ''))) return res.status(400).json({ error: 'Aviso inválido' })
         const r = await enviarAviso(body.aviso)
         return res.status(200).json(r ?? { enviados: 0, falhas: 0, motivo: 'já enviado, agendado ou arquivado' })
+      }
+
+      // Mensagens da IA pedidas na hora: devolve a prévia redigida para cada cliente; o envio é feito pelo
+      // painel (admin_mensagens_ia_enviar) depois que o master revisa.
+      if (body.acao === 'ia_previa') {
+        const admin = await chamar('/rest/v1/rpc/is_platform_admin', { method: 'POST', body: '{}' }, false)
+        if (admin !== true) return res.status(403).json({ error: 'Acesso restrito ao master' })
+        const instrucao = String(body.instrucao ?? '').trim()
+        if (instrucao.length < 5 || instrucao.length > 1000) return res.status(400).json({ error: 'Escreva a instrução para a IA (até 1.000 caracteres).' })
+        const orgs = body.orgs == null ? null : Array.isArray(body.orgs) && body.orgs.length <= 40 && body.orgs.every((x) => UUID.test(String(x))) ? body.orgs : undefined
+        if (orgs === undefined) return res.status(400).json({ error: 'Clientes inválidos (até 40 por vez).' })
+        if (!process.env.ANTHROPIC_API_KEY && !redigir) return res.status(503).json({ error: 'A IA ainda não foi ativada no servidor (chave ANTHROPIC_API_KEY ausente). As mensagens automáticas continuam saindo com os modelos prontos.' })
+        const analises = await chamar('/rest/v1/rpc/admin_mensagens_ia_analises', { method: 'POST', body: JSON.stringify({ p_orgs: orgs }) }, false)
+        try {
+          return res.status(200).json(await (redigir ?? previaMensagens)({ instrucao, analises: analises ?? [] }))
+        } catch (e) {
+          return res.status(e?.status === 503 ? 503 : 500).json({ error: e?.status === 503 ? e.message : 'Não foi possível gerar a prévia agora' })
+        }
       }
 
       // WhatsApp (API oficial da Meta) do canal de reserva: o token é cifrado aqui e nunca volta ao navegador.

@@ -164,3 +164,8 @@ export function explicarErroPush(status: number) {
 /** Master: WhatsApp do canal de reserva (o token é cifrado no servidor e nunca volta ao navegador). */
 export const salvarWhatsapp = (dados: { phone_id?: string; token?: string; template?: string; idioma?: string; ativo?: boolean }) => chamar({ acao: 'whatsapp_salvar', ...dados }) as Promise<{ ok: true }>
 export const testarWhatsapp = (telefone: string) => chamar({ acao: 'whatsapp_testar', telefone }) as Promise<{ ok: true }>
+
+/** Master: a IA redige, para cada cliente escolhido (null = todos os ativos, até 40), a mensagem pedida na instrução. */
+export interface PreviaMensagemIA { org_id: string; nome: string; enviar: boolean; titulo?: string; texto?: string; link?: string; motivo?: string }
+export const previaMensagensIA = (instrucao: string, orgs: string[] | null) =>
+  chamar({ acao: 'ia_previa', instrucao, orgs }) as Promise<{ itens: PreviaMensagemIA[]; custo_usd: number }>

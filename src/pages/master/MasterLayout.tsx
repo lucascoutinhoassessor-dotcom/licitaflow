@@ -2,7 +2,7 @@ import { Suspense, useEffect, type ReactNode } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { LimiteDeErro } from '@/components/LimiteDeErro'
 import { Carregando } from '@/components/ui'
-import { Settings, Wallet, Plug, CreditCard, Headphones, Megaphone, BarChart3, Activity, FileText, History, LayoutDashboard, LogOut, ShieldCheck, Users, Repeat, Receipt, Trophy, ExternalLink, Download, ToggleRight, Bot, Ticket, ScrollText, Volume2, BellRing, Lightbulb, BookOpen } from 'lucide-react'
+import { Sparkles, Settings, Wallet, Plug, CreditCard, Headphones, Megaphone, BarChart3, Activity, FileText, History, LayoutDashboard, LogOut, ShieldCheck, Users, Repeat, Receipt, Trophy, ExternalLink, Download, ToggleRight, Bot, Ticket, ScrollText, Volume2, BellRing, Lightbulb, BookOpen } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { useFinanceiro } from './Financeiro'
@@ -40,6 +40,7 @@ const grupos: { titulo: string; abas: { rota: string; rotulo: string; icone: typ
     { rota: '/master/sugestoes', rotulo: 'Sugestões para usuários', icone: Lightbulb },
     { rota: '/master/avisos', rotulo: 'Avisos aos clientes', icone: Megaphone },
     { rota: '/master/notificacoes', rotulo: 'Notificações e lembretes', icone: BellRing },
+    { rota: '/master/mensagens-ia', rotulo: 'Mensagens da IA', icone: Sparkles },
     { rota: '/master/som-aviso', rotulo: 'Som do aviso', icone: Volume2 },
     { rota: '/master/conteudo', rotulo: 'Landing page', icone: FileText },
   ] },
