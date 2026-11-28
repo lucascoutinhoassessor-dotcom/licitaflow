@@ -29,9 +29,9 @@ describe('API de pagamentos',()=>{
     ambiente();const fetch=vi.fn().mockResolvedValueOnce(Response.json(true)).mockResolvedValueOnce(Response.json([{id:'asaas'}])).mockResolvedValueOnce(Response.json([{id:'asaas'}]));vi.stubGlobal('fetch',fetch);const r=res()
     const chave='$aact_'+'a'.repeat(60)
     await handler({method:'POST',headers:{authorization:'Bearer master'},body:{acao:'asaas_salvar',api_key:chave,ativo:true}},r)
-    expect(r.json).toHaveBeenCalledWith({ok:true})
+    expect(r.json).toHaveBeenCalledWith(expect.objectContaining({ok:true}))
     const corpo=fetch.mock.calls[2][1].body
-    expect(corpo).not.toContain(chave);expect(JSON.parse(corpo).api_key_cifrada).toMatch(/^v1:/)
+    expect(corpo).not.toContain(chave);expect(JSON.parse(corpo).api_key_cifrada).toMatch(/^v1:/);expect(JSON.parse(corpo).api_key_sandbox_cifrada).toBe(JSON.parse(corpo).api_key_cifrada)
   })
   it('cliente só assina com o Asaas ativado pela plataforma',async()=>{
     ambiente();const fetch=vi.fn().mockResolvedValueOnce(Response.json(false)).mockResolvedValueOnce(Response.json([{id:'asaas',ativo:false}]));vi.stubGlobal('fetch',fetch);const r=res()

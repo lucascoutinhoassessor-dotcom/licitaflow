@@ -41,14 +41,33 @@ export class ErroAsaas extends Error {
 }
 
 /** Configuração ativa: a do painel (banco) tem prioridade; variáveis de ambiente ficam como alternativa. */
-export function montarConfig(linha, env) {
-  if (linha?.api_key_cifrada) {
+export const AMBIENTES = ['sandbox', 'production']
+
+/** Chave e token cifrados de um ambiente. As colunas antigas valem para o ambiente que estava em uso. */
+export function credenciaisAmbiente(linha, ambiente) {
+  const legado = linha?.ambiente === ambiente
+  return {
+    chave: linha?.[`api_key_${ambiente}_cifrada`] ?? (legado ? linha?.api_key_cifrada : null) ?? null,
+    token: linha?.[`webhook_token_${ambiente}_cifrado`] ?? (legado ? linha?.webhook_token_cifrado : null) ?? null,
+  }
+}
+
+/** Sandbox entrega chave "$aact_hmlg_…" e produção "$aact_prod_…": evita colar a chave no lugar errado. */
+export function chaveDoOutroAmbiente(chave, ambiente) {
+  return ambiente === 'production' ? /_hmlg_/.test(chave) : /_prod_/.test(chave)
+}
+
+export function montarConfig(linha, env, ambienteEscolhido) {
+  const ambiente = AMBIENTES.includes(ambienteEscolhido) ? ambienteEscolhido : linha?.ambiente === 'production' ? 'production' : 'sandbox'
+  const cred = credenciaisAmbiente(linha, ambiente)
+  if (cred.chave) {
     return {
-      origem: 'painel', ativo: !!linha.ativo, ambiente: linha.ambiente === 'production' ? 'production' : 'sandbox',
-      apiKey: decifrar(linha.api_key_cifrada, env),
-      webhookToken: linha.webhook_token_cifrado ? decifrar(linha.webhook_token_cifrado, env) : null,
+      origem: 'painel', ativo: !!linha.ativo && ambiente === linha.ambiente, ambiente,
+      apiKey: decifrar(cred.chave, env),
+      webhookToken: cred.token ? decifrar(cred.token, env) : null,
     }
   }
+  if (linha && AMBIENTES.some(a => credenciaisAmbiente(linha, a).chave)) return null
   if (env.ASAAS_API_KEY) {
     return { origem: 'ambiente', ativo: (env.PAYMENTS_ENABLED_PROVIDERS ?? '').split(',').map(x => x.trim()).includes('asaas'),
       ambiente: env.ASAAS_ENV === 'production' ? 'production' : 'sandbox', apiKey: env.ASAAS_API_KEY, webhookToken: env.ASAAS_WEBHOOK_TOKEN || null }

@@ -1,6 +1,6 @@
 // Webhook do Asaas. Configure em Asaas → Integrações → Webhooks com a URL e o token exibidos no master.
 // Idempotente: cada evento é gravado uma vez (id do evento); reenvios do Asaas são ignorados com 200.
-import {decifrar,mesmoToken} from '../server/asaas.js'
+import {credenciaisAmbiente,decifrar,mesmoToken} from '../server/asaas.js'
 import {enviarAcessoPago} from '../server/acesso-pago.js'
 
 // Primeiro pagamento confirmado da assinatura: e-mail de acesso liberado (uma vez). Nunca derruba o webhook.
@@ -19,9 +19,17 @@ export default async function handler(req,res) {
     return r.status===204?null:r.json()
   }
   try {
-    const [g]=await sv('/rest/v1/plataforma_gateways?select=webhook_token_cifrado&id=eq.asaas')
-    const esperado=g?.webhook_token_cifrado?decifrar(g.webhook_token_cifrado,env):env.ASAAS_WEBHOOK_TOKEN
-    if(!mesmoToken(req.headers['asaas-access-token'],esperado)) return res.status(401).json({error:'Token inválido'})
+    const [g]=await sv('/rest/v1/plataforma_gateways?select=*&id=eq.asaas')
+    const recebido=req.headers['asaas-access-token']
+    const tokenDe=amb=>{ const t=credenciaisAmbiente(g,amb).token; return t?decifrar(t,env):null }
+    // Produção é sempre processada (cliente pagou de verdade, mesmo com o master testando no sandbox).
+    // Eventos do sandbox só valem enquanto o teste estiver em uso: pagamento de teste nunca libera acesso na produção.
+    const daProducao=mesmoToken(recebido,tokenDe('production'))
+    const doTeste=!daProducao && mesmoToken(recebido,tokenDe('sandbox'))
+    const legado=!daProducao && !doTeste && !g?.webhook_token_sandbox_cifrado && !g?.webhook_token_production_cifrado
+      && mesmoToken(recebido,g?.webhook_token_cifrado?decifrar(g.webhook_token_cifrado,env):env.ASAAS_WEBHOOK_TOKEN)
+    if(!daProducao && !doTeste && !legado) return res.status(401).json({error:'Token inválido'})
+    if(doTeste && g?.ambiente!=='sandbox') return res.json({recebido:true,ignorado:'evento do Asaas de teste com a produção em uso'})
     const body=typeof req.body==='string'?JSON.parse(req.body):req.body ?? {}
     const evento=String(body.event ?? '')
     if(!evento) return res.status(400).json({error:'Evento ausente'})

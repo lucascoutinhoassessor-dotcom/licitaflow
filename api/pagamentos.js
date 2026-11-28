@@ -1,6 +1,6 @@
 import {ABERTOS,PAGOS,dadosCartao,apresentarPagamento} from '../server/checkout.js'
 import {configuracao,criarCheckout,consultarPagamento} from '../server/gateways.js'
-import {asaas,cifrar,corpoAssinatura,ErroAsaas,hojeSP,montarConfig} from '../server/asaas.js'
+import {AMBIENTES,asaas,chaveDoOutroAmbiente,cifrar,corpoAssinatura,credenciaisAmbiente,ErroAsaas,hojeSP,montarConfig} from '../server/asaas.js'
 import {emailCupomAcesso,emailTeste,enviarEmail,montarSmtp} from '../server/email.js'
 import {enviarAcessoPago} from '../server/acesso-pago.js'
 import {URL_SITE} from '../server/email.js'
@@ -58,24 +58,55 @@ export default async function handler(req,res) {
     if(!admin && !ACOES_CLIENTE.includes(body.acao)) return res.status(403).json({error:'Acesso restrito ao master'})
 
     // ------------------------------------------------------------------ Asaas pelo painel
+    // Duas contas guardadas (teste e produção); o master escolhe qual está em uso.
+    // body: { ambiente?: em uso, chaves?: {sandbox?, production?}, tokens?: {sandbox?, production?}, ativo? }
+    // (api_key / webhook_token soltos valem para o ambiente informado, como antes)
     if(body.acao==='asaas_salvar') {
-      const dados={updated_at:new Date().toISOString()}
-      if(typeof body.ativo==='boolean') dados.ativo=body.ativo
-      if(['sandbox','production'].includes(body.ambiente)) dados.ambiente=body.ambiente
-      const chave=String(body.api_key ?? '').trim(), tk=String(body.webhook_token ?? '').trim()
-      if(chave) { if(chave.length<20 || chave.length>500) return res.status(400).json({error:'Chave do Asaas inválida'}); dados.api_key_cifrada=cifrar(chave,env); dados.conta_nome=null; dados.testado_em=null }
-      if(tk) { if(tk.length<16 || tk.length>255) return res.status(400).json({error:'O token do webhook precisa ter entre 16 e 255 caracteres'}); dados.webhook_token_cifrado=cifrar(tk,env) }
       const {linha}=await carregarAsaas()
-      if(dados.ativo && !dados.api_key_cifrada && !linha?.api_key_cifrada) return res.status(400).json({error:'Cadastre a chave antes de ativar'})
+      const atual=linha?.ambiente==='production'?'production':'sandbox'
+      const emUso=AMBIENTES.includes(body.ambiente)?body.ambiente:atual
+      const chaves={...(body.chaves ?? {})}, tokens={...(body.tokens ?? {})}
+      if(body.api_key) chaves[emUso]=body.api_key
+      if(body.webhook_token) tokens[emUso]=body.webhook_token
+      const dados={updated_at:new Date().toISOString(),ambiente:emUso}
+      const cred={sandbox:credenciaisAmbiente(linha,'sandbox'),production:credenciaisAmbiente(linha,'production')}
+      for(const amb of AMBIENTES) {
+        const nome=amb==='production'?'produção':'teste'
+        const chave=String(chaves[amb] ?? '').trim(), tk=String(tokens[amb] ?? '').trim()
+        if(chave) {
+          if(chave.length<20 || chave.length>500) return res.status(400).json({error:`Chave de ${nome} do Asaas inválida`})
+          if(chaveDoOutroAmbiente(chave,amb)) return res.status(400).json({error:amb==='production'?'Esta chave é do Asaas de teste (sandbox). Cole a chave da conta de produção.':'Esta chave é do Asaas de produção. Cole a chave da conta de teste (sandbox).'})
+          dados[`api_key_${amb}_cifrada`]=cred[amb].chave=cifrar(chave,env)
+          if(amb===emUso) { dados.conta_nome=null; dados.testado_em=null }
+        }
+        if(tk) {
+          if(tk.length<16 || tk.length>255) return res.status(400).json({error:'O token do webhook precisa ter entre 16 e 255 caracteres'})
+          dados[`webhook_token_${amb}_cifrado`]=cred[amb].token=cifrar(tk,env)
+        }
+      }
+      // Colunas antigas espelham o ambiente em uso (código já publicado e webhook antigo continuam funcionando).
+      dados.api_key_cifrada=cred[emUso].chave
+      dados.webhook_token_cifrado=cred[emUso].token
+      dados.ativo=typeof body.ativo==='boolean'?body.ativo:!!linha?.ativo
+      if(dados.ativo && !cred[emUso].chave) return res.status(400).json({error:`Cadastre a chave de ${emUso==='production'?'produção':'teste'} antes de usar este ambiente`})
+      let cancelados=0
+      if(emUso!==atual) {
+        dados.conta_nome=null; dados.testado_em=null
+        // Pedidos não pagos foram criados na outra conta do Asaas: cancela para o checkout gerar de novo no ambiente certo.
+        const r=await patchSv(`/rest/v1/assinaturas?status=eq.pendente&pago_ate=is.null`,{status:'cancelada',cancelada_em:new Date().toISOString(),motivo_cancelamento:`Asaas trocado para ${emUso==='production'?'produção':'teste'}`})
+        cancelados=r?.length ?? 0
+      }
       await patchSv('/rest/v1/plataforma_gateways?id=eq.asaas',dados)
-      return res.json({ok:true})
+      return res.json({ok:true,ambiente:emUso,pedidos_cancelados:cancelados})
     }
     if(body.acao==='asaas_testar') {
-      const {cfg}=await carregarAsaas()
+      const {linha,cfg:emUso}=await carregarAsaas()
+      const cfg=AMBIENTES.includes(body.ambiente)?montarConfig(linha,env,body.ambiente):emUso
+      if(!cfg) return res.status(400).json({error:'Cadastre a chave deste ambiente antes de testar'})
       const saldo=await asaas(cfg,'/finance/balance')
       let nome=null
       try { const info=await asaas(cfg,'/myAccount/commercialInfo'); nome=info.companyName || info.name || null } catch { /* conta sem permissão para dados comerciais */ }
-      if(cfg.origem==='painel') await patchSv('/rest/v1/plataforma_gateways?id=eq.asaas',{conta_nome:nome,testado_em:new Date().toISOString()})
+      if(cfg.origem==='painel' && cfg.ambiente===(linha?.ambiente ?? 'sandbox')) await patchSv('/rest/v1/plataforma_gateways?id=eq.asaas',{conta_nome:nome,testado_em:new Date().toISOString()})
       return res.json({ok:true,ambiente:cfg.ambiente,saldo:saldo.balance ?? null,conta:nome,origem:cfg.origem})
     }
 

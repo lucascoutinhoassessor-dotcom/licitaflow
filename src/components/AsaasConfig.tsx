@@ -1,52 +1,95 @@
 import { useEffect, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Copy, KeyRound } from 'lucide-react'
+import { CheckCircle2, Copy, FlaskConical, KeyRound, Landmark } from 'lucide-react'
 import { URL_SITE, masterSeparado } from '@/lib/pwa'
 import { supabase, mensagemErro } from '@/lib/supabase'
 import { formatarDataHora, formatarMoeda } from '@/lib/format'
 import { pagamentoAPI } from '@/lib/pagamentos'
-import { Aviso, Badge, Button, Campo, Card, Input, Select } from '@/components/ui'
+import { cn } from '@/lib/utils'
+import { Aviso, Badge, Button, Campo, Card, Input } from '@/components/ui'
 
-interface Status { ativo: boolean; ambiente: 'sandbox' | 'production'; tem_chave: boolean; tem_token: boolean; dias_tolerancia: number; bloquear_inadimplente: boolean; conta_nome: string | null; testado_em: string | null }
+type Ambiente = 'sandbox' | 'production'
+interface Status {
+  ativo: boolean; ambiente: Ambiente; tem_chave: boolean; tem_token: boolean; dias_tolerancia: number; bloquear_inadimplente: boolean
+  conta_nome: string | null; testado_em: string | null
+  ambientes?: Record<Ambiente, { tem_chave: boolean; tem_token: boolean }>
+}
 const EVENTOS = 'PAYMENT_CREATED, PAYMENT_UPDATED, PAYMENT_CONFIRMED, PAYMENT_RECEIVED, PAYMENT_OVERDUE, PAYMENT_DELETED, PAYMENT_REFUNDED, PAYMENT_CHARGEBACK_REQUESTED, SUBSCRIPTION_DELETED, SUBSCRIPTION_INACTIVATED'
+const INFO: Record<Ambiente, { nome: string; sub: string; painel: string; prefixo: string; Icone: typeof FlaskConical }> = {
+  sandbox: { nome: 'Teste (sandbox)', sub: 'Pagamentos de mentira para testar o checkout', painel: 'sandbox.asaas.com', prefixo: '$aact_hmlg_…', Icone: FlaskConical },
+  production: { nome: 'Produção', sub: 'Pagamentos reais dos clientes', painel: 'www.asaas.com', prefixo: '$aact_prod_…', Icone: Landmark },
+}
 
 function gerarToken() {
   const b = new Uint8Array(24); crypto.getRandomValues(b)
   return Array.from(b, x => x.toString(16).padStart(2, '0')).join('')
 }
 
-/** Configuração do Asaas pelo master: chave e token vão só para o servidor, que guarda cifrado. */
+/** Configuração do Asaas pelo master: uma conta de teste e uma de produção; o master escolhe qual está em uso. */
 export function AsaasConfig() {
   const qc = useQueryClient()
   const q = useQuery({ queryKey: ['asaas-status'], queryFn: async () => {
     const { data, error } = await supabase.rpc('admin_gateway_status'); if (error) throw error; return data as Status
   }, retry: false })
-  const [f, setF] = useState({ ambiente: 'sandbox', chave: '', token: '', dias: '5', bloquear: true })
+  const [chaves, setChaves] = useState<Record<Ambiente, string>>({ sandbox: '', production: '' })
+  const [tokens, setTokens] = useState<Record<Ambiente, string>>({ sandbox: '', production: '' })
+  const [tokenSalvo, setTokenSalvo] = useState<Partial<Record<Ambiente, string>>>({})
+  const [regras, setRegras] = useState({ dias: '5', bloquear: true })
   const [ocupado, setOcupado] = useState('')
-  const [teste, setTeste] = useState<{ saldo: number | null; conta: string | null; ambiente: string } | null>(null)
-  const [tokenNovo, setTokenNovo] = useState('')
+  const [teste, setTeste] = useState<Partial<Record<Ambiente, { saldo: number | null; conta: string | null }>>>({})
   const urlWebhook = `${masterSeparado() ? URL_SITE : window.location.origin}/api/asaas-webhook`
-  useEffect(() => { if (q.data) setF(x => ({ ...x, ambiente: q.data.ambiente, dias: String(q.data.dias_tolerancia), bloquear: q.data.bloquear_inadimplente })) }, [q.data])
+  useEffect(() => { if (q.data) setRegras({ dias: String(q.data.dias_tolerancia), bloquear: q.data.bloquear_inadimplente }) }, [q.data])
   const recarregar = () => Promise.all([qc.invalidateQueries({ queryKey: ['asaas-status'] }), qc.invalidateQueries({ queryKey: ['admin-financeiro'] }), qc.invalidateQueries({ queryKey: ['gateways-config'] })])
 
-  async function salvar(ativo?: boolean) {
-    setOcupado(ativo === undefined ? 'salvar' : 'ativar')
+  const s = q.data
+  const emUso: Ambiente = s?.ambiente === 'production' ? 'production' : 'sandbox'
+  // Antes da migração nova, só existe a chave única (do ambiente marcado).
+  const amb = (a: Ambiente) => s?.ambientes?.[a] ?? { tem_chave: a === emUso && !!s?.tem_chave, tem_token: a === emUso && !!s?.tem_token }
+
+  async function salvarConta(a: Ambiente) {
+    if (!chaves[a] && !tokens[a]) return toast.error('Informe a chave ou o token para salvar.')
+    setOcupado('salvar-' + a)
     try {
-      if (ativo && f.ambiente === 'production' && !confirm('Ativar cobranças REAIS no Asaas de produção? Clientes passam a pagar de verdade.')) return
-      await pagamentoAPI({ acao: 'asaas_salvar', ambiente: f.ambiente, api_key: f.chave || undefined, webhook_token: f.token || undefined, ...(ativo === undefined ? {} : { ativo }) })
-      const dias = Number(f.dias)
-      if (!Number.isInteger(dias) || dias < 0 || dias > 60) throw new Error('Tolerância deve ser de 0 a 60 dias.')
-      const { error } = await supabase.rpc('admin_regras_cobranca', { p_dias: dias, p_bloquear: f.bloquear }); if (error) throw error
-      if (f.token) setTokenNovo(f.token)
-      setF(x => ({ ...x, chave: '', token: '' }))
-      await recarregar(); toast.success(ativo === undefined ? 'Configuração salva.' : ativo ? 'Asaas ativado.' : 'Asaas desativado.')
+      await pagamentoAPI({ acao: 'asaas_salvar', chaves: { [a]: chaves[a] || undefined }, tokens: { [a]: tokens[a] || undefined } })
+      if (tokens[a]) setTokenSalvo(t => ({ ...t, [a]: tokens[a] }))
+      setChaves(c => ({ ...c, [a]: '' })); setTokens(t => ({ ...t, [a]: '' }))
+      await recarregar(); toast.success(`Conta de ${a === 'production' ? 'produção' : 'teste'} salva.`)
     } catch (e) { toast.error(mensagemErro(e)) } finally { setOcupado('') }
   }
-  async function testar() {
-    setOcupado('testar')
-    try { const r = await pagamentoAPI({ acao: 'asaas_testar' }); setTeste(r); await recarregar(); toast.success('Conexão com o Asaas funcionando.') }
+  async function usar(a: Ambiente) {
+    if (a === emUso) return
+    if (!amb(a).tem_chave) return toast.error(`Cadastre a chave de ${a === 'production' ? 'produção' : 'teste'} primeiro.`)
+    const msg = a === 'production'
+      ? 'Usar o Asaas de PRODUÇÃO? A partir de agora os clientes pagam de verdade. Pedidos de teste ainda não pagos serão cancelados.'
+      : 'Usar o Asaas de TESTE? Novos pagamentos serão de mentira (sandbox). Pedidos ainda não pagos serão cancelados. Assinantes reais continuam com as renovações processadas normalmente.'
+    if (!confirm(msg)) return
+    setOcupado('usar')
+    try {
+      const r = await pagamentoAPI({ acao: 'asaas_salvar', ambiente: a })
+      await recarregar()
+      toast.success(`Asaas de ${a === 'production' ? 'produção' : 'teste'} em uso.${r.pedidos_cancelados ? ` ${r.pedidos_cancelados} pedido(s) não pago(s) cancelado(s).` : ''}`)
+    } catch (e) { toast.error(mensagemErro(e)) } finally { setOcupado('') }
+  }
+  async function ligar(ativo: boolean) {
+    if (ativo && emUso === 'production' && !confirm('Ativar cobranças REAIS no Asaas de produção? Clientes passam a pagar de verdade.')) return
+    setOcupado('ativar')
+    try { await pagamentoAPI({ acao: 'asaas_salvar', ativo }); await recarregar(); toast.success(ativo ? 'Cobranças ativadas.' : 'Cobranças desativadas.') }
     catch (e) { toast.error(mensagemErro(e)) } finally { setOcupado('') }
+  }
+  async function testar(a: Ambiente) {
+    setOcupado('testar-' + a)
+    try { const r = await pagamentoAPI({ acao: 'asaas_testar', ambiente: a }); setTeste(t => ({ ...t, [a]: r })); await recarregar(); toast.success('Conexão com o Asaas funcionando.') }
+    catch (e) { toast.error(mensagemErro(e)) } finally { setOcupado('') }
+  }
+  async function salvarRegras() {
+    setOcupado('regras')
+    try {
+      const dias = Number(regras.dias)
+      if (!Number.isInteger(dias) || dias < 0 || dias > 60) throw new Error('Tolerância deve ser de 0 a 60 dias.')
+      const { error } = await supabase.rpc('admin_regras_cobranca', { p_dias: dias, p_bloquear: regras.bloquear }); if (error) throw error
+      await recarregar(); toast.success('Regras de cobrança salvas.')
+    } catch (e) { toast.error(mensagemErro(e)) } finally { setOcupado('') }
   }
   async function rotina() {
     setOcupado('rotina')
@@ -55,52 +98,79 @@ export function AsaasConfig() {
   }
   const copiar = (t: string) => navigator.clipboard.writeText(t).then(() => toast.success('Copiado.'), () => toast.error('Não foi possível copiar.'))
 
-  const s = q.data
   return <Card className="space-y-5 p-5">
     <div className="flex flex-wrap items-center gap-2">
       <KeyRound className="h-5 w-5 text-primary" /><h2 className="flex-1 font-semibold">Asaas · assinaturas recorrentes</h2>
-      {s && <Badge cor={s.ativo ? 'verde' : 'amarelo'}>{s.ativo ? `Ativo · ${s.ambiente === 'production' ? 'produção' : 'sandbox'}` : 'Desativado'}</Badge>}
+      {s && <Badge cor={!s.ativo ? 'amarelo' : emUso === 'production' ? 'verde' : 'azul'}>{!s.ativo ? 'Cobranças desativadas' : emUso === 'production' ? 'Produção em uso · pagamentos reais' : 'Teste em uso · sandbox'}</Badge>}
     </div>
     {q.isError && <Aviso>{mensagemErro(q.error)} — aplique a migração de assinaturas.</Aviso>}
     {s && <>
-      <div className="grid gap-2 text-sm sm:grid-cols-3">
-        <p>Chave de API: <strong>{s.tem_chave ? 'cadastrada' : 'ausente'}</strong></p>
-        <p>Token do webhook: <strong>{s.tem_token ? 'cadastrado' : 'ausente'}</strong></p>
-        <p>Último teste: <strong>{s.testado_em ? formatarDataHora(s.testado_em) : 'nunca'}</strong>{s.conta_nome ? ` · ${s.conta_nome}` : ''}</p>
+      {/* escolha do ambiente */}
+      <div>
+        <p className="mb-2 text-sm font-medium">Qual Asaas está em uso</p>
+        <div role="radiogroup" aria-label="Ambiente do Asaas em uso" className="grid gap-3 sm:grid-cols-2">
+          {(['sandbox', 'production'] as const).map(a => {
+            const i = INFO[a], ativo = emUso === a
+            return <button key={a} type="button" role="radio" aria-checked={ativo} disabled={!!ocupado} onClick={() => usar(a)}
+              className={cn('flex items-start gap-3 rounded-lg border p-4 text-left transition disabled:opacity-60',
+                ativo ? (a === 'production' ? 'border-success bg-success/5 ring-1 ring-success' : 'border-primary bg-primary/5 ring-1 ring-primary') : 'hover:bg-muted')}>
+              <i.Icone className={cn('mt-0.5 h-5 w-5', ativo ? (a === 'production' ? 'text-success' : 'text-primary') : 'text-muted-foreground')} />
+              <span className="flex-1">
+                <span className="flex items-center gap-2 font-medium">{i.nome}{ativo && <CheckCircle2 className="h-4 w-4" />}</span>
+                <span className="block text-sm text-muted-foreground">{i.sub}</span>
+                <span className="mt-1 block text-xs text-muted-foreground">{amb(a).tem_chave ? 'Chave cadastrada' : 'Sem chave'} · {amb(a).tem_token ? 'webhook configurado' : 'sem token do webhook'}</span>
+              </span>
+              <span className={cn('mt-0.5 h-4 w-4 rounded-full border-2', ativo ? 'border-[5px] border-current' : 'border-muted-foreground/40')} />
+            </button>
+          })}
+        </div>
+        <p className="mt-2 text-xs text-muted-foreground">Pagamentos feitos no teste nunca liberam acesso com a produção em uso. Pagamentos reais são sempre processados, mesmo enquanto você testa.</p>
       </div>
-      {teste && <Aviso tipo="sucesso">Conta {teste.conta ?? 'Asaas'} ({teste.ambiente}) respondeu. Saldo disponível: {teste.saldo == null ? '—' : formatarMoeda(teste.saldo)}.</Aviso>}
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <Campo rotulo="Ambiente" htmlFor="asaas-amb"><Select id="asaas-amb" value={f.ambiente} onChange={e => setF({ ...f, ambiente: e.target.value })}><option value="sandbox">Sandbox (testes)</option><option value="production">Produção (cobranças reais)</option></Select></Campo>
-        <Campo rotulo={s.tem_chave ? 'Nova chave de API (deixe vazio para manter)' : 'Chave de API do Asaas'} htmlFor="asaas-chave" ajuda="Asaas → Integrações → Chave de API. Fica cifrada no servidor e nunca volta para a tela.">
-          <Input id="asaas-chave" type="password" autoComplete="off" value={f.chave} onChange={e => setF({ ...f, chave: e.target.value })} placeholder="$aact_..." /></Campo>
+      {/* as duas contas */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        {(['sandbox', 'production'] as const).map(a => {
+          const i = INFO[a], t = teste[a]
+          return <div key={a} className="space-y-3 rounded-lg border p-4">
+            <div className="flex items-center gap-2"><i.Icone className="h-4 w-4 text-muted-foreground" /><h3 className="flex-1 text-sm font-semibold">Conta {i.nome}</h3>
+              {emUso === a && <Badge cor={a === 'production' ? 'verde' : 'azul'}>em uso</Badge>}</div>
+            <Campo rotulo={amb(a).tem_chave ? 'Nova chave de API (deixe vazio para manter)' : 'Chave de API'} htmlFor={`asaas-chave-${a}`} ajuda={`${i.painel} → Integrações → Chave de API (começa com ${i.prefixo}). Fica cifrada no servidor.`}>
+              <Input id={`asaas-chave-${a}`} type="password" autoComplete="off" value={chaves[a]} onChange={e => setChaves({ ...chaves, [a]: e.target.value })} placeholder={i.prefixo} /></Campo>
+            <div className="flex items-end gap-2">
+              <div className="flex-1"><Campo rotulo={amb(a).tem_token ? 'Novo token do webhook (opcional)' : 'Token do webhook'} htmlFor={`asaas-token-${a}`}>
+                <Input id={`asaas-token-${a}`} autoComplete="off" value={tokens[a]} onChange={e => setTokens({ ...tokens, [a]: e.target.value })} /></Campo></div>
+              <Button type="button" variante="contorno" onClick={() => setTokens({ ...tokens, [a]: gerarToken() })}>Gerar</Button>
+            </div>
+            {tokenSalvo[a] && <p className="text-xs">Token salvo. Cole no webhook de {i.painel} (não será mostrado de novo): <button type="button" className="break-all font-mono underline" onClick={() => copiar(tokenSalvo[a]!)}>{tokenSalvo[a]}</button></p>}
+            {t && <Aviso tipo="sucesso">Conta {t.conta ?? 'Asaas'} respondeu. Saldo: {t.saldo == null ? '—' : formatarMoeda(t.saldo)}.</Aviso>}
+            <div className="flex flex-wrap gap-2">
+              <Button tamanho="sm" carregando={ocupado === 'salvar-' + a} disabled={!!ocupado || (!chaves[a] && !tokens[a])} onClick={() => salvarConta(a)}>Salvar</Button>
+              <Button tamanho="sm" variante="contorno" carregando={ocupado === 'testar-' + a} disabled={!!ocupado || !amb(a).tem_chave} onClick={() => testar(a)}>Testar conexão</Button>
+            </div>
+          </div>
+        })}
       </div>
+      {s.testado_em && <p className="text-xs text-muted-foreground">Último teste da conta em uso: {formatarDataHora(s.testado_em)}{s.conta_nome ? ` · ${s.conta_nome}` : ''}</p>}
 
-      <div className="space-y-3 rounded-md border p-4">
+      <div className="space-y-2 rounded-md border p-4">
         <h3 className="text-sm font-medium">Webhook (o Asaas avisa os pagamentos)</h3>
         <ol className="list-decimal space-y-1 pl-5 text-sm text-muted-foreground">
-          <li>No Asaas: Integrações → Webhooks → Adicionar.</li>
-          <li>URL: <button type="button" onClick={() => copiar(urlWebhook)} className="inline-flex items-center gap-1 break-all font-mono text-xs text-foreground hover:underline">{urlWebhook}<Copy className="h-3 w-3 shrink-0" /></button></li>
-          <li>Token de autenticação: o mesmo informado abaixo. Versão da API v3, envio sequencial.</li>
+          <li>Em <strong>cada</strong> conta (sandbox.asaas.com e www.asaas.com): Integrações → Webhooks → Adicionar.</li>
+          <li>URL (a mesma nas duas): <button type="button" onClick={() => copiar(urlWebhook)} className="inline-flex items-center gap-1 break-all font-mono text-xs text-foreground hover:underline">{urlWebhook}<Copy className="h-3 w-3 shrink-0" /></button></li>
+          <li>Token de autenticação: o token salvo na conta correspondente acima. Versão da API v3, envio sequencial.</li>
           <li>Eventos: <span className="font-mono text-xs">{EVENTOS}</span></li>
         </ol>
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
-          <div className="flex-1"><Campo rotulo={s.tem_token ? 'Novo token (deixe vazio para manter)' : 'Token do webhook'} htmlFor="asaas-token"><Input id="asaas-token" autoComplete="off" value={f.token} onChange={e => setF({ ...f, token: e.target.value })} /></Campo></div>
-          <Button type="button" variante="contorno" onClick={() => setF({ ...f, token: gerarToken() })}>Gerar token</Button>
-        </div>
-        {tokenNovo && <p className="text-sm">Token salvo. Copie agora para o Asaas (ele não será mostrado de novo): <button type="button" className="break-all font-mono text-xs underline" onClick={() => copiar(tokenNovo)}>{tokenNovo}</button></p>}
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
-        <Campo rotulo="Tolerância após o vencimento (dias)" htmlFor="asaas-dias"><Input id="asaas-dias" type="number" min={0} max={60} value={f.dias} onChange={e => setF({ ...f, dias: e.target.value })} /></Campo>
-        <label className="flex items-center gap-2 self-end pb-2 text-sm"><input type="checkbox" checked={f.bloquear} onChange={e => setF({ ...f, bloquear: e.target.checked })} />Suspender automaticamente quem passar da tolerância</label>
+        <Campo rotulo="Tolerância após o vencimento (dias)" htmlFor="asaas-dias"><Input id="asaas-dias" type="number" min={0} max={60} value={regras.dias} onChange={e => setRegras({ ...regras, dias: e.target.value })} /></Campo>
+        <label className="flex items-center gap-2 self-end pb-2 text-sm"><input type="checkbox" checked={regras.bloquear} onChange={e => setRegras({ ...regras, bloquear: e.target.checked })} />Suspender automaticamente quem passar da tolerância</label>
       </div>
       <p className="text-xs text-muted-foreground">A rotina roda todo dia às 8h. O pagamento confirmado libera o acesso na hora. Suspensões manuais feitas pelo master nunca são desfeitas por pagamento.</p>
 
       <div className="flex flex-wrap gap-2">
-        <Button carregando={ocupado === 'salvar'} disabled={!!ocupado} onClick={() => salvar()}>Salvar configuração</Button>
-        <Button variante="contorno" carregando={ocupado === 'testar'} disabled={!!ocupado || (!s.tem_chave && !f.chave)} onClick={testar}>Testar conexão</Button>
-        <Button variante={s.ativo ? 'contorno' : 'primario'} carregando={ocupado === 'ativar'} disabled={!!ocupado || (!s.tem_chave && !f.chave)} onClick={() => salvar(!s.ativo)}>{s.ativo ? 'Desativar cobranças' : 'Ativar cobranças'}</Button>
+        <Button variante={s.ativo ? 'contorno' : 'primario'} carregando={ocupado === 'ativar'} disabled={!!ocupado || !amb(emUso).tem_chave} onClick={() => ligar(!s.ativo)}>{s.ativo ? 'Desativar cobranças' : 'Ativar cobranças'}</Button>
+        <Button variante="contorno" carregando={ocupado === 'regras'} disabled={!!ocupado} onClick={salvarRegras}>Salvar regras de atraso</Button>
         <Button variante="contorno" carregando={ocupado === 'rotina'} disabled={!!ocupado} onClick={rotina}>Aplicar regra de atraso agora</Button>
       </div>
     </>}
