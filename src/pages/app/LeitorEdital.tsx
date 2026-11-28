@@ -7,6 +7,8 @@ import {
 } from 'lucide-react'
 import { Aviso, Badge, Button, Card, Carregando, Vazio } from '@/components/ui'
 import { useOrg } from '@/providers/OrgProvider'
+import { useMinhaIA } from '@/hooks/useMinhaIA'
+import { PROVEDORES_IA } from '@/lib/minhaIA'
 import { CartaoTermometro } from '@/components/Termometro'
 import { alvoPeloNome, alvoPeloPncp } from '@/lib/termometro'
 import { formatarDataHora, formatarMoeda } from '@/lib/format'
@@ -234,6 +236,7 @@ function Resultado({ leitura, chaveConferidos }: { leitura: LeituraEdital; chave
 export default function LeitorEdital() {
   const { cnpj = '', ano = '', seq = '' } = useParams()
   const { org } = useOrg()
+  const propria = useMinhaIA()
   const qc = useQueryClient()
   const valido = /^\d{14}$/.test(cnpj) && /^\d{4}$/.test(ano) && /^\d{1,9}$/.test(seq)
   const controle = `${cnpj}-1-${seq.padStart(6, '0')}/${ano}`
@@ -277,14 +280,15 @@ export default function LeitorEdital() {
                 A IA abre o edital, o termo de referência e os anexos publicados no PNCP e monta o relatório: avaliação geral, riscos com o que fazer,
                 datas, documentos de habilitação e exigências da proposta, cada item com o trecho do edital de onde saiu.
               </p>
-              {uso?.limite === 0 ? (
+              {!propria && uso?.limite === 0 ? (
                 <Aviso tipo="info">O seu plano não inclui leituras de editais com IA. <Link to="/app/plano" className="font-semibold underline">Ver planos</Link> ou fale com o atendimento.</Aviso>
-              ) : uso && uso.limite !== null && uso.usadas >= uso.limite ? (
+              ) : !propria && uso && uso.limite !== null && uso.usadas >= uso.limite ? (
                 <Aviso tipo="info">Você já usou as {uso.limite} leituras novas deste mês. O limite renova no dia 1º. Para ler mais agora, <Link to="/app/plano" className="font-semibold underline">mude de plano</Link> ou fale com o atendimento.</Aviso>
               ) : (
                 <>
                   <Button onClick={() => ler.mutate()}><FileSearch className="h-4 w-4" />Ler edital com IA</Button>
-                  {uso && <p className="text-xs text-muted-foreground">{uso.limite === null ? `Leituras novas neste mês: ${uso.usadas}.` : `Leituras novas neste mês: ${uso.usadas} de ${uso.limite}.`} Editais que já foram lidos abrem sem contar.</p>}
+                  {propria && <p className="text-xs text-muted-foreground">Usando a sua conta: {PROVEDORES_IA[propria.provedor].nome} ({propria.modelo}), sem contar no limite do plano.</p>}
+                  {!propria && uso && <p className="text-xs text-muted-foreground">{uso.limite === null ? `Leituras novas neste mês: ${uso.usadas}.` : `Leituras novas neste mês: ${uso.usadas} de ${uso.limite}.`} Editais que já foram lidos abrem sem contar.</p>}
                 </>
               )}
             </>

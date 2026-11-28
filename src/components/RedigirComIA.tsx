@@ -5,6 +5,8 @@ import { supabase } from '@/lib/supabase'
 import { useOrg } from '@/providers/OrgProvider'
 import { useModulos } from '@/hooks/useModulos'
 import type { LimiteIA } from '@/lib/agentesIA'
+import { useMinhaIA } from '@/hooks/useMinhaIA'
+import { PROVEDORES_IA } from '@/lib/minhaIA'
 import type { DadosPeca, Tese, TipoPeca } from '@/lib/juridico'
 import { Aviso, Button, Card } from '@/components/ui'
 
@@ -29,9 +31,11 @@ export function RedigirComIA({ tipo, processoId, dados, teses, aoRedigir }: {
   const [erro, setErro] = useState('')
   const [pontos, setPontos] = useState<string[] | null>(null)
   const [extras, setExtras] = useState<{ leitura: boolean; referencias: number } | null>(null)
+  const propria = useMinhaIA(liberado)
   const u = uso.data?.juridico
-  if (!liberado || !podeEditar || !u || u.limite === 0) return null
-  const esgotado = u.limite != null && (u.usadas ?? 0) >= u.limite
+  // Com a IA do próprio cliente (botão Minha IA), o limite do plano não se aplica.
+  if (!liberado || !podeEditar || !u || (u.limite === 0 && !propria)) return null
+  const esgotado = !propria && u.limite != null && (u.usadas ?? 0) >= u.limite
 
   async function redigir() {
     setOcupado(true); setErro(''); setPontos(null)
@@ -66,7 +70,7 @@ export function RedigirComIA({ tipo, processoId, dados, teses, aoRedigir }: {
       </p>
       <div className="flex flex-wrap items-center gap-3">
         <Button onClick={redigir} carregando={ocupado} disabled={esgotado}><Sparkles className="h-4 w-4" />{ocupado ? 'Redigindo…' : 'Redigir com IA'}</Button>
-        <span className="text-xs text-muted-foreground">Peças com IA neste mês: {u.usadas ?? 0}{u.limite == null ? '' : ` de ${u.limite}`}</span>
+        <span className="text-xs text-muted-foreground">{propria ? `Usando a sua conta: ${PROVEDORES_IA[propria.provedor].nome} (${propria.modelo}), sem contar no limite do plano.` : `Peças com IA neste mês: ${u.usadas ?? 0}${u.limite == null ? '' : ` de ${u.limite}`}`}</span>
       </div>
       {ocupado && <p className="text-xs text-muted-foreground">Leva cerca de 1 minuto.</p>}
       {esgotado && <Aviso tipo="info">Você já usou as peças com IA deste mês. O limite renova no dia 1º; o formulário continua montando a minuta normalmente.</Aviso>}

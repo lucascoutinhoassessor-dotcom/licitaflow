@@ -14,6 +14,7 @@ import PedirNotificacoes from '@/components/PedirNotificacoes'
 import SinoAvisos from '@/components/SinoAvisos'
 import RastreioAparelho from '@/components/RastreioAparelho'
 import AvisoAppAntigo from '@/components/AvisoAppAntigo'
+import MinhaIA from '@/components/MinhaIA'
 
 function alternarTema() {
   const escuro = document.documentElement.classList.toggle('dark')
@@ -279,6 +280,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
         <PedirNotificacoes />
 
         <RastreioAparelho />
+        <MinhaIA />
       </main>
 
       <BarraInferior />

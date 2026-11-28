@@ -49,6 +49,7 @@ describe('rota do Jurídico com IA', () => {
     const fetcher = vi.fn(async (url: string, init?: RequestInit) => {
       if (url.endsWith('/auth/v1/user')) return json({ id: USER })
       if (url.endsWith('/rpc/modulos_da_org')) return json({ agentes: 'liberado' })
+      if (url.includes('/rest/v1/ia_chaves_cliente?')) return json([])
       if (url.endsWith('/rpc/ia_limite_e_uso')) return json({ limite, origem: 'plano', usadas })
       if (url.includes('/rest/v1/processos?')) return json([{ pncp_controle: CONTROLE }])
       if (url.includes('/rest/v1/ia_leituras_edital?')) return json([{ resultado: { riscos: [{ nivel: 'alto', titulo: 'Atestado', detalhe: 'x', trecho: { texto: 'atestado 100%' } }] } }])

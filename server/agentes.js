@@ -5,6 +5,7 @@ import { rodadaSentinela } from './sentinela.js'
 import { avisarRadar } from './radar.js'
 import { atualizarCapag } from './termometro.js'
 import { atenderJuridico } from './juridicoIA.js'
+import { atenderChave, chaveAtiva, criarClienteIA } from './iaCliente.js'
 import { atualizarFederal } from './termometroFederal.js'
 // Agentes de IA (Claude API). Uma rota só para todos os agentes, por causa do limite de funções da Vercel.
 //
@@ -323,7 +324,7 @@ export function criarHandler({ fetcher = fetch, cliente, webpush } = {}) {
     }
 
     if (!/^Bearer \S+$/.test(token ?? '')) return res.status(401).json({ error: 'Entre na sua conta' })
-    if (q.agente !== 'leitor' && q.agente !== 'juridico') return res.status(400).json({ error: 'Agente inválido' })
+    if (!['leitor', 'juridico', 'chave'].includes(q.agente)) return res.status(400).json({ error: 'Agente inválido' })
     const org = String(q.org ?? '')
     const controle = String(q.controle ?? '').trim()
     if (!/^[0-9a-f-]{36}$/i.test(org)) return res.status(400).json({ error: 'Organização inválida' })
@@ -350,13 +351,19 @@ export function criarHandler({ fetcher = fetch, cliente, webpush } = {}) {
       const estados = await mod.json().catch(() => ({}))
       if (estados?.agentes !== 'liberado') return res.status(403).json({ error: 'Os agentes de IA ainda não estão liberados para a sua conta.' })
 
+      // IA do próprio cliente: cadastrar/trocar a chave (dono ou administrador).
+      if (q.agente === 'chave') return await atenderChave({ req, res, org, usuario, banco, segredo: servico, fetcher, excedeuLimite })
+      // Chave ativa da organização: Leitor e Jurídico usam a conta do cliente, sem contar no limite do plano.
+      const propria = req.method === 'POST' ? await chaveAtiva({ banco, org, segredo: servico }) : null
+      const clienteProprio = propria ? criarClienteIA({ ...propria, fetcher }) : null
+
       if (q.agente === 'juridico') {
         // Leituras com o login do cliente (respeitam o RLS da organização).
         const comoUsuario = (caminho, { metodo = 'GET', corpo } = {}) => fetcher(`${base}/rest/v1/${caminho}`, {
           method: metodo, headers: { apikey: anon, Authorization: token, 'Content-Type': 'application/json' },
           body: corpo ? JSON.stringify(corpo) : undefined, signal: AbortSignal.timeout(15000),
         })
-        return await atenderJuridico({ req, res, org, usuario, banco, comoUsuario, env, cliente, modelo: MODELOS.juridico })
+        return await atenderJuridico({ req, res, org, usuario, banco, comoUsuario, env, cliente: clienteProprio ?? cliente, modelo: MODELOS.juridico, propria })
       }
 
       // Limite do plano (ou exceção do cliente, definida no master) e usos novos do mês. limite null = sem limite.
@@ -367,7 +374,9 @@ export function criarHandler({ fetcher = fetch, cliente, webpush } = {}) {
       const guardada = async () => (await (await banco(`ia_leituras_edital?controle=eq.${encodeURIComponent(controle)}&select=*`)).json())[0] ?? null
       const registrar = (l, nova) => banco('ia_uso', { metodo: 'POST', prefer: 'return=minimal', corpo: {
         org_id: org, user_id: usuario, agente: AGENTE_LEITOR, referencia: controle, nova,
-        tokens_entrada: nova ? l.tokens_entrada : 0, tokens_saida: nova ? l.tokens_saida : 0, custo_usd: nova ? l.custo_usd : 0,
+        tokens_entrada: nova ? l.tokens_entrada : 0, tokens_saida: nova ? l.tokens_saida : 0,
+        // Com a chave do cliente, o custo é dele: fica 0 aqui e o uso não conta no limite.
+        custo_usd: nova && !propria ? l.custo_usd : 0, provedor: nova && propria ? propria.provedor : 'licitaforce',
       } })
       const publica = (l) => l && { controle: l.controle, objeto: l.objeto, resultado: l.resultado, documentos: l.documentos, modelo: l.modelo, created_at: l.created_at }
 
@@ -381,13 +390,13 @@ export function criarHandler({ fetcher = fetch, cliente, webpush } = {}) {
         await registrar(existente, false)
         return res.status(200).json({ leitura: publica(existente), uso: await usoMes(), reaproveitada: true })
       }
-      if (!env.ANTHROPIC_API_KEY && !cliente) return res.status(503).json({ error: 'O Leitor de editais ainda não foi ativado no servidor (chave da IA ausente).' })
+      if (!propria && !env.ANTHROPIC_API_KEY && !cliente) return res.status(503).json({ error: 'O Leitor de editais ainda não foi ativado no servidor (chave da IA ausente).' })
       if (excedeuLimite('leitor', usuario, 3, 5 * 60_000)) return res.status(429).json({ error: 'Muitas leituras em pouco tempo. Aguarde alguns minutos.' })
       const uso = await usoMes()
-      if (uso.limite === 0) return res.status(403).json({ error: 'O seu plano não inclui leituras novas de editais. Fale com o atendimento para incluir.', uso })
-      if (uso.limite !== null && uso.usadas >= uso.limite) return res.status(429).json({ error: `A sua organização já usou as ${uso.limite} leituras novas do mês. Editais já lidos continuam disponíveis; para mais leituras, fale com o atendimento ou mude de plano.`, uso })
+      if (!propria && uso.limite === 0) return res.status(403).json({ error: 'O seu plano não inclui leituras novas de editais. Fale com o atendimento para incluir.', uso })
+      if (!propria && uso.limite !== null && uso.usadas >= uso.limite) return res.status(429).json({ error: `A sua organização já usou as ${uso.limite} leituras novas do mês. Editais já lidos continuam disponíveis; para mais leituras, fale com o atendimento ou mude de plano.`, uso })
 
-      const lida = await lerEdital(controle, { fetcher, cliente })
+      const lida = await lerEdital(controle, { fetcher, cliente: clienteProprio ?? cliente })
       const r = await banco('ia_leituras_edital?on_conflict=controle', { metodo: 'POST', prefer: 'resolution=merge-duplicates,return=representation', corpo: {
         controle, objeto: lida.objeto, resultado: lida.resultado, documentos: lida.documentos, modelo: lida.modelo,
         tokens_entrada: lida.tokens_entrada, tokens_saida: lida.tokens_saida, custo_usd: lida.custo_usd,
@@ -395,7 +404,7 @@ export function criarHandler({ fetcher = fetch, cliente, webpush } = {}) {
       } })
       const salva = (await r.json().catch(() => []))[0] ?? { ...lida, created_at: new Date().toISOString() }
       await registrar(lida, true)
-      return res.status(200).json({ leitura: publica(salva), uso: { ...uso, usadas: uso.usadas + 1 } })
+      return res.status(200).json({ leitura: publica(salva), uso: propria ? uso : { ...uso, usadas: uso.usadas + 1 }, ia: propria ? propria.provedor : 'licitaforce' })
     } catch (e) {
       if (e instanceof Anthropic.RateLimitError) return res.status(429).json({ error: 'A IA está com muita demanda agora. Tente de novo em alguns minutos.' })
       if (e instanceof Anthropic.AuthenticationError) return res.status(503).json({ error: 'A chave da IA no servidor é inválida.' })

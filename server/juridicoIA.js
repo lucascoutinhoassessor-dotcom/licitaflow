@@ -99,7 +99,7 @@ export async function redigirPeca({ tipo, dados, teses, leitura, referencias, cl
  * Atende POST /api/agentes?agente=juridico&org=… (corpo: {tipo, processo_id?, dados, teses: [{rotulo, texto}]}).
  * `banco(caminho, opcoes)` usa a chave de serviço; `comoUsuario(caminho, opcoes)` usa o login do cliente (RLS).
  */
-export async function atenderJuridico({ req, res, org, usuario, banco, comoUsuario, env, cliente, modelo }) {
+export async function atenderJuridico({ req, res, org, usuario, banco, comoUsuario, env, cliente, modelo, propria = null }) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Use POST' })
   const corpo = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body ?? {})
   const tipo = String(corpo.tipo ?? '')
@@ -108,12 +108,13 @@ export async function atenderJuridico({ req, res, org, usuario, banco, comoUsuar
   const teses = (Array.isArray(corpo.teses) ? corpo.teses : []).slice(0, 10).map((t) => ({ rotulo: limpar(t?.rotulo, 120), texto: limpar(t?.texto, 1500) })).filter((t) => t.rotulo)
   const relato = [dados.fatos, dados.argumentos, dados.perguntas, dados.atoRecorrido, dados.itens].map((v) => limpar(v, 10)).join('')
   if (!relato && !teses.length) return res.status(400).json({ error: 'Conte o que aconteceu ou escolha ao menos uma tese para a IA redigir.' })
-  if (!env.ANTHROPIC_API_KEY && !cliente) return res.status(503).json({ error: 'O Jurídico com IA ainda não foi ativado no servidor (chave da IA ausente).' })
+  if (!propria && !env.ANTHROPIC_API_KEY && !cliente) return res.status(503).json({ error: 'O Jurídico com IA ainda não foi ativado no servidor (chave da IA ausente).' })
   if (excedeuLimite('juridico', usuario, 4, 5 * 60_000)) return res.status(429).json({ error: 'Muitas redações em pouco tempo. Aguarde alguns minutos.' })
 
   const uso = await (await banco('rpc/ia_limite_e_uso', { metodo: 'POST', corpo: { p_org: org, p_agente: AGENTE_JURIDICO } })).json()
-  if (uso?.limite === 0) return res.status(403).json({ error: 'O seu plano não inclui o Jurídico com IA. As minutas pelo formulário continuam disponíveis.', uso })
-  if (uso?.limite != null && Number(uso.usadas) >= Number(uso.limite)) {
+  // Com a IA do próprio cliente, o limite do plano não se aplica.
+  if (!propria && uso?.limite === 0) return res.status(403).json({ error: 'O seu plano não inclui o Jurídico com IA. As minutas pelo formulário continuam disponíveis.', uso })
+  if (!propria && uso?.limite != null && Number(uso.usadas) >= Number(uso.limite)) {
     return res.status(429).json({ error: `A sua organização já usou as ${uso.limite} peças com IA deste mês. O limite renova no dia 1º; as minutas pelo formulário continuam disponíveis.`, uso })
   }
 
@@ -139,7 +140,7 @@ export async function atenderJuridico({ req, res, org, usuario, banco, comoUsuar
   const r = await redigirPeca({ tipo, dados, teses, leitura, referencias, cliente, modelo })
   await banco('ia_uso', { metodo: 'POST', prefer: 'return=minimal', corpo: {
     org_id: org, user_id: usuario, agente: AGENTE_JURIDICO, referencia: tipo, nova: true,
-    tokens_entrada: r.tokens_entrada, tokens_saida: r.tokens_saida, custo_usd: r.custo_usd,
+    tokens_entrada: r.tokens_entrada, tokens_saida: r.tokens_saida, custo_usd: propria ? 0 : r.custo_usd, provedor: propria ? propria.provedor : 'licitaforce',
   } })
-  return res.status(200).json({ peca: r.peca, usou_leitura: !!leitura, referencias: referencias.length, uso: { ...uso, usadas: Number(uso?.usadas ?? 0) + 1 } })
+  return res.status(200).json({ peca: r.peca, usou_leitura: !!leitura, referencias: referencias.length, ia: propria ? propria.provedor : 'licitaforce', uso: propria ? uso : { ...uso, usadas: Number(uso?.usadas ?? 0) + 1 } })
 }

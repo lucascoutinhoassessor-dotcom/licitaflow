@@ -146,6 +146,7 @@ describe('rota do Leitor de editais', () => {
     const fetcher = vi.fn(async (url: string, init?: RequestInit) => {
       if (url.endsWith('/auth/v1/user')) return json({ id: USER })
       if (url.endsWith('/rpc/modulos_da_org')) return json({ agentes: modulo })
+      if (url.includes('/rest/v1/ia_chaves_cliente?')) return json([])
       if (url.endsWith('/rpc/ia_limite_e_uso')) return json({ limite, origem: 'plano', usadas })
       if (url.includes('/rest/v1/ia_leituras_edital?controle=')) return json(guardada ? [guardada] : [])
       if (init?.method === 'POST' && url.includes('/rest/v1/')) { gravados.push({ url, corpo: JSON.parse(String(init.body)) }); return json(url.includes('ia_leituras') ? [{ ...JSON.parse(String(init.body)), created_at: '2026-11-21T10:00:00Z' }] : null, 201) }
