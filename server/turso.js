@@ -6,6 +6,7 @@
 // Conversa com o Turso pela API HTTP (/v2/pipeline), sem dependência nova. Passo a passo em docs/turso.md.
 import { createHash } from 'node:crypto'
 import { gzipSync, gunzipSync } from 'node:zlib'
+import { PAGINAS_PCP, paginaIminenciaPCP } from './pcp-iminencia.js'
 import { compraEnxuta, consultaFts, diaUtil, filtroDescricao, IDS_PORTAIS, PORTAIS_NOVOS, portalDe, tempo, textoEdital, tipoPeloObjeto } from './turso-regras.js'
 import { chavesConsumo, cicloAtual, comandoSomar, configCota, nivelCota, peloMenos } from './turso-cota.js'
 
@@ -586,6 +587,22 @@ export async function coletarRodada(turso, { prazo = Date.now() + 40_000, fetche
     const s = await recontarBase(turso)
     feitos.push({ etapa: 'situacao', editais: s.editais, abertos: s.abertos, comItens: s.comItens })
   })
+  // "Iminência de deserto" do PCP (processos abertos sem nenhuma proposta): uma página por rodada; ao fim de cada
+  // volta (~16 rodadas) sai quem deixou de aparecer na lista. Cursor "início da volta|página".
+  if (!enxuta && tempoAte(0.8)) await etapa('pcp', async () => {
+    if (estado.pcp_tabela !== '1') await turso.pipeline([[TABELA_PCP], guardar('pcp_tabela', '1')])
+    let [volta, pg] = String(estado.pcp_cursor ?? '').split('|')
+    pg = Number(pg) || 1
+    if (!volta) volta = agoraIso()
+    const { processos, paginas } = await paginaIminenciaPCP(fetcher, pg)
+    const agora = agoraIso()
+    const comandos = processos.map((p) => ['insert into pcp_iminencia(link, dados, abertura, visto_em) values(?,?,?,?) on conflict(link) do update set dados = excluded.dados, abertura = excluded.abertura, visto_em = excluded.visto_em',
+      [p.link, JSON.stringify(p), p.abertura, agora]])
+    if (!processos.length || pg >= Math.min(paginas, PAGINAS_PCP)) comandos.push(['delete from pcp_iminencia where visto_em < ?', [volta]], guardar('pcp_cursor', ''), guardar('pcp_lido_em', agora))
+    else comandos.push(guardar('pcp_cursor', `${volta}|${pg + 1}`))
+    await turso.pipeline(comandos)
+    feitos.push({ etapa: 'pcp', pagina: pg, de: paginas, processos: processos.length })
+  })
   if (cota.nivel === 'normal' && tempoAte(0.95)) await etapa('compactacao', async () => {
     feitos.push({ etapa: 'compactacao', bytes: await compactarBase(turso, estado.compactacao_cursor) })
   })
@@ -595,6 +612,20 @@ export async function coletarRodada(turso, { prazo = Date.now() + 40_000, fetche
   await turso.pipeline(fim, { descarregar: true })
   if (cota.nivel !== 'normal') feitos.push({ cota: cota.nivel, leituras: Math.round(cota.usoLeituras * 1000) / 10, escritas: Math.round(cota.usoEscritas * 1000) / 10 })
   return feitos
+}
+
+const TABELA_PCP = 'create table if not exists pcp_iminencia (link text primary key, dados text not null, abertura text, visto_em text not null) without rowid'
+/** Processos do PCP em iminência de deserto que ainda não abriram (cancelados e suspensos ficam de fora). */
+export async function iminenciaPCPTurso(turso, agora = new Date()) {
+  let linhas = [], estado = []
+  try {
+    [linhas, estado] = await turso.lote([
+      ['select dados from pcp_iminencia where abertura is null or abertura >= ? order by abertura', [new Date(agora.getTime() - 3600_000).toISOString()]],
+      ["select valor from coleta_estado where chave = 'pcp_lido_em'"],
+    ])
+  } catch (e) { if (!/no such table/i.test(String(e?.message))) throw e }
+  const processos = linhas.map((l) => JSON.parse(l.dados)).filter((p) => !/cancelad|suspens|revogad|anulad/i.test(p.situacao ?? ''))
+  return { processos, lidoEm: estado[0]?.valor ?? null }
 }
 
 /** Itens de um edital guardados no Turso, no formato do PNCP (reserva da página do edital). null se ainda não coletados. */

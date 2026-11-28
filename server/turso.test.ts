@@ -1,8 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createRequire } from 'node:module'
-import { buscarTurso, clienteTurso, coletarRodada, itensTurso, LIMITE_CONTAGEM, limiteContagem, linhas, montarFiltros, orgaosTurso, urlHttp } from './turso.js'
+import { buscarTurso, clienteTurso, coletarRodada, iminenciaPCPTurso, itensTurso, LIMITE_CONTAGEM, limiteContagem, linhas, montarFiltros, orgaosTurso, urlHttp } from './turso.js'
 import { consultaFts, diaUtil, filtroDescricao, portalDe, raiz, tempo, tipoPeloObjeto } from './turso-regras.js'
 import { criarHandler } from './oportunidades.js'
+import { PAGINA_PCP } from './pcp-iminencia.fixture'
 
 /** "Turso" local: o mesmo SQL rodando no SQLite do Node, com a resposta no formato do /v2/pipeline. */
 function tursoLocal() {
@@ -557,5 +558,18 @@ describe('banco bloqueado pelo Turso', () => {
     expect(coleta.status).toHaveBeenCalledWith(200)
     expect(coleta.json).toHaveBeenCalledWith(expect.objectContaining({ bloqueado: true }))
     expect(chamadasTurso).toBe(1)
+  })
+})
+
+describe('iminência de deserto do PCP na coleta', () => {
+  it('guarda uma página por rodada e devolve os processos abertos sem os cancelados', async () => {
+    const turso = tursoLocal()
+    const fetcher = vi.fn(async (url: string) => url.includes('portaldecompraspublicas.com.br/processos') ? new Response(PAGINA_PCP) : new Response('{}'))
+    await coletarRodada(turso as never, { fetcher, prazo: Date.now() + 40_000, maxConsultas: 0, intervaloMs: 0 })
+    expect(fetcher.mock.calls.some(([u]) => String(u).includes('status=4') && String(u).includes('pagina=1'))).toBe(true)
+    const r = await iminenciaPCPTurso(turso as never, new Date('2026-12-01T00:00:00Z'))
+    expect(r.processos.map((p: { numero: string }) => p.numero)).toEqual(['DE43/2026'])
+    // A volta segue para a página 2 na próxima rodada.
+    expect((await turso.consultar("select valor from coleta_estado where chave='pcp_cursor'"))[0].valor).toMatch(/\|2$/)
   })
 })

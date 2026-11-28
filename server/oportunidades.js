@@ -9,7 +9,7 @@
 //   GET  ?acao=turso-logs&tipo=&horas=&usuario=&busca=&antes= (master)         → logs de uso dos clientes
 import { emCache, usuarioLogado, excedeuLimite } from './protecao.js'
 import { consultarLogs, registrarLogs } from './logs-uso.js'
-import { BloqueioTurso, buscarTurso, clienteTurso, coletarRodada, CotaTurso, FiltroInvalido, itensTurso, nivelConhecido, orgaosTurso, situacaoTurso } from './turso.js'
+import { BloqueioTurso, buscarTurso, clienteTurso, coletarRodada, CotaTurso, FiltroInvalido, iminenciaPCPTurso, itensTurso, nivelConhecido, orgaosTurso, situacaoTurso } from './turso.js'
 import { peloMenos } from './turso-cota.js'
 import { modalidadesResumo, perfilHoje, resumoHoje } from './turso.js'
 
@@ -134,6 +134,12 @@ export function criarHandler({ fetcher = fetch, env = process.env, validarSessao
         if (r.comTermo && r.coberturaItens < 0.9) avisos.push('A busca já consulta os objetos dos editais; a pesquisa nos itens será ampliada conforme a coleta avança.')
         const { coberturaItens, comTermo, ...resposta } = r
         return res.status(200).json({ ...resposta, catalogo: { ...resposta.catalogo, aviso: avisos.join(' ') || null, cobertura_itens: Math.round(coberturaItens * 100) } })
+      }
+      // Processos do Portal de Compras Públicas ainda sem nenhuma proposta ("iminência de deserto"), lidos pela coleta.
+      if (acao === 'turso-pcp-iminencia') {
+        if (!(await sessao)) return res.status(401).json({ error: 'Entre na sua conta' })
+        if (!turso) return res.status(409).json({ error: 'A base rápida ainda não foi conectada.', codigo: 'turso_indisponivel' })
+        return res.status(200).json(await emCache('turso-pcp-iminencia', 'lista', 2 * 60_000, () => iminenciaPCPTurso(turso), 5))
       }
       if (acao === 'turso-orgaos') {
         if (req.method !== 'POST') return res.status(405).json({ error: 'Método não permitido' })

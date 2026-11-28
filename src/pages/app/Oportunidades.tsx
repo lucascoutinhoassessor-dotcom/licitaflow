@@ -17,6 +17,7 @@ import FiltrosOportunidades from '@/components/FiltrosOportunidades'
 import MenuFiltros from '@/components/MenuFiltros'
 import SeletorEstados from '@/components/SeletorEstados'
 import OportunidadesDesertas from '@/components/OportunidadesDesertas'
+import IminenciaDeserto from '@/components/IminenciaDeserto'
 import LocalizarEdital from '@/components/LocalizarEdital'
 import AtalhosOportunidades, { type AcaoAtalho } from '@/components/AtalhosOportunidades'
 import { RecursoLiberado } from '@/components/RecursoLiberado'
@@ -31,10 +32,10 @@ import type { Processo } from '@/types/db'
 import ContagemDisputa from '@/components/ContagemDisputa'
 
 const CHAVE_BUSCA='lf-oportunidades-busca',CHAVE_ABA='lf-oportunidades-aba'
-type Aba='abertas'|'desertas'|'localizar'
-function lerAba():Aba{try{const a=sessionStorage.getItem(CHAVE_ABA);return a==='desertas'||a==='localizar'?a:'abertas'}catch{return 'abertas'}}
+type Aba='abertas'|'desertas'|'iminencia'|'localizar'
+function lerAba():Aba{try{const a=sessionStorage.getItem(CHAVE_ABA);return a==='desertas'||a==='iminencia'||a==='localizar'?a:'abertas'}catch{return 'abertas'}}
 /** Abas da tela e o recurso (liberado pelo master) que cada uma exige. */
-const ABAS:[Aba,string,`recurso-${string}`|null][]=[['abertas','Editais',null],['desertas','Itens sem vencedor','recurso-sem-vencedor'],['localizar','Localizar edital','recurso-localizar-edital']]
+const ABAS:[Aba,string,`recurso-${string}`|null][]=[['abertas','Editais',null],['desertas','Itens sem vencedor','recurso-sem-vencedor'],['iminencia','Sem propostas','recurso-sem-vencedor'],['localizar','Localizar edital','recurso-localizar-edital']]
 /** Período rápido escolhido (7, 15, 30 ou todo o período) é guardado junto: ao reabrir em outro dia, as datas andam com ele. */
 type Rapido=number|null|undefined
 const lerRapido=(v:unknown):Rapido=>v===null?null:typeof v==='number'&&Number.isInteger(v)?v:undefined
@@ -85,6 +86,7 @@ export default function Oportunidades() {
   const aba:Aba=abas.some(([id])=>id===abaEscolhida)?abaEscolhida:'abertas'
   function usarAtalho(a:AcaoAtalho){
     if(a.tipo==='localizar'){setAba('localizar');return}
+    if(a.tipo==='iminencia'){setAba('iminencia');return}
     if(a.tipo==='proximas'){
       // Editais que ainda vão abrir: troca período e portal e já pesquisa. Num dia só (hoje/amanhã) mostra também fim de semana e feriado.
       const novo:Filtros={...f,situacao:'abertas',...periodoEntre(a.de,a.ate),portais:a.portal?[a.portal]:filtrosExtras.portais,diasUteis:a.de===a.ate?false:f.diasUteis,inverter:false}
@@ -158,7 +160,7 @@ export default function Oportunidades() {
       {abas.map(([id,rotulo])=><button key={id} type="button" role="tab" aria-selected={aba===id} onClick={()=>{setAba(id);setAtalho(undefined)}}
         className={`min-h-9 min-w-0 flex-1 rounded-full px-2 py-1 text-xs font-semibold leading-tight transition-colors sm:flex-none sm:px-4 sm:text-sm ${aba===id?'bg-primary text-primary-foreground':'text-muted-foreground hover:text-foreground'}`}>{rotulo}</button>)}
     </div>}
-    {aba==='desertas'?<OportunidadesDesertas atalho={atalho} />:aba==='localizar'?<LocalizarEdital />:<>
+    {aba==='desertas'?<OportunidadesDesertas atalho={atalho} />:aba==='iminencia'?<IminenciaDeserto />:aba==='localizar'?<LocalizarEdital />:<>
     <Card className="mb-5 p-4">
       <form onSubmit={pesquisar} className="space-y-3">
         <div className="flex flex-col gap-2 sm:flex-row"><div className="relative min-w-0 flex-1"><Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input className="pl-9" aria-label="Pesquisar oportunidades" placeholder="O que sua empresa vende? Ex.: notebook; computador" value={f.busca} onChange={set('busca')} maxLength={300} /></div><Button type="submit" carregando={q.isFetching}>Buscar oportunidades</Button></div>

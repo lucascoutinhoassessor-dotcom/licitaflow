@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { CalendarClock, ChevronDown, Hash, TriangleAlert, X, Zap } from 'lucide-react'
+import { CalendarClock, ChevronDown, Hash, Sparkles, TriangleAlert, X, Zap } from 'lucide-react'
 import { useRecursos } from '@/hooks/useModulos'
 import { ATALHOS_PORTAIS } from '@/lib/recursos'
 import { PORTAIS } from '@/lib/portais'
@@ -7,7 +7,7 @@ import { PROXIMAS_DISPUTAS } from '@/lib/filtrosOportunidades'
 import IconePortal from '@/components/IconePortal'
 import { cn } from '@/lib/utils'
 
-export type AcaoAtalho = { tipo: 'localizar' } | { tipo: 'sem-vencedor'; portal: string }
+export type AcaoAtalho = { tipo: 'localizar' } | { tipo: 'iminencia' } | { tipo: 'sem-vencedor'; portal: string }
   /** Editais que ainda vão abrir entre hoje+de e hoje+ate; portal '' = todos. */
   | { tipo: 'proximas'; de: number; ate: number; portal: string }
 
@@ -59,6 +59,9 @@ export default function AtalhosOportunidades({ aoEscolher }: { aoEscolher: (a: A
       </div>}
       {localizar && <button role="menuitem" type="button" className={item} onClick={() => escolher({ tipo: 'localizar' })}>
         <Hash className="h-4 w-4 shrink-0 text-muted-foreground" /><span><span className="block font-medium">Localizar edital</span><span className="block text-xs text-muted-foreground">Pelo número, UASG, CNPJ ou link</span></span>
+      </button>}
+      {semVencedor && <button role="menuitem" type="button" className={item} onClick={() => escolher({ tipo: 'iminencia' })}>
+        <Sparkles className="h-4 w-4 shrink-0 text-emerald-500" /><span><span className="block font-medium">Sem propostas ainda</span><span className="block text-xs text-muted-foreground">Portal de Compras Públicas: ninguém propôs até agora</span></span>
       </button>}
       {semVencedor && <button role="menuitem" type="button" className={item} onClick={() => escolher({ tipo: 'sem-vencedor', portal: '' })}>
         <TriangleAlert className="h-4 w-4 shrink-0 text-amber-500" /><span><span className="block font-medium">Itens sem vencedor</span><span className="block text-xs text-muted-foreground">Desertos e fracassados; o portal se escolhe dentro da aba</span></span>
