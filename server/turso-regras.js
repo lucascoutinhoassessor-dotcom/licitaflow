@@ -8,8 +8,8 @@ export const PORTAIS = [
   ['comprasnet', ['compras.gov.br', 'comprasnet.gov.br', 'serpro.gov.br'], ['compras.gov.br', 'comprasnet']],
   ['pcp', ['portaldecompraspublicas.com.br'], ['portal de compras publicas']],
   ['licitacoes-e', ['licitacoes-e.com.br'], ['licitacoes-e']],
-  ['caixa', ['licitacoes.caixa.gov.br'], ['licitacoes caixa']],
-  ['banrisul', ['banrisul.com.br'], ['banrisul']],
+  ['caixa', ['licitacoes.caixa.gov.br'], ['licitacoes caixa', 'caixa economica federal']],
+  ['banrisul', ['banrisul.com.br', 'pregaobanrisul.com.br'], ['banrisul']],
   ['rs', ['compras.rs.gov.br'], ['compras rs']],
   ['bahia', ['comprasnet.ba.gov.br'], ['compras bahia', 'bahia secretaria da administracao']],
   ['amazonas', ['e-compras.am.gov.br'], ['compras amazonas']],
@@ -18,11 +18,11 @@ export const PORTAIS = [
   ['recife', ['recife.pe.gov.br'], ['compras recife']],
   ['licitanet', ['licitanet.com.br'], ['licitanet']],
   ['bll', ['bll.org.br', 'bllcompras.com'], ['bll compras', 'bolsa de licitacoes e leiloes']],
-  ['elic', ['elic.sc.gov.br', 'portaldecompras.sc.gov.br'], ['e-lic', 'compras santa catarina']],
+  ['elic', ['elic.sc.gov.br', 'portaldecompras.sc.gov.br'], ['e-lic', 'compras santa catarina', 'secretaria de estado da administracao de santa catarina']],
   ['procergs', ['procergs.com.br', 'procergs.rs.gov.br'], ['procergs']],
   ['mg', ['compras.mg.gov.br'], ['compras minas gerais']],
   ['banpara', ['banpara.b.br'], ['banpara']],
-  ['pe', ['peintegrado.pe.gov.br'], ['pe integrado']],
+  ['pe', ['peintegrado.pe.gov.br'], ['pe integrado', 'secretaria de administracao do estado de pernambuco']],
   ['bnc', ['bnc.org.br'], ['bolsa nacional de compras', 'bnc']],
   // Acrescentados em 28/11/2026: eram metade dos editais abertos caindo em "outros".
   ...PORTAIS_NOVOS_REGRAS(),
@@ -36,9 +36,13 @@ function PORTAIS_NOVOS_REGRAS() {
     ['ceara', ['compras.ce.gov.br', 'licitacoes.ce.gov.br'], ['planejamento e gestao do ceara']],
     ['fortaleza', ['compras.sepog.fortaleza.ce.gov.br'], ['prefeitura municipal de fortaleza']],
     ['paraiba', ['centraldecompras.pb.gov.br'], ['central de compras da paraiba']],
-    ['municipais', ['licitapp.com.br', 'dcfiorilli.com.br', 'balkertecnologia.com.br', 'emunicipio.com.br'],
+    ['para', ['compras.pa.gov.br'], ['compras para']],
+    ['sergipe', ['comprasnet.se.gov.br', 'aracajucompras.se.gov.br'], ['compras sergipe']],
+    ['licitamais', ['licitamaisbrasil.com.br'], ['licita + brasil', 'licita mais brasil']],
+    ['municipais', ['licitapp.com.br', 'dcfiorilli.com.br', 'balkertecnologia.com.br', 'emunicipio.com.br', 'gp.srv.br', 'slicx.com.br', 'agilicloud.com.br'],
       ['ipm sistemas', 'elotech', 'smarapd', 'az informatica', 'e & l producoes', 'betha sistemas', 'governancabrasil', 'conam consultoria', 'publica tecnologia',
-        'megasoft', 'equiplano', 'j brasil sistemas', 'fiorilli', 'tecnosweb', 'embras', 'startgov', 'prodata informatica', 'sh3 informatica', 'top down consultoria', 'br conectado']],
+        'megasoft', 'equiplano', 'j brasil sistemas', 'fiorilli', 'tecnosweb', 'embras', 'startgov', 'prodata informatica', 'sh3 informatica', 'top down consultoria', 'br conectado',
+        'instituto municipal de administracao publica', 'ibdm modernizacao', 'planejar consultores', 'digifred', 'contass', 'elmar tecnologia', 'abase sistemas', 'memory projetos', 'hlh assessoria', '3tecnos', 'sonner sistemas', 'novoserv', '4r tecnologia', 'sisvetor', 'instar tecnologia', 'govtec', 'gcaspp', 'tche informatica', 'system desenvolvimento', 'sigep', 'assesi', 'eddydata', 'contratosgov', 'publicenter', 'coplan', 'slicx', 'agili software', 'procede bahia', 'empro tecnologia', 'licitacon', 'centi']],
   ]
 }
 /** Portais acrescentados depois: um filtro salvo antes deles, que marcava "outros", continua vendo esses editais. */
@@ -46,7 +50,8 @@ export const PORTAIS_NOVOS = PORTAIS_NOVOS_REGRAS().map((p) => p[0])
 export const IDS_PORTAIS = [...PORTAIS.map((p) => p[0]), 'outros']
 
 export function portalDe(c) {
-  const host = /^https:\/\/([^/:?#]+)/.exec(String(c?.linkSistemaOrigem ?? '').toLowerCase())?.[1] ?? ''
+  // Vários portais ainda publicam o link com http:// (sem o "s").
+  const host = /^https?:\/\/([^/:?#]+)/.exec(String(c?.linkSistemaOrigem ?? '').toLowerCase())?.[1] ?? ''
   if (host) for (const [id, dominios] of PORTAIS) if (dominios.some((d) => host === d || host.endsWith(`.${d}`))) return id
   const nome = normalizar(c?.usuarioNome)
   let melhor = null

@@ -4,8 +4,8 @@ export const PORTAIS = [
   ['comprasnet', 'Comprasnet', ['compras.gov.br','comprasnet.gov.br','serpro.gov.br'], ['compras.gov.br','comprasnet']],
   ['pcp', 'Portal de Compras Públicas', ['portaldecompraspublicas.com.br'], ['portal de compras publicas']],
   ['licitacoes-e', 'Licitações-e', ['licitacoes-e.com.br'], ['licitacoes-e']],
-  ['caixa', 'Licitações Caixa', ['licitacoes.caixa.gov.br'], ['licitacoes caixa']],
-  ['banrisul', 'Banrisul', ['banrisul.com.br'], ['banrisul']],
+  ['caixa', 'Licitações Caixa', ['licitacoes.caixa.gov.br'], ['licitacoes caixa','caixa economica federal']],
+  ['banrisul', 'Banrisul', ['banrisul.com.br','pregaobanrisul.com.br'], ['banrisul']],
   ['rs', 'Compras RS', ['compras.rs.gov.br'], ['compras rs']],
   ['bahia', 'Compras Bahia', ['comprasnet.ba.gov.br'], ['compras bahia','bahia secretaria da administracao']],
   ['amazonas', 'Compras Amazonas', ['e-compras.am.gov.br'], ['compras amazonas']],
@@ -14,11 +14,11 @@ export const PORTAIS = [
   ['recife', 'Compras Recife', ['recife.pe.gov.br'], ['compras recife']],
   ['licitanet', 'Licitanet', ['licitanet.com.br'], ['licitanet']],
   ['bll', 'BLL Compras', ['bll.org.br','bllcompras.com'], ['bll compras','bolsa de licitacoes e leiloes']],
-  ['elic', 'Portal e-LIC · Santa Catarina', ['elic.sc.gov.br','portaldecompras.sc.gov.br'], ['e-lic','compras santa catarina']],
+  ['elic', 'Portal e-LIC · Santa Catarina', ['elic.sc.gov.br','portaldecompras.sc.gov.br'], ['e-lic','compras santa catarina','secretaria de estado da administracao de santa catarina']],
   ['procergs', 'Procergs', ['procergs.com.br','procergs.rs.gov.br'], ['procergs']],
   ['mg', 'Compras Minas Gerais', ['compras.mg.gov.br'], ['compras minas gerais']],
   ['banpara', 'Banpará', ['banpara.b.br'], ['banpara']],
-  ['pe', 'PE Integrado', ['peintegrado.pe.gov.br'], ['pe integrado']],
+  ['pe', 'PE Integrado', ['peintegrado.pe.gov.br'], ['pe integrado','secretaria de administracao do estado de pernambuco']],
   ['bnc', 'BNC', ['bnc.org.br'], ['bolsa nacional de compras','bnc']],
   // Iguais aos de server/turso-regras.js (acrescentados em 28/11/2026).
   ['bbmnet', 'BBMNET', ['bbmnet.com.br'], ['bbmnet']],
@@ -28,14 +28,18 @@ export const PORTAIS = [
   ['ceara', 'Compras Ceará', ['compras.ce.gov.br','licitacoes.ce.gov.br'], ['planejamento e gestao do ceara']],
   ['fortaleza', 'Compras Fortaleza', ['compras.sepog.fortaleza.ce.gov.br'], ['prefeitura municipal de fortaleza']],
   ['paraiba', 'Central de Compras PB', ['centraldecompras.pb.gov.br'], ['central de compras da paraiba']],
-  ['municipais', 'Sistemas de prefeituras (IPM, Betha, Elotech…)', ['licitapp.com.br','dcfiorilli.com.br','balkertecnologia.com.br','emunicipio.com.br'],
+  ['para', 'Compras Pará', ['compras.pa.gov.br'], ['compras para']],
+  ['sergipe', 'Compras Sergipe', ['comprasnet.se.gov.br','aracajucompras.se.gov.br'], ['compras sergipe']],
+  ['licitamais', 'Licita+Brasil', ['licitamaisbrasil.com.br'], ['licita + brasil','licita mais brasil']],
+  ['municipais', 'Sistemas de prefeituras (IPM, Betha, Elotech…)', ['licitapp.com.br','dcfiorilli.com.br','balkertecnologia.com.br','emunicipio.com.br','gp.srv.br','slicx.com.br','agilicloud.com.br'],
     ['ipm sistemas','elotech','smarapd','az informatica','e & l producoes','betha sistemas','governancabrasil','conam consultoria','publica tecnologia',
-      'megasoft','equiplano','j brasil sistemas','fiorilli','tecnosweb','embras','startgov','prodata informatica','sh3 informatica','top down consultoria','br conectado']],
+      'megasoft','equiplano','j brasil sistemas','fiorilli','tecnosweb','embras','startgov','prodata informatica','sh3 informatica','top down consultoria','br conectado',
+      'instituto municipal de administracao publica','ibdm modernizacao','planejar consultores','digifred','contass','elmar tecnologia','abase sistemas','memory projetos','hlh assessoria','3tecnos','sonner sistemas','novoserv','4r tecnologia','sisvetor','instar tecnologia','govtec','gcaspp','tche informatica','system desenvolvimento','sigep','assesi','eddydata','contratosgov','publicenter','coplan','slicx','agili software','procede bahia','empro tecnologia','licitacon','centi']],
   ['outros', 'Outros portais', [], []],
 ] as const
 export const normalizar = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
 export function urlOrigem(c: CompraPNCP): string | null {
-  try { const u = new URL(c.linkSistemaOrigem ?? ''); return u.protocol === 'https:' ? u.href : null } catch { return null }
+  try { const u = new URL(c.linkSistemaOrigem ?? ''); return u.protocol === 'https:' || u.protocol === 'http:' ? u.href : null } catch { return null }
 }
 export function portalCompra(c: CompraPNCP) {
   const origem = urlOrigem(c), host = origem ? new URL(origem).hostname : ''
@@ -71,7 +75,7 @@ const ICONES: Record<string, { dominio: string; direto?: string }> = {
   banpara: { dominio: 'www.banpara.b.br' }, pe: { dominio: 'www.pe.gov.br' }, bnc: { dominio: 'bnccompras.com' },
   bbmnet: { dominio: 'bbmnet.com.br' }, licitardigital: { dominio: 'licitardigital.com.br' }, ammlicita: { dominio: 'ammlicita.org.br' },
   parana: { dominio: 'www.comprasparana.pr.gov.br' }, ceara: { dominio: 'www.seplag.ce.gov.br' }, fortaleza: { dominio: 'www.fortaleza.ce.gov.br' },
-  paraiba: { dominio: 'www.centraldecompras.pb.gov.br' }, municipais: { dominio: '' }, outros: { dominio: '' },
+  paraiba: { dominio: 'www.centraldecompras.pb.gov.br' }, para: { dominio: 'www.compras.pa.gov.br' }, sergipe: { dominio: 'www.comprasnet.se.gov.br' }, licitamais: { dominio: 'licitamaisbrasil.com.br' }, municipais: { dominio: '' }, outros: { dominio: '' },
 }
 /** Endereços do ícone do portal, do mais confiável ao reserva. */
 export function iconesPortal(id: string) {
@@ -86,7 +90,7 @@ export function iconesPortal(id: string) {
 }
 
 /** Portais acrescentados em 28/11/2026 (antes eram "outros"). */
-export const PORTAIS_NOVOS = ['bbmnet', 'licitardigital', 'ammlicita', 'parana', 'ceara', 'fortaleza', 'paraiba', 'municipais']
+export const PORTAIS_NOVOS = ['bbmnet', 'licitardigital', 'ammlicita', 'parana', 'ceara', 'fortaleza', 'paraiba', 'para', 'sergipe', 'licitamais', 'municipais']
 /** Filtro guardado antes dos portais novos: quem marcava "outros" continua vendo esses editais. */
 export function comPortaisNovos(portais: string[]) {
   return portais.includes('outros') && !PORTAIS_NOVOS.some((p) => portais.includes(p)) ? [...portais, ...PORTAIS_NOVOS] : portais

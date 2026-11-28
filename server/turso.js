@@ -15,6 +15,8 @@ const PNCP_ITENS = 'https://pncp.gov.br/api/pncp/v1/orgaos'
 export const MODALIDADES = [6, 8, 4, 12, 5, 7, 9, 1, 2, 3, 10, 11, 13]
 const VERSAO_ESQUEMA = '2'
 const LIMITE_CARGA = '20991231'
+/** Sobe a cada regra nova de portal (turso-regras.js): a coleta reclassifica os editais que estão em "outros". */
+const REVISAO_PORTAIS = '3'
 const UA = { Accept: 'application/json', 'User-Agent': 'licitaforce-turso' }
 // Histórico de encerrados: 12 meses, sem dispensa (8) e inexigibilidade (9), que são ~65% do volume e não caberiam
 // nos 5 GB do plano grátis. Os itens dos encerrados não ficam (só os dos abertos).
@@ -432,14 +434,23 @@ export async function coletarRodada(turso, { prazo = Date.now() + 40_000, fetche
       ...(lote.length < 250 ? [guardar('fts_orgao', '1'), ['delete from cache_busca']] : []),
     ])
   }
-  // Portais novos (28/11/2026): reclassifica aos poucos os editais que estavam em "outros". Só grava o que muda.
-  if (estado.portal_v2 !== '1' && !peloMenos(cota.escritasNivel, 'economia')) {
-    const lote = await turso.consultar("select rowid as id, compra from editais where portal = 'outros' and rowid > ? order by rowid limit 250", [Number(estado.portal_v2_cursor) || 0])
-    const mudam = lote.map((l) => [l.id, portalDe(lerCompra(l.compra))]).filter(([, p]) => p !== 'outros')
+  // Regras de portal novas: reclassifica aos poucos todos os editais (um edital pode ter caído em "outros" ou num portal
+  // errado), primeiro os abertos (o que o cliente procura), depois o histórico. Só grava o que muda.
+  // Cursor "revisão:fase:rowid"; cada regra nova de portal = nova REVISAO_PORTAIS.
+  if (estado.portal_rev !== REVISAO_PORTAIS && !peloMenos(cota.escritasNivel, 'economia')) {
+    let [rev, fase, depois] = String(estado.portal_rev_cursor ?? '').split(':')
+    if (rev !== REVISAO_PORTAIS) { fase = 'abertos'; depois = '0' }
+    const soAbertos = fase === 'abertos'
+    const lote = await turso.consultar(`select rowid as id, portal, compra from editais where rowid > ?${soAbertos ? ' and (encerramento is null or encerramento >= ?)' : ''} order by rowid limit 1000`,
+      soAbertos ? [Number(depois) || 0, agoraIso()] : [Number(depois) || 0])
+    const mudam = lote.map((l) => [l.id, portalDe(lerCompra(l.compra)), l.portal]).filter(([, p, antes]) => p !== antes)
+    const acabou = lote.length < 1000
+    const proximo = acabou ? (soAbertos ? `${REVISAO_PORTAIS}:todos:0` : null) : `${REVISAO_PORTAIS}:${fase}:${lote.at(-1).id}`
     await turso.transacao([
-      ...mudam.map(([id, p]) => ["update editais set portal = ? where rowid = ? and portal = 'outros'", [p, id]]),
-      guardar('portal_v2_cursor', lote.at(-1)?.id ?? estado.portal_v2_cursor ?? 0),
-      ...(lote.length < 250 ? [guardar('portal_v2', '1'), ['delete from cache_busca']] : []),
+      ...mudam.map(([id, p, antes]) => ['update editais set portal = ? where rowid = ? and portal = ?', [p, id, antes]]),
+      ...(proximo ? [guardar('portal_rev_cursor', proximo)] : [guardar('portal_rev', REVISAO_PORTAIS)]),
+      // Os abertos reclassificados já aparecem no filtro de portal (as contagens guardadas caem).
+      ...(acabou ? [['delete from cache_busca']] : []),
     ])
   }
   // Em economia de escrita, roda em minutos alternados (metade das gravações; o atraso máximo vira 2 min).

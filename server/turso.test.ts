@@ -53,6 +53,15 @@ describe('regras da base rápida', () => {
     expect(portalDe({ usuarioNome: 'Betha Sistemas' })).toBe('municipais')
     expect(portalDe({ usuarioNome: 'BAHIA SECRETARIA DA ADMINISTRACAO' })).toBe('bahia')
     expect(portalDe({ usuarioNome: 'Secretaria de Estado da Administração e da Previdência do Estado do Paraná - SEAP-PR' })).toBe('parana')
+    // Revisão portal a portal: nomes e endereços que os portais usam no PNCP.
+    expect(portalDe({ usuarioNome: 'CAIXA ECONOMICA FEDERAL' })).toBe('caixa')
+    expect(portalDe({ usuarioNome: 'PROCERGS - CENTRO DE TECNOLOGIA', linkSistemaOrigem: 'https://www.pregaobanrisul.com.br/x' })).toBe('banrisul')
+    expect(portalDe({ usuarioNome: 'Secretaria de Estado da Administração de Santa Catarina' })).toBe('elic')
+    expect(portalDe({ usuarioNome: 'Secretaria de Administração do Estado de Pernambuco' })).toBe('pe')
+    expect(portalDe({ linkSistemaOrigem: 'http://portaldecompras.recife.pe.gov.br/x' })).toBe('recife')
+    expect(portalDe({ usuarioNome: 'Compras Pará' })).toBe('para')
+    expect(portalDe({ usuarioNome: 'Licita + Brasil' })).toBe('licitamais')
+    expect(portalDe({ usuarioNome: 'Instituto Municipal de Administração Pública - IMAP' })).toBe('municipais')
   })
   it('palavra-chave vira consulta por prefixo, com plural reduzido e ";" como "ou"', () => {
     expect(raiz('computadores')).toBe('computador')
@@ -197,11 +206,13 @@ describe('coleta e busca no Turso', () => {
   it('reclassifica aos poucos os editais em "outros" e o filtro salvo antes dos portais novos continua vendo-os', async () => {
     const { turso } = await preparar()
     const total = (await buscarTurso(turso as never, { ufs: ['MG'] })).totalRegistros
-    turso.db.exec("update editais set portal='outros'; delete from coleta_estado where chave in ('portal_v2','portal_v2_cursor')")
+    turso.db.exec("update editais set portal='outros'; delete from coleta_estado where chave in ('portal_rev','portal_rev_cursor')")
+    await coletarRodada(turso as never, { prazo: Date.now() - 1, maxConsultas: 0, intervaloMs: 0 })
+    // Primeiro os abertos, na rodada seguinte o histórico.
     await coletarRodada(turso as never, { prazo: Date.now() - 1, maxConsultas: 0, intervaloMs: 0 })
     // O link de origem dos editais de teste é do Portal de Compras Públicas.
     expect((await buscarTurso(turso as never, { ufs: ['MG'], portais: ['pcp'] })).totalRegistros).toBe(total)
-    expect(await turso.consultar("select valor from coleta_estado where chave='portal_v2'")).toEqual([{ valor: '1' }])
+    expect(await turso.consultar("select valor from coleta_estado where chave='portal_rev'")).toEqual([{ valor: '3' }])
     turso.db.exec("update editais set portal='bbmnet'; delete from cache_busca")
     expect((await buscarTurso(turso as never, { ufs: ['MG'], portais: ['pcp', 'outros'] })).totalRegistros).toBe(total)
     expect((await buscarTurso(turso as never, { ufs: ['MG'], portais: ['outros', 'ammlicita'] })).totalRegistros).toBe(0)
