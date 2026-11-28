@@ -57,6 +57,40 @@ export default async function handler(req,res) {
     const admin=(await rpc('is_platform_admin'))===true
     if(!admin && !ACOES_CLIENTE.includes(body.acao)) return res.status(403).json({error:'Acesso restrito ao master'})
 
+    // ------------------------------------------------------------------ Exclusão definitiva (contas de teste)
+    // Apaga o login e as organizações em que a pessoa é o único usuário, com o histórico financeiro, e cancela no
+    // Asaas as assinaturas e cobranças em aberto delas. O e-mail fica livre para um cadastro ou checkout novo.
+    if(body.acao==='excluir_definitivo') {
+      const id=String(body.usuario ?? '')
+      if(!UUID.test(id)) return res.status(400).json({error:'Usuário inválido'})
+      const eu=await banco('/auth/v1/user')
+      if(eu?.id===id) return res.status(400).json({error:'Você não pode excluir a sua própria conta.'})
+      if((await sv(`/rest/v1/platform_admins?select=user_id&user_id=eq.${id}`)).length) return res.status(400).json({error:'Conta master: remova o acesso master antes de excluir de vez.'})
+      const usuario=await sv(`/auth/v1/admin/users/${id}`)
+      const vinculos=await sv(`/rest/v1/memberships?select=org_id&user_id=eq.${id}`)
+      const orgs=[]
+      for(const {org_id} of vinculos) {
+        const membros=await sv(`/rest/v1/memberships?select=user_id&org_id=eq.${org_id}`)
+        if(membros.every(m=>m.user_id===id)) orgs.push(org_id)
+      }
+      const {cfg}=await carregarAsaas()
+      const avisos=[]
+      for(const org of orgs) {
+        const [assinaturas,cobrancas]=await Promise.all([
+          sv(`/rest/v1/assinaturas?select=gateway_assinatura_id&org_id=eq.${org}&gateway_assinatura_id=not.is.null&status=neq.cancelada`),
+          sv(`/rest/v1/plataforma_cobrancas?select=gateway_id&org_id=eq.${org}&gateway=eq.asaas&gateway_id=not.is.null&status=in.(gerando,pendente,revisao)`),
+        ])
+        if(cfg?.ativo) {
+          for(const a of assinaturas) await asaas(cfg,`/subscriptions/${encodeURIComponent(a.gateway_assinatura_id)}`,{method:'DELETE'}).catch(e=>{ if(e.status!==404) avisos.push(`Assinatura ${a.gateway_assinatura_id} não foi cancelada no Asaas: ${e.message}`) })
+          for(const c of cobrancas) await asaas(cfg,`/payments/${encodeURIComponent(c.gateway_id)}`,{method:'DELETE'}).catch(e=>{ if(e.status!==404) avisos.push(`Cobrança ${c.gateway_id} não foi cancelada no Asaas: ${e.message}`) })
+        } else if(assinaturas.length || cobrancas.length) avisos.push('Asaas desativado: cancele no painel do Asaas as cobranças desta conta.')
+        await rpc('admin_excluir_org_definitivo',{p_org:org})
+      }
+      await sv('/rest/v1/admin_audit',{method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify({ator:eu.id,acao:'usuario.excluir_definitivo',alvo:'auth.users',dados:{usuario:id,email:usuario.email,organizacoes:orgs.length,avisos}})}).catch(()=>{})
+      await sv(`/auth/v1/admin/users/${id}`,{method:'DELETE'})
+      return res.json({ok:true,email:usuario.email,organizacoes:orgs.length,avisos})
+    }
+
     // ------------------------------------------------------------------ Asaas pelo painel
     // Duas contas guardadas (teste e produção); o master escolhe qual está em uso.
     // body: { ambiente?: em uso, chaves?: {sandbox?, production?}, tokens?: {sandbox?, production?}, ativo? }

@@ -8,6 +8,7 @@ import { diasAte, formatarData, formatarDataHora, formatarMoeda } from '@/lib/fo
 import { formatarWhatsapp, linkWhatsapp, normalizarWhatsapp } from '@/lib/telefone'
 import { useAuth } from '@/providers/AuthProvider'
 import { acaoUsuarioMaster } from '@/components/EdicaoClienteMaster'
+import { pagamentoAPI } from '@/lib/pagamentos'
 import { useCatalogoPlanos } from '@/hooks/useCatalogoPlanos'
 import { cn } from '@/lib/utils'
 import { Aviso, Badge, Button, CabecalhoPagina, Campo, Card, Carregando, Input, Modal, Select } from '@/components/ui'
@@ -286,7 +287,23 @@ function useAcoesPessoa(dados: Clientes | undefined) {
       toast.error((e as Error).message)
     }
   }
-  return { alternarAdmin, excluir }
+  /** Contas de teste: apaga login, organização (se for o único usuário), histórico financeiro e cancela no Asaas. */
+  async function excluirDefinitivo(u: PessoaCliente) {
+    if (u.is_admin) return toast.error('Remova o acesso master antes de excluir de vez.')
+    const orgs = (dados?.organizacoes ?? []).filter((o) => o.membros.length === 1 && o.membros[0].id === u.id).map((o) => o.nome)
+    const alvo = orgs.length ? ` e a(s) organização(ões) ${orgs.join(', ')} com TODO o histórico (pedidos, assinaturas, faturas e cobranças)` : ''
+    if (!confirm(`Excluir DE VEZ ${u.email}${alvo}?\n\nAssinaturas e cobranças em aberto são canceladas no Asaas e o e-mail fica livre para um novo cadastro. Use para contas de teste: não dá para desfazer.`)) return
+    if (prompt('Para confirmar, digite o e-mail da conta:')?.trim().toLowerCase() !== u.email.toLowerCase()) return toast.error('E-mail não confere. Nada foi excluído.')
+    try {
+      const r = await pagamentoAPI({ acao: 'excluir_definitivo', usuario: u.id }) as { organizacoes: number; avisos: string[] }
+      toast.success(`Conta excluída de vez${r.organizacoes ? ` com ${r.organizacoes} organização(ões)` : ''}. O e-mail está livre.`)
+      for (const a of r.avisos ?? []) toast.warning(a)
+      recarregar()
+    } catch (e) {
+      toast.error(mensagemErro(e))
+    }
+  }
+  return { alternarAdmin, excluir, excluirDefinitivo }
 }
 
 function Pessoa({ p, papel, extra, acoes }: { p: PessoaCliente; papel?: string; extra?: ReactNode; acoes?: ReactNode }) {
@@ -372,6 +389,7 @@ function CartaoCliente({ c, aberto, alternar, editar, acoes, euId }: {
                   acoes={m.id !== euId && <div className="flex gap-2">
                     <Button tamanho="sm" variante="contorno" onClick={() => acoes.alternarAdmin(m)}>{m.is_admin ? 'Remover master' : 'Tornar master'}</Button>
                     <Button tamanho="sm" variante="perigo" onClick={() => acoes.excluir(m)}><Trash2 className="mr-1 h-4 w-4" /> Excluir</Button>
+                    {!m.is_admin && <Button tamanho="sm" variante="perigo" onClick={() => acoes.excluirDefinitivo(m)} title="Apaga também a organização e o histórico de pagamentos (contas de teste)">Excluir de vez</Button>}
                   </div>} />
               ))}
             </div>
@@ -488,6 +506,7 @@ export default function Clientes() {
               <Pessoa key={u.id} p={u} acoes={u.id !== user?.id && <div className="flex gap-2">
                 <Button tamanho="sm" variante="contorno" onClick={() => acoes.alternarAdmin(u)}>{u.is_admin ? 'Remover master' : 'Tornar master'}</Button>
                 <Button tamanho="sm" variante="perigo" onClick={() => acoes.excluir(u)}><Trash2 className="mr-1 h-4 w-4" /> Excluir</Button>
+                {!u.is_admin && <Button tamanho="sm" variante="perigo" onClick={() => acoes.excluirDefinitivo(u)} title="Apaga o login de vez e libera o e-mail">Excluir de vez</Button>}
               </div>} />
             ))}
           </div>
