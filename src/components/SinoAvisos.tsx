@@ -22,6 +22,10 @@ function useAvisosNaoLidos() {
     queryKey: ['aviso-leituras', 'sino', user?.id, org?.id],
     enabled: !!user,
     refetchInterval: 120_000,
+    // O app desliga isso globalmente; no sino, voltar para o app (ou desbloquear o celular) já traz o número certo.
+    staleTime: 0,
+    refetchOnWindowFocus: 'always',
+    refetchOnReconnect: 'always',
     queryFn: async (): Promise<AvisoSino[]> => {
       const { data, error } = await supabase.from('plataforma_avisos')
         .select('id,titulo,texto,ativo,publicar_em,expira_em,org_id,org_ids')
@@ -63,6 +67,21 @@ export default function SinoAvisos() {
   const n = avisos.length
 
   useEffect(() => { if (q.isSuccess) sincronizarAparelho(n) }, [n, q.isSuccess])
+
+  // Push chegou (public/sw.js avisa as janelas abertas com 'push-ping'): o sino muda na hora, sem recarregar.
+  // Ao voltar para a tela (app em segundo plano, celular desbloqueado) também consulta de novo.
+  const refetch = q.refetch
+  useEffect(() => {
+    const aoPush = (e: MessageEvent) => { if (e.data?.tipo === 'push-ping') void refetch() }
+    const aoVoltar = () => { if (document.visibilityState === 'visible') void refetch() }
+    const sw = 'serviceWorker' in navigator ? navigator.serviceWorker : null
+    sw?.addEventListener('message', aoPush)
+    document.addEventListener('visibilitychange', aoVoltar)
+    return () => {
+      sw?.removeEventListener('message', aoPush)
+      document.removeEventListener('visibilitychange', aoVoltar)
+    }
+  }, [refetch])
 
   async function marcar(ids: string[]) {
     if (!ids.length || !user) return
