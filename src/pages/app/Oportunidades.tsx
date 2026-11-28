@@ -20,7 +20,7 @@ import OportunidadesDesertas from '@/components/OportunidadesDesertas'
 import LocalizarEdital from '@/components/LocalizarEdital'
 import AtalhosOportunidades, { type AcaoAtalho } from '@/components/AtalhosOportunidades'
 import { RecursoLiberado } from '@/components/RecursoLiberado'
-import { codigoComprasnet, portalCompra, PORTAIS } from '@/lib/portais'
+import { codigoComprasnet, comPortaisNovos, portalCompra, PORTAIS } from '@/lib/portais'
 import IconePortal from '@/components/IconePortal'
 import CodigoComprasnet from '@/components/CodigoComprasnet'
 import { FiltroLiberado } from '@/components/FiltroLiberado'
@@ -70,10 +70,10 @@ export default function Oportunidades() {
     }
     const salvo=lerBuscaSalva()
     if(!salvo)return {f:padraoFiltros,consulta:padraoFiltros,pagina:1}
-    const consultaSalva=salvo.consulta&&{...padraoFiltros,...salvo.consulta},consulta=consultaSalva&&atualizarPeriodoRapido(consultaSalva,salvo.rapidoC)
+    const consultaSalva=salvo.consulta&&{...padraoFiltros,...salvo.consulta,portais:comPortaisNovos(salvo.consulta.portais??padraoFiltros.portais)},consulta=consultaSalva&&atualizarPeriodoRapido(consultaSalva,salvo.rapidoC)
     // Datas que andaram para hoje: a página guardada era de outro período.
     const pagina=consulta&&JSON.stringify(consulta)!==JSON.stringify(consultaSalva)?1:salvo.pagina
-    return {f:atualizarPeriodoRapido({...padraoFiltros,...salvo.f},salvo.rapidoF),consulta,pagina}
+    return {f:atualizarPeriodoRapido({...padraoFiltros,...salvo.f,portais:comPortaisNovos(salvo.f.portais??padraoFiltros.portais)},salvo.rapidoF),consulta,pagina}
   })
   const [f,setF]=useState<Filtros>(inicial.f)
   const [consulta,setConsulta]=useState<Filtros|null>(inicial.consulta)

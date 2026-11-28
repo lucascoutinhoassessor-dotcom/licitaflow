@@ -6,7 +6,7 @@
 // Conversa com o Turso pela API HTTP (/v2/pipeline), sem dependência nova. Passo a passo em docs/turso.md.
 import { createHash } from 'node:crypto'
 import { gzipSync, gunzipSync } from 'node:zlib'
-import { compraEnxuta, consultaFts, diaUtil, filtroDescricao, IDS_PORTAIS, portalDe, tempo, textoEdital, tipoPeloObjeto } from './turso-regras.js'
+import { compraEnxuta, consultaFts, diaUtil, filtroDescricao, IDS_PORTAIS, PORTAIS_NOVOS, portalDe, tempo, textoEdital, tipoPeloObjeto } from './turso-regras.js'
 import { chavesConsumo, cicloAtual, comandoSomar, configCota, nivelCota, peloMenos } from './turso-cota.js'
 
 const PNCP = 'https://pncp.gov.br/api/consulta/v1'
@@ -432,6 +432,16 @@ export async function coletarRodada(turso, { prazo = Date.now() + 40_000, fetche
       ...(lote.length < 250 ? [guardar('fts_orgao', '1'), ['delete from cache_busca']] : []),
     ])
   }
+  // Portais novos (28/11/2026): reclassifica aos poucos os editais que estavam em "outros". Só grava o que muda.
+  if (estado.portal_v2 !== '1' && !peloMenos(cota.escritasNivel, 'economia')) {
+    const lote = await turso.consultar("select rowid as id, compra from editais where portal = 'outros' and rowid > ? order by rowid limit 250", [Number(estado.portal_v2_cursor) || 0])
+    const mudam = lote.map((l) => [l.id, portalDe(lerCompra(l.compra))]).filter(([, p]) => p !== 'outros')
+    await turso.transacao([
+      ...mudam.map(([id, p]) => ["update editais set portal = ? where rowid = ? and portal = 'outros'", [p, id]]),
+      guardar('portal_v2_cursor', lote.at(-1)?.id ?? estado.portal_v2_cursor ?? 0),
+      ...(lote.length < 250 ? [guardar('portal_v2', '1'), ['delete from cache_busca']] : []),
+    ])
+  }
   // Em economia de escrita, roda em minutos alternados (metade das gravações; o atraso máximo vira 2 min).
   if (peloMenos(cota.escritasNivel, 'economia') && hoje.getUTCMinutes() % 2 === 1) return [{ cota: cota.nivel, pulada: true }]
   // Em nível crítico, só acompanha as atualizações do dia (o que mais importa para o cliente) e limpa.
@@ -622,6 +632,8 @@ export function montarFiltros(f, agora = agoraIso()) {
   if (termo.length > 300 || excluir.length > 300 || !['', 'M', 'S'].includes(tipo)) throw new FiltroInvalido('Filtros inválidos')
   const mods = (Array.isArray(f.modalidades) ? f.modalidades : TODAS_MODALIDADES).map(Number).filter((m) => Number.isInteger(m))
   const portais = (Array.isArray(f.portais) ? f.portais : IDS_PORTAIS).map(String).filter((p) => IDS_PORTAIS.includes(p))
+  // Filtro salvo antes dos portais novos: marcava "outros", onde esses editais estavam, e nenhum dos novos.
+  if (portais.includes('outros') && !PORTAIS_NOVOS.some((p) => portais.includes(p))) portais.push(...PORTAIS_NOVOS)
   if (!mods.length || !portais.length) throw new FiltroInvalido('Selecione modalidade e portal')
   const abDe = DATA.test(f.aberturaDe ?? '') ? f.aberturaDe : null, abAte = DATA.test(f.aberturaAte ?? '') ? f.aberturaAte : null
   if (abDe && abAte && abDe > abAte) throw new FiltroInvalido('Período de abertura inválido')

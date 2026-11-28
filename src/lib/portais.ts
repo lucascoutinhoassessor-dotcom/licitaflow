@@ -7,7 +7,7 @@ export const PORTAIS = [
   ['caixa', 'Licitações Caixa', ['licitacoes.caixa.gov.br'], ['licitacoes caixa']],
   ['banrisul', 'Banrisul', ['banrisul.com.br'], ['banrisul']],
   ['rs', 'Compras RS', ['compras.rs.gov.br'], ['compras rs']],
-  ['bahia', 'Compras Bahia', ['comprasnet.ba.gov.br'], ['compras bahia']],
+  ['bahia', 'Compras Bahia', ['comprasnet.ba.gov.br'], ['compras bahia','bahia secretaria da administracao']],
   ['amazonas', 'Compras Amazonas', ['e-compras.am.gov.br'], ['compras amazonas']],
   ['goias', 'Comprasnet Goiás', ['comprasnet.go.gov.br','sislog.go.gov.br'], ['comprasnet goias','sislog']],
   ['rj', 'Compras RJ', ['compras.rj.gov.br'], ['compras rj','siga rj']],
@@ -20,6 +20,17 @@ export const PORTAIS = [
   ['banpara', 'Banpará', ['banpara.b.br'], ['banpara']],
   ['pe', 'PE Integrado', ['peintegrado.pe.gov.br'], ['pe integrado']],
   ['bnc', 'BNC', ['bnc.org.br'], ['bolsa nacional de compras','bnc']],
+  // Iguais aos de server/turso-regras.js (acrescentados em 28/11/2026).
+  ['bbmnet', 'BBMNET', ['bbmnet.com.br'], ['bbmnet']],
+  ['licitardigital', 'Licitar Digital', ['licitardigital.com.br'], ['licitar digital']],
+  ['ammlicita', 'AMM Licita', ['ammlicita.org.br'], ['amm licita']],
+  ['parana', 'Compras Paraná', ['compras.pr.gov.br','comprasparana.pr.gov.br'], ['seap-pr','administracao e da previdencia do estado do parana']],
+  ['ceara', 'Compras Ceará', ['compras.ce.gov.br','licitacoes.ce.gov.br'], ['planejamento e gestao do ceara']],
+  ['fortaleza', 'Compras Fortaleza', ['compras.sepog.fortaleza.ce.gov.br'], ['prefeitura municipal de fortaleza']],
+  ['paraiba', 'Central de Compras PB', ['centraldecompras.pb.gov.br'], ['central de compras da paraiba']],
+  ['municipais', 'Sistemas de prefeituras (IPM, Betha, Elotech…)', ['licitapp.com.br','dcfiorilli.com.br','balkertecnologia.com.br','emunicipio.com.br'],
+    ['ipm sistemas','elotech','smarapd','az informatica','e & l producoes','betha sistemas','governancabrasil','conam consultoria','publica tecnologia',
+      'megasoft','equiplano','j brasil sistemas','fiorilli','tecnosweb','embras','startgov','prodata informatica','sh3 informatica','top down consultoria','br conectado']],
   ['outros', 'Outros portais', [], []],
 ] as const
 export const normalizar = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
@@ -57,7 +68,10 @@ const ICONES: Record<string, { dominio: string; direto?: string }> = {
   goias: { dominio: 'www.comprasnet.go.gov.br', direto: 'https://www.comprasnet.go.gov.br/favicon.ico' }, rj: { dominio: 'compras.rj.gov.br' },
   recife: { dominio: 'www.recife.pe.gov.br' }, licitanet: { dominio: 'licitanet.com.br' }, bll: { dominio: 'bllcompras.com' },
   elic: { dominio: 'www.portaldecompras.sc.gov.br' }, procergs: { dominio: 'www.procergs.rs.gov.br' }, mg: { dominio: 'www.compras.mg.gov.br' },
-  banpara: { dominio: 'www.banpara.b.br' }, pe: { dominio: 'www.pe.gov.br' }, bnc: { dominio: 'bnccompras.com' }, outros: { dominio: '' },
+  banpara: { dominio: 'www.banpara.b.br' }, pe: { dominio: 'www.pe.gov.br' }, bnc: { dominio: 'bnccompras.com' },
+  bbmnet: { dominio: 'bbmnet.com.br' }, licitardigital: { dominio: 'licitardigital.com.br' }, ammlicita: { dominio: 'ammlicita.org.br' },
+  parana: { dominio: 'www.comprasparana.pr.gov.br' }, ceara: { dominio: 'www.seplag.ce.gov.br' }, fortaleza: { dominio: 'www.fortaleza.ce.gov.br' },
+  paraiba: { dominio: 'www.centraldecompras.pb.gov.br' }, municipais: { dominio: '' }, outros: { dominio: '' },
 }
 /** Endereços do ícone do portal, do mais confiável ao reserva. */
 export function iconesPortal(id: string) {
@@ -69,4 +83,11 @@ export function iconesPortal(id: string) {
     ...(i.direto ? [i.direto] : []),
     `https://icons.duckduckgo.com/ip3/${i.dominio.replace(/^www\./, '')}.ico`,
   ]
+}
+
+/** Portais acrescentados em 28/11/2026 (antes eram "outros"). */
+export const PORTAIS_NOVOS = ['bbmnet', 'licitardigital', 'ammlicita', 'parana', 'ceara', 'fortaleza', 'paraiba', 'municipais']
+/** Filtro guardado antes dos portais novos: quem marcava "outros" continua vendo esses editais. */
+export function comPortaisNovos(portais: string[]) {
+  return portais.includes('outros') && !PORTAIS_NOVOS.some((p) => portais.includes(p)) ? [...portais, ...PORTAIS_NOVOS] : portais
 }

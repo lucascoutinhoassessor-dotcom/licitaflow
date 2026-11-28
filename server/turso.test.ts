@@ -46,6 +46,13 @@ describe('regras da base rápida', () => {
     expect(portalDe({ linkSistemaOrigem: 'https://cnetmobile.estaleiro.serpro.gov.br/x' })).toBe('comprasnet')
     expect(portalDe({ usuarioNome: 'BLL Compras' })).toBe('bll')
     expect(portalDe({})).toBe('outros')
+    // Portais que caíam em "outros" até 28/11/2026.
+    expect(portalDe({ usuarioNome: 'Novo BBMNET Licitações' })).toBe('bbmnet')
+    expect(portalDe({ linkSistemaOrigem: 'https://app2.licitardigital.com.br/x' })).toBe('licitardigital')
+    expect(portalDe({ usuarioNome: 'IPM Sistemas' })).toBe('municipais')
+    expect(portalDe({ usuarioNome: 'Betha Sistemas' })).toBe('municipais')
+    expect(portalDe({ usuarioNome: 'BAHIA SECRETARIA DA ADMINISTRACAO' })).toBe('bahia')
+    expect(portalDe({ usuarioNome: 'Secretaria de Estado da Administração e da Previdência do Estado do Paraná - SEAP-PR' })).toBe('parana')
   })
   it('palavra-chave vira consulta por prefixo, com plural reduzido e ";" como "ou"', () => {
     expect(raiz('computadores')).toBe('computador')
@@ -185,6 +192,19 @@ describe('coleta e busca no Turso', () => {
     expect((await buscarTurso(turso as never, { busca: 'grampeador', tipoItem: 'M' })).totalRegistros).toBe(0)
     expect((await buscarTurso(turso as never, { busca: 'notebook; grampeador', tipoItem: 'M', exclusivo: true })).totalRegistros).toBe(1)
     expect((await buscarTurso(turso as never, { busca: 'notebook', tipoItem: 'M', ufs: ['SP'] })).totalRegistros).toBe(0)
+  })
+
+  it('reclassifica aos poucos os editais em "outros" e o filtro salvo antes dos portais novos continua vendo-os', async () => {
+    const { turso } = await preparar()
+    const total = (await buscarTurso(turso as never, { ufs: ['MG'] })).totalRegistros
+    turso.db.exec("update editais set portal='outros'; delete from coleta_estado where chave in ('portal_v2','portal_v2_cursor')")
+    await coletarRodada(turso as never, { prazo: Date.now() - 1, maxConsultas: 0, intervaloMs: 0 })
+    // O link de origem dos editais de teste é do Portal de Compras Públicas.
+    expect((await buscarTurso(turso as never, { ufs: ['MG'], portais: ['pcp'] })).totalRegistros).toBe(total)
+    expect(await turso.consultar("select valor from coleta_estado where chave='portal_v2'")).toEqual([{ valor: '1' }])
+    turso.db.exec("update editais set portal='bbmnet'; delete from cache_busca")
+    expect((await buscarTurso(turso as never, { ufs: ['MG'], portais: ['pcp', 'outros'] })).totalRegistros).toBe(total)
+    expect((await buscarTurso(turso as never, { ufs: ['MG'], portais: ['outros', 'ammlicita'] })).totalRegistros).toBe(0)
   })
 
   it('reindexa registros antigos com o órgão, o CNPJ e o número, inclusive documentos compactados', async () => {

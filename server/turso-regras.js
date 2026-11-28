@@ -11,7 +11,7 @@ export const PORTAIS = [
   ['caixa', ['licitacoes.caixa.gov.br'], ['licitacoes caixa']],
   ['banrisul', ['banrisul.com.br'], ['banrisul']],
   ['rs', ['compras.rs.gov.br'], ['compras rs']],
-  ['bahia', ['comprasnet.ba.gov.br'], ['compras bahia']],
+  ['bahia', ['comprasnet.ba.gov.br'], ['compras bahia', 'bahia secretaria da administracao']],
   ['amazonas', ['e-compras.am.gov.br'], ['compras amazonas']],
   ['goias', ['comprasnet.go.gov.br', 'sislog.go.gov.br'], ['comprasnet goias', 'sislog']],
   ['rj', ['compras.rj.gov.br'], ['compras rj', 'siga rj']],
@@ -24,7 +24,25 @@ export const PORTAIS = [
   ['banpara', ['banpara.b.br'], ['banpara']],
   ['pe', ['peintegrado.pe.gov.br'], ['pe integrado']],
   ['bnc', ['bnc.org.br'], ['bolsa nacional de compras', 'bnc']],
+  // Acrescentados em 28/11/2026: eram metade dos editais abertos caindo em "outros".
+  ...PORTAIS_NOVOS_REGRAS(),
 ]
+function PORTAIS_NOVOS_REGRAS() {
+  return [
+    ['bbmnet', ['bbmnet.com.br'], ['bbmnet']],
+    ['licitardigital', ['licitardigital.com.br'], ['licitar digital']],
+    ['ammlicita', ['ammlicita.org.br'], ['amm licita']],
+    ['parana', ['compras.pr.gov.br', 'comprasparana.pr.gov.br'], ['seap-pr', 'administracao e da previdencia do estado do parana']],
+    ['ceara', ['compras.ce.gov.br', 'licitacoes.ce.gov.br'], ['planejamento e gestao do ceara']],
+    ['fortaleza', ['compras.sepog.fortaleza.ce.gov.br'], ['prefeitura municipal de fortaleza']],
+    ['paraiba', ['centraldecompras.pb.gov.br'], ['central de compras da paraiba']],
+    ['municipais', ['licitapp.com.br', 'dcfiorilli.com.br', 'balkertecnologia.com.br', 'emunicipio.com.br'],
+      ['ipm sistemas', 'elotech', 'smarapd', 'az informatica', 'e & l producoes', 'betha sistemas', 'governancabrasil', 'conam consultoria', 'publica tecnologia',
+        'megasoft', 'equiplano', 'j brasil sistemas', 'fiorilli', 'tecnosweb', 'embras', 'startgov', 'prodata informatica', 'sh3 informatica', 'top down consultoria', 'br conectado']],
+  ]
+}
+/** Portais acrescentados depois: um filtro salvo antes deles, que marcava "outros", continua vendo esses editais. */
+export const PORTAIS_NOVOS = PORTAIS_NOVOS_REGRAS().map((p) => p[0])
 export const IDS_PORTAIS = [...PORTAIS.map((p) => p[0]), 'outros']
 
 export function portalDe(c) {
