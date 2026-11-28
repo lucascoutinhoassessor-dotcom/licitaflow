@@ -106,3 +106,22 @@ Além de `estrategias_lance`, `lances_disputa` e `maquinas_lances` do plano ante
 - Certificado de assinatura do Windows. Sem ele, aparece o aviso do SmartScreen na instalação.
 - Onde publicar as atualizações: GitHub Releases, que é grátis e serve bem com o repositório público.
 - Em quais planos entra e com qual limite de sessões simultâneas.
+
+## 8. Máquina de lances (versão 0.2.0, 28/11/2026)
+
+- Fica na tela do programa, seção "Máquina de lances". Cada pregão aberto na janela do portal vira um cartão, e cada item mostra:
+  - lance mínimo (R$);
+  - desconto por lance (R$ ou %) e intervalo (s);
+  - as opções "4 casas decimais" e "Só no fim" (aleatório ou prorrogação);
+  - o botão Ligar/Parar e o motivo do que o motor decidiu.
+- **Modo simulação** nasce ligado: a máquina mostra o lance que daria, sem enviar. Para desligar, o programa pede confirmação. O botão **Parar tudo** desliga todos os itens na hora.
+- O motor (`desktop/src/motor.cjs`) é uma função pura com estas travas:
+  - nunca abaixo do mínimo; se ainda cobre o melhor lance, vai no mínimo;
+  - só com o item aberto;
+  - quem está ganhando não dá lance;
+  - um envio por vez e o intervalo mínimo respeitado;
+  - respeita a variação mínima do item.
+- O ciclo (`desktop/src/maquina.cjs`) roda a cada novidade da sala e a cada segundo. Depois de 3 recusas seguidas do portal, desliga o item e avisa.
+- O lance é enviado **pela própria página do portal** (`codigoEnviarLance`): `POST …/comprasnet-disputa/api/v1/compras/{compra}/itens/{n}/lances`, com o token que já está na página. O token não sai da janela.
+- As estratégias ficam no computador (`userData/estrategias.json`).
+- **A conferir na primeira disputa de treinamento:** os nomes dos campos da sala (fase, melhor valor, meu valor, posição, `faseItem`). As amostras ficam em `userData/descoberta/`.

@@ -10,6 +10,9 @@ contextBridge.exposeInMainWorld('pav', {
   abrirPortal: (id, ambiente) => ipcRenderer.invoke('abrirPortal', { id, ambiente }),
   situacao: (sessaoId, situacao) => ipcRenderer.invoke('situacao', { sessaoId, situacao }),
   abrirSite: (rota) => ipcRenderer.invoke('abrirSite', rota),
+  estrategia: (portal, chave, item, parcial) => ipcRenderer.invoke('estrategia', { portal, chave, item, parcial }),
+  simulacao: (ligada) => ipcRenderer.invoke('simulacao', ligada),
+  pararTudo: () => ipcRenderer.invoke('pararTudo'),
   aoEstado: (fn) => ipcRenderer.on('estado', (_e, d) => fn(d)),
   aoTocar: (fn) => ipcRenderer.on('tocar', (_e, d) => fn(d)),
 })

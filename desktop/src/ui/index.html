@@ -40,13 +40,26 @@
     </section>
 
     <section class="cartao">
-      <h2>3. O que aconteceu na sala</h2>
+      <div class="linha-titulo">
+        <h2>3. Máquina de lances</h2>
+        <div class="acoes">
+          <label class="interruptor"><input type="checkbox" id="simulacao" /> Modo simulação</label>
+          <button class="perigo" id="pararTudo">Parar tudo</button>
+        </div>
+      </div>
+      <p class="mudo" id="avisoDisputa"></p>
+      <div id="disputa"></div>
+    </section>
+
+    <section class="cartao">
+      <h2>4. O que aconteceu na sala</h2>
       <ul class="eventos" id="eventos"></ul>
     </section>
     <footer class="mudo" id="rodape"></footer>
   </main>
 
   <audio id="som" src="sons/aviso.mp3" preload="auto"></audio>
+  <script src="disputa.js"></script>
   <script src="ui.js"></script>
 </body>
 </html>

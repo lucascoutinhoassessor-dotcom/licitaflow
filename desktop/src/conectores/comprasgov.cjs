@@ -53,7 +53,7 @@ const K_TEXTO = ['mensagem', 'texto', 'textoMensagem', 'conteudo', 'descricaoMen
 const K_DATA = ['dataHora', 'dataHoraEnvio', 'dataEnvio', 'dataHoraMensagem', 'dataCriacao', 'dataHoraInclusao', 'data']
 const K_AUTOR = ['remetente', 'nomeRemetente', 'tipoRemetente', 'autor', 'perfil', 'origem', 'tipoUsuario', 'usuario']
 const K_ITEM = ['numeroItem', 'numero', 'item', 'numeroItemCompra', 'nrItem']
-const K_FASE = ['faseItem', 'fase', 'situacaoItem', 'situacao', 'statusItem', 'status', 'descricaoSituacao', 'etapa']
+const K_FASE = ['situacaoItem', 'descricaoSituacao', 'situacao', 'faseItem', 'fase', 'statusItem', 'status', 'etapa']
 const K_MELHOR = ['melhorValor', 'valorMelhorLance', 'melhorLance', 'menorValor', 'valorMelhor', 'melhorValorGeral']
 const K_POSICAO = ['posicao', 'posicaoFornecedor', 'classificacao', 'colocacao', 'posicaoParticipante']
 const K_MEU = ['valorMeuLance', 'meuLance', 'valorUltimoLanceFornecedor', 'meuMelhorLance', 'valorLanceFornecedor']
@@ -98,15 +98,26 @@ function lerMensagem(o, ctx, url) {
   }
 }
 
-/** Itens da disputa: compara com o último estado visto e gera fase, melhor lance e posição. */
-function lerItem(o, ctx) {
+const K_DESCRICAO = ['descricao', 'descricaoItem', 'nomeItem', 'objeto', 'descricaoResumida']
+const K_FASE_BRUTA = ['faseItem', 'fase', 'codigoFase']
+const K_VARIACAO = ['variacaoMinimaEntreLances', 'valorVariacaoMinima', 'variacaoMinima']
+const K_TIPO_VARIACAO = ['tipoVariacaoMinimaEntreLances', 'tipoVariacao']
+
+/** Fase em que o item recebe lances (aberta, aleatório, prorrogação, 2 minutos finais). */
+const faseAberta = (fase) => !!fase && /abert|disputa|aleat|prorrog|lance|final|andamento/i.test(fase) && !/encerrad|fechad|suspens|aguard|cancel|desert|fracass|julg|aceit|habilit|homolog|adjudic/i.test(fase)
+/** Encerramento aleatório ou minutos finais: hora de usar o modo "só no fim". */
+const faseFinal = (fase) => faseAberta(fase) && /aleat|prorrog|final|encerramento/i.test(fase)
+
+/** Itens da disputa: compara com o último estado visto (por pregão e item) e gera fase, melhor lance e posição. */
+function lerItem(o, ctx, chave, apiBase) {
   const item = textoDe(pegar(o, K_ITEM))
   const fase = textoDe(pegar(o, K_FASE))
   const melhor = numeroDe(pegar(o, K_MELHOR))
   const posicao = numeroDe(pegar(o, K_POSICAO))
   const meu = numeroDe(pegar(o, K_MEU))
   if (!item || !/^\d{1,5}$/.test(String(item)) || (fase == null && melhor == null && posicao == null)) return []
-  const ant = ctx.estado.get(item) ?? {}
+  const k = `${chave ?? '?'}|${item}`
+  const ant = ctx.estado.get(k) ?? {}
   const agora = (ctx.agora ?? new Date()).toISOString()
   const saida = []
   const moeda = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 4 })
@@ -119,26 +130,46 @@ function lerItem(o, ctx) {
   if (posicao != null && posicao !== ant.posicao) {
     saida.push({ tipo: 'posicao', item, autor: 'Sistema', texto: `Item ${item}: você está em ${posicao}º lugar`, quando: agora, prazo: null, cita_cliente: posicao === 1, impressao: impressao('posicao', item, posicao, melhor) })
   }
-  ctx.estado.set(item, { fase: fase ?? ant.fase, melhor: melhor ?? ant.melhor, posicao: posicao ?? ant.posicao })
+  const faseBruta = pegar(o, K_FASE_BRUTA)
+  const variacao = numeroDe(pegar(o, K_VARIACAO))
+  const tipoVar = textoDe(pegar(o, K_TIPO_VARIACAO))
+  ctx.estado.set(k, {
+    chave, item,
+    descricao: limpar(textoDe(pegar(o, K_DESCRICAO)) ?? ant.descricao ?? '', 200),
+    fase: fase ?? ant.fase, melhor: melhor ?? ant.melhor, posicao: posicao ?? ant.posicao, meu: meu ?? ant.meu,
+    faseBruta: typeof faseBruta === 'string' || typeof faseBruta === 'number' ? faseBruta : (faseBruta?.codigo ?? faseBruta?.id ?? ant.faseBruta),
+    variacao: variacao ?? ant.variacao, variacaoPercentual: tipoVar ? /percent|%/i.test(tipoVar) : ant.variacaoPercentual,
+    apiBase: apiBase ?? ant.apiBase, atualizadoEm: agora,
+  })
   return saida
 }
 
+/** Endereço base da API da disputa a partir de uma chamada vista (produção ou treinamento). */
+function apiBaseDe(url) {
+  const m = String(url).match(/^(https:\/\/[^/]+\/comprasnet-disputa\/api)\//)
+  return m ? m[1] : null
+}
+
 /**
- * Lê uma resposta JSON de um serviço da sala. ctx = { estado: Map, empresas, agora }.
+ * Lê uma resposta JSON de um serviço da sala. ctx = { estado: Map, apis?: Map, empresas, agora }.
  * Devolve { chave, eventos }.
  */
 function lerResposta(url, corpo, ctx) {
+  const chave = chaveDaUrl(url)
   let json
-  try { json = typeof corpo === 'string' ? JSON.parse(corpo) : corpo } catch { return { chave: chaveDaUrl(url), eventos: [] } }
+  try { json = typeof corpo === 'string' ? JSON.parse(corpo) : corpo } catch { return { chave, eventos: [] } }
   const chat = /comprasnet-mensagem|\/chat|mensage/i.test(url)
+  if (!ctx.apis) ctx.apis = new Map()
+  const apiBase = apiBaseDe(url) ?? (chave ? ctx.apis.get(chave) : null) ?? null
+  if (chave && apiBase) ctx.apis.set(chave, apiBase)
   const eventos = []
   const vistos = new Set()
   for (const o of objetos(json)) {
     const ev = chat || pegar(o, K_TEXTO) ? lerMensagem(o, ctx, url) : null
-    const lista = ev ? [ev] : chat ? [] : lerItem(o, ctx)
+    const lista = ev ? [ev] : chat ? [] : lerItem(o, ctx, chave, apiBase)
     for (const e of lista) if (!vistos.has(e.impressao)) { vistos.add(e.impressao); eventos.push(e) }
   }
-  return { chave: chaveDaUrl(url), eventos }
+  return { chave, eventos }
 }
 
 /** Quadro STOMP ("MESSAGE\ndestination:/topic/...\n\n{json}\0") recebido pelo WebSocket da página. */
@@ -150,8 +181,32 @@ function lerQuadroWs(dados, ctx) {
   const cab = s.slice(0, fimCab)
   const destino = (cab.match(/^destination:(.*)$/m) ?? [])[1] ?? ''
   const corpo = s.slice(fimCab + 2).replace(/\u0000+$/, '')
-  const r = lerResposta(destino.includes('chat') || destino.includes('mensage') ? `${destino}/chat` : destino, corpo, ctx)
-  return { chave: chaveDaUrl(destino + '/'), eventos: r.eventos }
+  const r = lerResposta(destino.includes('chat') || destino.includes('mensage') ? `${destino}/chat` : destino + '/', corpo, ctx)
+  return { chave: r.chave, eventos: r.eventos }
 }
 
-module.exports = { id, nome, entradas, chaveDaUrl, interessa, interessaWs, indicaLogin, tituloDaChave, lerResposta, lerQuadroWs }
+/** Itens conhecidos de um pregão (para a tela de disputa e para o motor). */
+const itensDe = (ctx, chave) => [...ctx.estado.values()].filter((x) => x.chave === chave).sort((a, b) => Number(a.item) - Number(b.item))
+
+/**
+ * Código que roda DENTRO da janela do portal para enviar um lance com a sessão que o usuário abriu.
+ * O token fica na página (sessionStorage) e não volta para o programa: só o resultado volta.
+ */
+function codigoEnviarLance({ apiBase, chave, item, valor, faseBruta }) {
+  if (!/^https:\/\/[a-z0-9.-]+\/comprasnet-disputa\/api$/.test(String(apiBase))) throw new Error('Endereço da disputa desconhecido')
+  if (!/^\d{17}$/.test(String(chave)) || !/^\d{1,5}$/.test(String(item)) || !(valor > 0)) throw new Error('Lance inválido')
+  const url = `${apiBase}/v1/compras/${chave}/itens/${item}/lances`
+  const corpo = JSON.stringify({ valorInformado: valor, ...(faseBruta != null ? { faseItem: faseBruta } : {}) })
+  return `(async () => {
+    const t = sessionStorage.getItem('accessToken');
+    if (!t) return { ok: false, status: 0, mensagem: 'Sessão do portal não encontrada. Faça o login de novo na janela do portal.' };
+    try {
+      const r = await fetch(${JSON.stringify(url)}, { method: 'POST', headers: { Authorization: 'Bearer ' + t, 'Content-Type': 'application/json' }, body: ${JSON.stringify(corpo)} });
+      const texto = await r.text();
+      let m = ''; try { const j = JSON.parse(texto); m = j.message || j.mensagem || j.detail || j.erro || ''; } catch (e) { m = texto.slice(0, 300); }
+      return { ok: r.ok, status: r.status, mensagem: String(m).slice(0, 300) };
+    } catch (e) { return { ok: false, status: 0, mensagem: String((e && e.message) || e).slice(0, 200) }; }
+  })()`
+}
+
+module.exports = { id, nome, entradas, chaveDaUrl, interessa, interessaWs, indicaLogin, tituloDaChave, lerResposta, lerQuadroWs, itensDe, faseAberta, faseFinal, codigoEnviarLance, apiBaseDe }

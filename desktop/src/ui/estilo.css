@@ -45,3 +45,29 @@ ul { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 8px; }
 .evento.cita { background: rgba(16, 185, 129, .08); border-color: var(--verde); }
 .evento .prazo { color: #fcd34d; font-weight: 600; }
 footer { text-align: center; padding-bottom: 10px; }
+
+/* máquina de lances */
+.interruptor { display: flex; align-items: center; gap: 6px; flex-direction: row; color: var(--texto); font-size: 13px; }
+button.perigo { background: #7f1d1d; border-color: #b91c1c; }
+.alerta-real { color: #fca5a5; font-size: 13px; font-weight: 600; }
+.pregao-disputa { margin-top: 12px; }
+.pregao-disputa h3 { font-size: 14px; margin: 0 0 8px; }
+.item-disputa { border: 1px solid #263248; border-radius: 12px; padding: 12px; margin-bottom: 10px; display: grid; gap: 8px; }
+.item-disputa.executando { border-color: var(--verde); box-shadow: 0 0 0 1px rgba(16,185,129,.3); }
+.cab-item { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.selo.perigo { border-color: #b91c1c; color: #fca5a5; text-transform: uppercase; }
+.selo.ok { text-transform: uppercase; }
+.valores { display: grid; grid-template-columns: repeat(6, auto); gap: 4px 10px; justify-content: start; align-items: baseline; font-size: 14px; }
+.valores span:nth-child(even) { font-weight: 700; margin-right: 18px; }
+.linha-controles { display: flex; gap: 12px; align-items: end; flex-wrap: wrap; justify-content: space-between; }
+.controles { display: flex; gap: 10px; flex-wrap: wrap; }
+.campo-disputa { display: grid; gap: 4px; font-size: 12px; color: var(--mudo); }
+.campo-disputa input, .campo-disputa select { padding: 7px 9px; width: 120px; }
+.desconto { display: flex; gap: 4px; }
+.desconto input { width: 90px; }
+select { padding: 7px 9px; border-radius: 10px; border: 1px solid #334155; background: #0b1220; color: var(--texto); }
+.opcoes { display: flex; gap: 16px; flex-wrap: wrap; font-size: 13px; }
+.opcoes label { display: flex; align-items: center; gap: 4px; flex-direction: row; color: var(--texto); font-size: 13px; }
+button.play { min-width: 110px; }
+button.play.ligado { background: #7f1d1d; border-color: #b91c1c; }
+.motivo { margin: 0; }
