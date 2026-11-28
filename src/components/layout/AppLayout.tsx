@@ -2,10 +2,11 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import * as Menu from '@radix-ui/react-dropdown-menu'
 import * as Dialog from '@radix-ui/react-dialog'
-import { Building, Check, ChevronDown, ChevronsUpDown, CircleHelp, Download, LayoutDashboard, LogOut, Menu as IconeMais, Moon, Sun, X } from 'lucide-react'
+import { Building, Check, ChevronDown, ChevronsUpDown, CircleHelp, Download, LayoutDashboard, MonitorDown, LogOut, Menu as IconeMais, Moon, Sun, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { IA, rotaAtiva, type GrupoNav, type ItemNav } from '@/lib/navegacao'
-import { useNavegacao } from '@/hooks/useModulos'
+import { useModulos, useNavegacao } from '@/hooks/useModulos'
+import { LINK_DOWNLOAD } from '@/lib/pregaoAoVivo'
 import { Logo } from '@/components/ui'
 import { useAuth } from '@/providers/AuthProvider'
 import { useOrg } from '@/providers/OrgProvider'
@@ -219,6 +220,9 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const iaAtiva = rotaAtiva(IA.rota, pathname)
   const nav = useNavegacao()
   const instalacao = useInstalacao()
+  // Instalador do Pregão ao Vivo: só no computador com Windows e com o módulo liberado.
+  const { estado: estadoModulo } = useModulos()
+  const instalarPregao = estadoModulo('/app/pregao-ao-vivo') === 'liberado' && typeof navigator !== 'undefined' && /Windows/i.test(navigator.userAgent)
 
   return (
     <div className="flex h-dvh min-w-0 flex-col">
@@ -240,6 +244,9 @@ export function AppLayout({ children }: { children: ReactNode }) {
           {!instalacao.ocultar && <button type="button" onClick={() => { void instalacao.instalar() }} className="inline-flex h-9 items-center gap-1.5 rounded-full border border-white/15 px-3 text-sm font-medium text-white outline-none hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-white/40" aria-label="Instalar aplicativo">
             <Download className="h-4 w-4" /><span className="hidden sm:inline">Instalar app</span>
           </button>}
+          {instalarPregao && <a href={LINK_DOWNLOAD} download className="hidden h-9 items-center gap-1.5 rounded-full border border-emerald-400/40 px-3 text-sm font-medium text-white outline-none hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-white/40 lg:inline-flex" title="Baixe e abra o instalador: ele instala o Pregão ao Vivo sozinho">
+            <MonitorDown className="h-4 w-4" />Instalar Pregão ao Vivo
+          </a>}
           <SinoAvisos />
           <Link to="/suporte" className={cn(botaoIcone, 'hidden sm:inline-flex')} aria-label="Ajuda e suporte"><CircleHelp className="h-5 w-5" /></Link>
           <MenuUsuario />

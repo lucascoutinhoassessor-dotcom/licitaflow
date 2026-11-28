@@ -27,8 +27,8 @@ export const ROTULO_EVENTO: Record<TipoEvento, string> = {
   mensagem: 'Mensagem', convocacao: 'Convocação', fase: 'Fase do item', lance: 'Lance', posicao: 'Posição', situacao: 'Sessão', aviso: 'Aviso',
 }
 
-/** Instalador publicado nas versões do GitHub (o programa se atualiza sozinho a partir de lá). */
-export const LINK_DOWNLOAD = 'https://github.com/lucascoutinhoassessor-dotcom/licitaflow/releases/latest'
+/** Instalador (um único .exe: abre e instala sozinho) na versão mais recente do GitHub. O programa se atualiza a partir de lá. */
+export const LINK_DOWNLOAD = 'https://github.com/lucascoutinhoassessor-dotcom/licitaflow/releases/latest/download/LicitaForce-Pregao-ao-Vivo-Setup.exe'
 
 /** O programa manda sinal a cada minuto; até 3 minutos sem sinal ainda conta como conectado. */
 export function conectado(sinal: string | null | undefined, agora = Date.now()) {

@@ -24,7 +24,7 @@
     "appId": "br.com.licitaforce.pregaoaovivo",
     "productName": "LicitaForce Pregão ao Vivo",
     "executableName": "LicitaForce Pregao ao Vivo",
-    "artifactName": "LicitaForce-Pregao-ao-Vivo-${version}.${ext}",
+    "artifactName": "LicitaForce-Pregao-ao-Vivo-Setup.${ext}",
     "directories": {
       "output": "release",
       "buildResources": "build"
