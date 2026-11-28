@@ -125,6 +125,8 @@ export default async function handler(req,res) {
       // Conta bloqueada por falta de contratação (teste encerrado, sem teste ou checkout sem pagamento): o cupom libera.
       const motivos=BLOQUEIOS_DE_CONTRATACAO.map(m=>`"${m}"`).join(',')
       await patchSv(`/rest/v1/organizations?id=eq.${body.org}&suspensa=eq.true&motivo_suspensao=in.(${encodeURIComponent(motivos)})`,{suspensa:false,motivo_suspensao:null}).catch(()=>{})
+      // Conta sem plano ("cancelado": limite 0 de empresas) vira teste até a data do cupom; ao vencer, o banco bloqueia de novo.
+      await patchSv(`/rest/v1/organizations?id=eq.${body.org}&plano=eq.cancelado`,{plano:'trial'}).catch(()=>{})
       // Confirma o acesso no e-mail cadastrado. Sem SMTP configurado, o cupom vale do mesmo jeito.
       let emailEnviado=false
       try {
