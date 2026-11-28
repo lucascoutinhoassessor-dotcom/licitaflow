@@ -411,26 +411,26 @@ export async function coletarRodada(turso, { prazo = Date.now() + 40_000, fetche
   if (estado.indices_historico !== '1') await turso.pipeline([...INDICES_HISTORICO.map((s) => [s]), guardar('indices_historico', '1')])
   if (estado.otimizacao !== '1') await migrarOtimizacao(turso)
   if (estado.indice_uf !== '1') await turso.pipeline([[INDICE_UF], guardar('indice_uf', '1')])
-  // Reindexação gradual: também lê documentos compactados sem fazer JSON no banco.
-  if (estado.fts_objeto !== '1') {
-    const lote = await turso.consultar('select rowid as id, controle, compra, hash from editais where rowid > ? order by rowid limit 100', [Number(estado.fts_objeto_cursor) || 0])
-    await turso.transacao([
-      ...lote.flatMap(l => [
-        // Não sobrescreve uma versão mais recente gravada por outra rodada do coletor.
-        ['delete from editais_fts where rowid = ? and exists(select 1 from editais where rowid = ? and hash is ?)', [l.id, l.id, l.hash]],
-        ['insert into editais_fts(rowid, controle, texto) select rowid, controle, ? from editais where rowid = ? and hash is ?', [textoEdital(lerCompra(l.compra)), l.id, l.hash]],
-      ]),
-      guardar('fts_objeto_cursor', lote.at(-1)?.id ?? estado.fts_objeto_cursor ?? 0),
-      ...(lote.length < 100 ? [guardar('fts_objeto', '1')] : []),
-      ['delete from cache_busca'],
-    ])
-  }
   if (estado.pausado_ate && estado.pausado_ate > agoraIso()) return [{ pausado: estado.pausado_ate }]
   // Cota do mês (server/turso-cota.js): freia antes de o Turso bloquear o banco.
   const cota = nivelCota(estado, turso.cota ?? configCota(), { agora: hoje, pendente: turso.pendente?.() })
   if (cota.nivel === 'parado') {
     await turso.pipeline([guardar('cota_nivel', 'parado')], { descarregar: true })
     return [{ cota: 'parado', leituras: cota.usoLeituras, escritas: cota.usoEscritas }]
+  }
+  // Reindexação gradual (órgão, CNPJ e número de volta à busca por palavra), só com escrita folgada.
+  // Lê documentos compactados sem JSON no banco; o cache de buscas só é limpo no fim, para não multiplicar leituras.
+  if (estado.fts_orgao !== '1' && !peloMenos(cota.escritasNivel, 'economia')) {
+    const lote = await turso.consultar('select rowid as id, controle, compra, hash from editais where rowid > ? order by rowid limit 250', [Number(estado.fts_orgao_cursor) || 0])
+    await turso.transacao([
+      ...lote.flatMap(l => [
+        // Não sobrescreve uma versão mais recente gravada por outra rodada do coletor.
+        ['delete from editais_fts where rowid = ? and exists(select 1 from editais where rowid = ? and hash is ?)', [l.id, l.id, l.hash]],
+        ['insert into editais_fts(rowid, controle, texto) select rowid, controle, ? from editais where rowid = ? and hash is ?', [textoEdital(lerCompra(l.compra)), l.id, l.hash]],
+      ]),
+      guardar('fts_orgao_cursor', lote.at(-1)?.id ?? estado.fts_orgao_cursor ?? 0),
+      ...(lote.length < 250 ? [guardar('fts_orgao', '1'), ['delete from cache_busca']] : []),
+    ])
   }
   // Em economia de escrita, roda em minutos alternados (metade das gravações; o atraso máximo vira 2 min).
   if (peloMenos(cota.escritasNivel, 'economia') && hoje.getUTCMinutes() % 2 === 1) return [{ cota: cota.nivel, pulada: true }]

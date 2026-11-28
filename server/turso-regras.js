@@ -63,9 +63,9 @@ export function diaUtil(iso) {
   return dia >= 1 && dia <= 5 && !FERIADOS.has(md) ? 1 : 0
 }
 
-/** Palavras-chave descrevem o que se contrata; órgão tem filtro próprio. */
+/** Texto da busca por palavra: o que se contrata, o órgão (nome e CNPJ) e o número do edital. */
 export function textoEdital(c) {
-  return [c.objetoCompra, c.informacaoComplementar].filter(Boolean).join(' ').slice(0, 20000)
+  return [c.objetoCompra, c.informacaoComplementar, c.orgaoEntidade?.razaoSocial, c.orgaoEntidade?.cnpj, c.numeroControlePNCP, c.numeroCompra].filter(Boolean).join(' ').slice(0, 20000)
 }
 
 /** Edital do jeito que a tela usa (o mesmo "compra" que o Postgres guarda). */

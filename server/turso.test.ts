@@ -172,7 +172,8 @@ describe('coleta e busca no Turso', () => {
 
   it('combina palavras-chave com tipo e condições do mesmo item', async () => {
     const { turso } = await preparar()
-    expect((await buscarTurso(turso as never, { busca: 'Varginha' })).totalRegistros).toBe(0)
+    // O nome do órgão também entra na busca por palavra.
+    expect((await buscarTurso(turso as never, { busca: 'Varginha' })).totalRegistros).toBe(3)
     expect((await buscarTurso(turso as never, { busca: 'grampeador', itemMinimo: '1000' })).totalRegistros).toBe(0)
     expect((await buscarTurso(turso as never, { busca: 'grampeador', exclusivo: true })).totalRegistros).toBe(0)
     expect((await buscarTurso(turso as never, { busca: 'notebook de 16GB', tipoItem: 'M', itemMinimo: '1000' })).data.map(c => c.sequencialCompra)).toEqual([3])
@@ -186,14 +187,17 @@ describe('coleta e busca no Turso', () => {
     expect((await buscarTurso(turso as never, { busca: 'notebook', tipoItem: 'M', ufs: ['SP'] })).totalRegistros).toBe(0)
   })
 
-  it('reindexa registros antigos sem incluir o órgão, inclusive documentos compactados', async () => {
+  it('reindexa registros antigos com o órgão, o CNPJ e o número, inclusive documentos compactados', async () => {
     const { turso } = await preparar()
-    turso.db.exec("update editais_fts set texto=texto || ' Varginha'; delete from coleta_estado where chave in ('fts_objeto','fts_objeto_cursor')")
-    expect((await buscarTurso(turso as never, { busca: 'Varginha' })).totalRegistros).toBe(3)
-    await coletarRodada(turso as never, { prazo: Date.now() - 1, maxConsultas: 0, intervaloMs: 0 })
+    // Base como a compactação deixou: só o objeto no índice.
+    turso.db.exec("update editais_fts set texto='computador'; delete from coleta_estado where chave in ('fts_orgao','fts_orgao_cursor')")
     expect((await buscarTurso(turso as never, { busca: 'Varginha', ufs: ['MG'] })).totalRegistros).toBe(0)
-    expect((await buscarTurso(turso as never, { busca: 'computador' })).totalRegistros).toBe(1)
-    expect(await turso.consultar("select valor from coleta_estado where chave='fts_objeto'")).toEqual([{ valor: '1' }])
+    await coletarRodada(turso as never, { prazo: Date.now() - 1, maxConsultas: 0, intervaloMs: 0 })
+    const mg = (await buscarTurso(turso as never, { ufs: ['MG'] })).totalRegistros
+    expect(mg).toBeGreaterThan(0)
+    expect((await buscarTurso(turso as never, { busca: 'Prefeitura de Varginha', ufs: ['MG'] })).totalRegistros).toBe(mg)
+    expect((await buscarTurso(turso as never, { busca: '12345678000199', ufs: ['MG'] })).totalRegistros).toBe(mg)
+    expect(await turso.consultar("select valor from coleta_estado where chave='fts_orgao'")).toEqual([{ valor: '1' }])
   })
 
   it('contagem para no limite e a busca por UF segue o índice que começa pela UF', async () => {
