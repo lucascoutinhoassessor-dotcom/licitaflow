@@ -16,7 +16,7 @@ const ESQUEMA = {
     enviar: { type: 'boolean', description: 'false quando a instrução não se aplica a este cliente' },
     titulo: { type: 'string', description: 'Assunto curto, até 60 caracteres' },
     texto: { type: 'string', description: 'Mensagem de até 400 caracteres' },
-    link: { type: 'string', enum: ['/app', '/app/radar', '/app/processos', '/app/prazos', '/app/documentos', '/app/agentes', '/app/precos', '/app/cotador', '/app/avisos'] },
+    link: { type: 'string', enum: ['/app', '/app/agentes/radar', '/app/processos', '/app/prazos', '/app/documentos', '/app/agentes', '/app/historico-precos', '/app/agentes/cotador', '/app/avisos'] },
   },
 }
 

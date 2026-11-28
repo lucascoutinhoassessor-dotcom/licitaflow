@@ -139,4 +139,16 @@ const resumo = (await as(ANA, `select titulo, link from public.notificacoes wher
 assert.equal(resumo.length, 1); assert.equal(resumo[0].link, '/app/agentes')
 console.log('PASS resumo diário das IAs entra uma vez no sino, mesmo com dois aparelhos')
 
+// Todo link que a rotina pode gerar (função de texto e lembretes) existe nas rotas do app.
+const appTsx = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8')
+const trechoApp = appTsx.slice(appTsx.indexOf('path="/app"'), appTsx.indexOf('</Route>', appTsx.indexOf('path="/app"')))
+const rotasApp = [...trechoApp.matchAll(/path="([^"]+)"/g)].map((m) => m[1]).filter((p) => p !== '/app' && p !== ':modulo')
+const existe = (l) => l === '/app' || rotasApp.some((r) => { const a = r.split('/'), b = l.slice(5).split('/'); return a.length === b.length && a.every((s, i) => s.startsWith(':') || s === b[i]) })
+const fonte = (await um(`select pg_get_functiondef('licitaflow_lembretes.texto_ia(jsonb, public.mensagens_ia_config, boolean, date)'::regprocedure) d`)).d
+  + (await um(`select pg_get_functiondef('licitaflow_lembretes.preparar(boolean, timestamptz)'::regprocedure) d`)).d
+const linksSql = [...new Set([...fonte.matchAll(/'(\/app(?:\/[a-z0-9_-]+)*)'/g)].map((m) => m[1]))]
+assert.ok(linksSql.includes('/app/agentes/radar'))
+assert.deepEqual(linksSql.filter((l) => !existe(l)), [])
+console.log('PASS todos os links das mensagens e lembretes levam a telas que existem:', linksSql.join(', '))
+
 console.log('\nTodos os testes das mensagens da IA passaram.')
