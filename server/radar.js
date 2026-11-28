@@ -5,7 +5,7 @@ import webpushPadrao from 'web-push'
 
 import { emailRadar, enviarEmail, montarSmtp } from './email.js'
 
-import { filtrarPushAgente } from './pushAgentes.js'
+import { filtrarPushAgente, registrarNoSino } from './pushAgentes.js'
 
 
 const CONTATO = 'https://licitaforce-app.vercel.app'
@@ -64,14 +64,16 @@ async function avisarPush({ grupos, chamar, webpush }) {
   const usuarios = [...new Set(membros.map((m) => m.user_id))]
   const inscricoes = await filtrarPushAgente(usuarios.length ? ((await chamar(`/rest/v1/push_inscricoes?select=id,user_id,endpoint,p256dh,auth&user_id=in.(${usuarios.join(',')})`)) ?? []) : [], 'radar', chamar)
   let enviados = 0, falhas = 0
-  const mortas = []
+  const mortas = [], sino = []
   for (const g of grupos) {
     const quem = new Set(membros.filter((m) => m.org_id === g.org_id).map((m) => m.user_id))
-    const payload = JSON.stringify({ ...mensagemRadar(g), url: '/app/agentes/radar', tag: `radar-${g.empresa_id}` })
+    const msg = mensagemRadar(g)
+    const payload = JSON.stringify({ ...msg, url: '/app/agentes/radar', tag: `radar-${g.empresa_id}` })
     await Promise.all(inscricoes.filter((s) => quem.has(s.user_id)).map(async (s) => {
       try {
         await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, payload, { TTL: 86400, urgency: 'normal', timeout: 10000 })
         enviados++
+        sino.push({ org_id: g.org_id, user_id: s.user_id, tipo: 'radar', titulo: msg.titulo, mensagem: msg.texto, link: '/app/agentes/radar' })
       } catch (e) {
         falhas++
         if (e?.statusCode === 404 || e?.statusCode === 410) mortas.push(s.id)
@@ -79,5 +81,6 @@ async function avisarPush({ grupos, chamar, webpush }) {
     }))
   }
   if (mortas.length) await chamar(`/rest/v1/push_inscricoes?id=in.(${mortas.join(',')})`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } }).catch(() => undefined)
+  await registrarNoSino(chamar, sino)
   return { empresas: grupos.length, enviados, falhas }
 }

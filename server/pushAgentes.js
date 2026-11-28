@@ -12,6 +12,21 @@ export async function filtrarPushAgente(inscricoes, agente, chamar) {
   return inscricoes.filter(s => !bloqueados.has(s.user_id))
 }
 
+/**
+ * Registra no sino (public.notificacoes) quem recebeu um push direto do servidor (Radar, Sentinela),
+ * para o número do sino bater com o do ícone do app. Uma linha por pessoa; falha aqui não impede o push.
+ * `linhas`: [{ org_id, user_id, tipo, titulo, mensagem, link }].
+ */
+export async function registrarNoSino(chamar, linhas) {
+  const unicas = [...new Map(linhas.map((l) => [`${l.org_id}|${l.user_id}|${l.link}`, l])).values()]
+  if (!unicas.length) return
+  try {
+    await chamar('/rest/v1/notificacoes', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(unicas.map((l) => ({
+      org_id: l.org_id, user_id: l.user_id, tipo: l.tipo, titulo: String(l.titulo ?? '').slice(0, 120), mensagem: String(l.mensagem ?? '').slice(0, 1000), link: l.link,
+    }))) })
+  } catch { /* o push já saiu; o sino é complementar */ }
+}
+
 /** A fila é reservada no banco com lease; somente o token privado do agendador consegue retirá-la. */
 export async function enviarResumoAgentes({ token, chamar, webpush = webpushPadrao }) {
   const rpc = (nome, corpo) => chamar(`/rest/v1/rpc/${nome}`, { method: 'POST', body: JSON.stringify(corpo) })

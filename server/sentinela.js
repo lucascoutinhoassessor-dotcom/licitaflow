@@ -2,7 +2,7 @@
 // Chamado pelo pg_cron (POST /api/agentes?agente=sentinela&acao=verificar com o token x-coleta).
 // Não usa IA. Detalhes em docs/sentinela.md.
 import webpushPadrao from 'web-push'
-import { filtrarPushAgente } from './pushAgentes.js'
+import { filtrarPushAgente, registrarNoSino } from './pushAgentes.js'
 
 const CONSULTA = 'https://pncp.gov.br/api/consulta/v1/orgaos'
 const PNCP = 'https://pncp.gov.br/api/pncp/v1/orgaos'
@@ -363,18 +363,20 @@ export async function avisarPorPush(avisos, { chamar, webpush }) {
   const usuarios = [...new Set(membros.map((m) => m.user_id))]
   const inscricoes = await filtrarPushAgente(usuarios.length ? ((await chamar(`/rest/v1/push_inscricoes?select=id,user_id,endpoint,p256dh,auth&user_id=in.(${usuarios.join(',')})`)) ?? []) : [], 'sentinela', chamar)
   let enviados = 0, falhas = 0
-  const mortas = []
+  const mortas = [], sino = []
   for (const p of porProcesso.values()) {
     const quem = new Set(membros.filter((m) => m.org_id === p.org_id).map((m) => m.user_id))
     const mais = p.titulos.length > 1 ? ` (+${p.titulos.length - 1} ${p.titulos.length > 2 ? 'outras mudanças' : 'outra mudança'})` : ''
-    const payload = JSON.stringify({
+    const msg = {
       titulo: `${p.alto ? 'Sentinela · Atenção' : 'Sentinela'}${p.contexto ? ` · ${p.contexto}` : ''}`.slice(0, 120),
       texto: `${p.titulos[0]}${mais}`.slice(0, 180), url: `/app/processos/${p.processo_id}`, tag: `sentinela-${p.processo_id}`,
-    })
+    }
+    const payload = JSON.stringify(msg)
     await Promise.all(inscricoes.filter((s) => quem.has(s.user_id)).map(async (s) => {
       try {
         await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, payload, { TTL: 86400, urgency: p.alto ? 'high' : 'normal', timeout: 10000 })
         enviados++
+        sino.push({ org_id: p.org_id, user_id: s.user_id, tipo: 'sentinela', titulo: msg.titulo, mensagem: msg.texto, link: msg.url })
       } catch (e) {
         falhas++
         if (e?.statusCode === 404 || e?.statusCode === 410) mortas.push(s.id)
@@ -382,5 +384,6 @@ export async function avisarPorPush(avisos, { chamar, webpush }) {
     }))
   }
   if (mortas.length) await chamar(`/rest/v1/push_inscricoes?id=in.(${mortas.join(',')})`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } }).catch(() => undefined)
+  await registrarNoSino(chamar, sino)
   return { enviados, falhas }
 }

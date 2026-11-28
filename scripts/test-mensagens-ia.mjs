@@ -129,4 +129,14 @@ await db.query(`insert into public.notificacoes_envios (user_id, org_id, origem,
 assert.equal((await as(ANA, `select * from public.notificacoes where tipo = 'lembrete'`)).rows.length, 1)
 console.log('PASS lembrete enviado por push também aparece no sino')
 
+// Resumo diário das IAs: um registro no sino por pessoa e dia, mesmo com dois aparelhos.
+await db.query(`insert into public.push_inscricoes (user_id, endpoint, p256dh, auth) values ($1, 'https://push.exemplo/ana2', 'k', 'a')`, [ANA])
+await db.query(`insert into licitaflow_push_agentes.fila (org_id, inscricao_id, user_id, dia, payload)
+  select $1, s.id, s.user_id, current_date, '{"titulo":"Suas IAs · Papelaria Ana","texto":"Radar: 3 oportunidades encontradas.","url":"/app/agentes"}'::jsonb
+  from public.push_inscricoes s where s.user_id = $2`, [orgA, ANA])
+await db.query(`update licitaflow_push_agentes.fila set enviado_em = now()`)
+const resumo = (await as(ANA, `select titulo, link from public.notificacoes where tipo = 'agentes'`)).rows
+assert.equal(resumo.length, 1); assert.equal(resumo[0].link, '/app/agentes')
+console.log('PASS resumo diário das IAs entra uma vez no sino, mesmo com dois aparelhos')
+
 console.log('\nTodos os testes das mensagens da IA passaram.')
