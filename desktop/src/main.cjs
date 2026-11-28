@@ -10,8 +10,12 @@ const config = require('./config.cjs')
 const comprasgov = require('./conectores/comprasgov.cjs')
 const { criarMaquina, moeda } = require('./maquina.cjs')
 const { criarEstrategias } = require('./estrategias.cjs')
+const { criarDemo, CHAVE_DEMO, ITENS_DEMO } = require('./demo.cjs')
 
-const CONECTORES = { comprasgov }
+// "demo" é o pregão de mentira da demonstração: usa a leitura do Compras.gov, mas nunca envia nada.
+const CONECTORES = { comprasgov, demo: { ...comprasgov, id: 'demo', nome: 'Demonstração', tituloDaChave: () => 'Demonstração · Pregão 90001/2026 (nada é enviado)', codigoEnviarLance: () => { throw new Error('Demonstração não envia lances') } } }
+let demo = null
+let demoTimer = null
 const PORTAIS_FUTUROS = [
   { id: 'bll', nome: 'BLL Compras' }, { id: 'bnc', nome: 'BNC' },
   { id: 'licitanet', nome: 'Licitanet' }, { id: 'pcp', nome: 'Portal de Compras Públicas' },
@@ -52,11 +56,12 @@ function estadoUi() {
     conta: nuvem?.org ? { org: nuvem.org } : null,
     status, sessoes: nuvem?.sessoes ?? [], recentes: recentes.slice(0, 80),
     portais: [
-      ...Object.values(CONECTORES).map((c) => ({ id: c.id, nome: c.nome, disponivel: true, aberto: portais.has(c.id), logado: !!portais.get(c.id)?.logado })),
+      ...Object.values(CONECTORES).filter((c) => c.id !== 'demo').map((c) => ({ id: c.id, nome: c.nome, disponivel: true, aberto: portais.has(c.id), logado: !!portais.get(c.id)?.logado })),
       ...PORTAIS_FUTUROS.map((p) => ({ ...p, disponivel: false })),
     ],
     pendentes: nuvem?.pendentes() ?? 0,
     guia: guiaUi(),
+    demo: !!demo,
     simulacao: estrategias?.simulacao ?? true,
     disputa: disputaUi(),
     historico: historico.slice(0, 40),
@@ -79,7 +84,7 @@ function guiaUi() {
 /** Itens de cada pregão aberto nas janelas dos portais, com a estratégia e o que o motor decidiu. */
 function disputaUi() {
   const lista = []
-  for (const [idConector, reg] of portais) {
+  for (const [idConector, reg] of [...portais, ...(demo ? [['demo', { ctx: demo.ctx }]] : [])]) {
     const conector = CONECTORES[idConector]
     const chaves = [...new Set([...reg.ctx.estado.values()].map((x) => x.chave).filter(Boolean))]
     for (const chave of chaves) {
@@ -220,6 +225,11 @@ async function ciclo() {
 
 // ---------- máquina de lances (ciclo em maquina.cjs) ----------
 function registrarLance({ titulo, item, chave, valor, enviado, texto }) {
+  if (chave === CHAVE_DEMO) {
+    demo?.aplicarLance(item, valor)
+    texto = `Demonstração: a máquina deu lance de ${moeda(valor)} no item ${item}.`
+    enviado = false
+  }
   const e = { tipo: enviado ? 'lance' : 'aviso', item, autor: 'Máquina de lances', texto, quando: new Date().toISOString(), cita_cliente: false, prazo: null }
   historico.unshift({ ...e, sessao: titulo, simulado: !enviado })
   historico.splice(100)
@@ -236,10 +246,32 @@ function registrarLance({ titulo, item, chave, valor, enviado, texto }) {
 }
 
 function avaliar(idConector) {
-  const reg = portais.get(idConector)
-  if (!reg || !maquina) return
-  const { mudou } = maquina.avaliar(idConector, CONECTORES[idConector], reg.ctx)
+  const ctx = idConector === 'demo' ? demo?.ctx : portais.get(idConector)?.ctx
+  if (!ctx || !maquina) return
+  const { mudou } = maquina.avaliar(idConector, CONECTORES[idConector], ctx)
   if (mudou) atualizarUi()
+}
+
+// ---------- demonstração ----------
+function iniciarDemo() {
+  pararDemo()
+  demo = criarDemo({
+    aoEvento: (e) => {
+      recentes.unshift({ tipo: e.tipo, item: e.item ?? null, autor: 'Demonstração', texto: e.texto, quando: new Date().toISOString(), cita_cliente: false, prazo: null, sessao: 'Demonstração' })
+      recentes.splice(200)
+    },
+  })
+  demo.iniciar()
+  // Valores sugeridos para o cliente só clicar em Ligar (intervalo curto para ver a máquina trabalhando).
+  for (const it of ITENS_DEMO) estrategias.mudar('demo', CHAVE_DEMO, it.item, { ligado: false, minimo: it.minimoSugerido, desconto: it.desconto, tipoDesconto: 'valor', intervaloSeg: 3, soNoFim: false })
+  demoTimer = setInterval(() => { if (!demo) return; demo.tique(); avaliar('demo'); atualizarUi() }, 3_000)
+}
+
+function pararDemo() {
+  if (demoTimer) clearInterval(demoTimer)
+  demoTimer = null
+  if (demo) for (const it of ITENS_DEMO) estrategias.mudar('demo', CHAVE_DEMO, it.item, { ligado: false })
+  demo = null
 }
 
 // Eventos saem em poucos segundos; o sinal de vida fica no ciclo de 1 minuto.
@@ -286,6 +318,7 @@ function registrarIpc() {
     reg.janela.show(); reg.janela.focus()
   })
   ipcMain.handle('simulacao', (_e, ligada) => { estrategias.definirSimulacao(ligada !== false); atualizarUi() })
+  ipcMain.handle('demo', (_e, ligar) => { if (ligar) iniciarDemo(); else pararDemo(); atualizarUi() })
   ipcMain.handle('pararTudo', () => { estrategias.pararTudo(); for (const id of portais.keys()) avaliar(id); atualizarUi() })
   ipcMain.handle('abrirSite', (_e, rota) => shell.openExternal(config.siteUrl + (typeof rota === 'string' && rota.startsWith('/') ? rota : '/app/pregao-ao-vivo')))
 }
@@ -323,6 +356,7 @@ app.whenReady().then(async () => {
       if (Notification.isSupported()) new Notification({ title: titulo, body: corpo, icon: icone }).show()
       enviarUi('tocar', { forte: true })
     },
+    simulado: (idPortal) => idPortal === 'demo' || estrategias.simulacao,
     tituloDe: (idPortal, chave) => nuvem?.sessaoPorChave(idPortal, chave)?.titulo ?? CONECTORES[idPortal].tituloDaChave(chave),
   })
   registrarIpc()
@@ -335,7 +369,16 @@ app.whenReady().then(async () => {
   if (process.env.LICITAFORCE_AUTOTESTE) {
     const quandoCarregar = (fn) => (principal.webContents.isLoading() ? principal.webContents.once('did-finish-load', fn) : fn())
     quandoCarregar(() => setTimeout(async () => {
-      if (process.env.LICITAFORCE_AUTOTESTE_PAINEL) {
+      if (process.env.LICITAFORCE_AUTOTESTE_PAINEL === 'demo') {
+        // Demonstração de verdade (pregão de mentira) com o item 1 ligado por alguns segundos.
+        iniciarDemo()
+        estrategias.mudar('demo', CHAVE_DEMO, '1', { ligado: true })
+        await new Promise((r) => setTimeout(r, 10_000))
+        const exemplo = { ...estadoUi(), conta: { org: { nome: 'Org de exemplo' } }, status: { conectado: true, erro: '', ultimoEnvio: null } }
+        await principal.webContents.executeJavaScript(`desenhar(${JSON.stringify(exemplo)})`)
+        await principal.webContents.executeJavaScript("document.getElementById('barraDemo').scrollIntoView()")
+        await new Promise((r) => setTimeout(r, 300))
+      } else if (process.env.LICITAFORCE_AUTOTESTE_PAINEL) {
         // Painel com dados de exemplo (sem conta real), só para conferir o desenho da tela.
         const agora = new Date().toISOString()
         const exemplo = { ...estadoUi(), conta: { org: { nome: 'Org de exemplo' } }, status: { conectado: true, erro: '', ultimoEnvio: agora },
@@ -356,6 +399,8 @@ app.whenReady().then(async () => {
         if (process.env.LICITAFORCE_AUTOTESTE_PAINEL === 'disputa') await principal.webContents.executeJavaScript("document.getElementById('disputa').scrollIntoView()")
         await new Promise((r) => setTimeout(r, 300))
       }
+      principal.show(); principal.focus(); principal.moveTop()
+      await new Promise((r) => setTimeout(r, 500))
       const img = await principal.webContents.capturePage()
       require('node:fs').writeFileSync(process.env.LICITAFORCE_AUTOTESTE, img.toPNG())
       console.log('AUTOTESTE', await principal.webContents.executeJavaScript('document.body.innerText.slice(0, 600)'))
@@ -365,6 +410,6 @@ app.whenReady().then(async () => {
   setInterval(ciclo, 60_000)
   setInterval(enviarEventos, 3_000)
   // Motor de lances: além de reagir a cada novidade da sala, confere os itens ligados a cada segundo.
-  setInterval(() => { for (const id of portais.keys()) avaliar(id) }, 1_000)
+  setInterval(() => { for (const id of portais.keys()) avaliar(id); if (demo) avaliar('demo') }, 1_000)
   atualizacoes()
 })

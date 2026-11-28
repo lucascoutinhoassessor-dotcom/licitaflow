@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld('pav', {
   estrategia: (portal, chave, item, parcial) => ipcRenderer.invoke('estrategia', { portal, chave, item, parcial }),
   simulacao: (ligada) => ipcRenderer.invoke('simulacao', ligada),
   pararTudo: () => ipcRenderer.invoke('pararTudo'),
+  demo: (ligar) => ipcRenderer.invoke('demo', ligar),
   irParaDisputas: (id) => ipcRenderer.invoke('irParaDisputas', id),
   aoEstado: (fn) => ipcRenderer.on('estado', (_e, d) => fn(d)),
   aoTocar: (fn) => ipcRenderer.on('tocar', (_e, d) => fn(d)),

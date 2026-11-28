@@ -86,3 +86,6 @@ button.play.ligado { background: #7f1d1d; border-color: #b91c1c; }
 .ajuda summary { cursor: pointer; color: var(--azul); font-weight: 600; }
 .ajuda ul { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 6px; color: var(--mudo); list-style: disc; }
 .ajuda strong { color: var(--texto); }
+
+.barra-demo { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; margin: 8px 0; padding: 10px 12px; border-radius: 12px; border: 1px dashed var(--ambar); background: rgba(245,158,11,.08); color: #fcd34d; font-size: 13px; }
+.vazio p { margin: 0 0 8px; }

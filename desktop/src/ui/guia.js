@@ -13,12 +13,12 @@
         feito: g.portalLogado, titulo: 'Entre no portal',
         texto: g.portalAberto ? 'Faça o login na janela do Compras.gov.br (senha e captcha são sempre seus). Quando o login terminar, este passo fica verde.' : 'Abra o Compras.gov.br numa janela do programa e faça o login como fornecedor.',
         acoes: g.portalAberto ? [{ rotulo: 'Mostrar a janela do portal', fn: () => window.pav.abrirPortal('comprasgov', 'producao') }]
-          : [{ rotulo: 'Abrir Compras.gov.br', fn: () => window.pav.abrirPortal('comprasgov', 'producao') }, { rotulo: 'Treinamento', secundario: true, fn: () => window.pav.abrirPortal('comprasgov', 'treinamento') }],
+          : [{ rotulo: 'Abrir Compras.gov.br', fn: () => window.pav.abrirPortal('comprasgov', 'producao') }, { rotulo: 'Treinamento', secundario: true, fn: () => window.pav.abrirPortal('comprasgov', 'treinamento') }, { rotulo: 'Ver demonstração', secundario: true, fn: () => window.pav.demo(true) }],
       },
       {
         feito: g.salaAberta, titulo: 'Abra a sala de disputa',
-        texto: 'Na janela do portal, vá em "Compras", abra o pregão e entre na disputa (sala de lances). O programa reconhece a compra sozinho e os itens aparecem em "Máquina de lances".',
-        acoes: cg?.aberto ? [{ rotulo: 'Ir para as minhas compras', fn: () => window.pav.irParaDisputas('comprasgov') }] : [],
+        texto: 'Os itens só aparecem durante uma disputa ao vivo: no horário da sessão, vá em "Compras" na janela do portal, abra o pregão e entre na sala de lances. O programa reconhece a compra sozinho. Sem disputa agora? Veja a demonstração.',
+        acoes: [...(cg?.aberto ? [{ rotulo: 'Ir para as minhas compras', fn: () => window.pav.irParaDisputas('comprasgov') }] : []), { rotulo: s.demo ? 'Demonstração aberta abaixo' : 'Ver demonstração', secundario: !!cg?.aberto, fn: () => window.pav.demo(true) }],
       },
       {
         feito: g.maquinaLigada, titulo: 'Configure e ligue',

@@ -96,8 +96,20 @@
       : 'Lances de verdade: a máquina cobre o melhor lance até o seu mínimo, respeitando o intervalo do portal.'
     aviso.className = simulacao ? 'mudo' : 'alerta-real'
     const vivos = new Set()
+    let barra = document.getElementById('barraDemo')
+    if (s.demo && !barra) {
+      barra = novo('div', 'barra-demo'); barra.id = 'barraDemo'
+      const fechar = novo('button', 'secundario', 'Encerrar demonstração'); fechar.addEventListener('click', () => window.pav.demo(false))
+      barra.append(novo('span', null, 'Demonstração: um pregão de mentira com concorrentes automáticos. Nada é enviado a nenhum portal. Clique em Ligar nos itens e veja a máquina cobrir os lances.'), fechar)
+      area.before(barra)
+    } else if (!s.demo && barra) barra.remove()
     if (!s.disputa?.length) {
-      if (!area.querySelector('.vazio')) { area.replaceChildren(novo('p', 'vazio', 'Abra a sala de disputa do pregão na janela do portal: os itens aparecem aqui para você definir o lance mínimo e ligar a máquina.')); linhas.clear(); grupos.clear() }
+      if (!area.querySelector('.vazio')) {
+        const v = novo('div', 'vazio')
+        const b = novo('button', 'secundario', 'Ver demonstração'); b.addEventListener('click', () => window.pav.demo(true))
+        v.append(novo('p', null, 'Os itens aparecem aqui quando você entra na sala de disputa de um pregão, na janela do portal, durante a sessão. Para ver como a máquina funciona agora, abra a demonstração.'), b)
+        area.replaceChildren(v); linhas.clear(); grupos.clear()
+      }
       return
     }
     area.querySelector('.vazio')?.remove()

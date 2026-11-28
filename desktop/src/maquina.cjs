@@ -13,14 +13,14 @@ const moeda = (v) => Number(v).toLocaleString('pt-BR', { style: 'currency', curr
  *  tituloDe(idPortal, chave)
  *  agora() → ms (opcional)
  */
-function criarMaquina({ estrategias, executar, registrar, notificar, tituloDe, agora = () => Date.now(), tempoLimite = 15000 }) {
+function criarMaquina({ estrategias, executar, registrar, notificar, tituloDe, agora = () => Date.now(), tempoLimite = 15000, simulado = () => estrategias.simulacao }) {
   const controles = new Map()
 
   async function enviar(idPortal, conector, it, valor, k, titulo) {
     const ctl = controles.get(k)
     ctl.enviando = true
     try {
-      if (estrategias.simulacao) {
+      if (simulado(idPortal)) {
         ctl.ultimoEnvio = agora()
         registrar({ titulo, item: it.item, chave: it.chave, valor, enviado: false, texto: `Simulação: daria lance de ${moeda(valor)} no item ${it.item} (não enviado).` })
         return
