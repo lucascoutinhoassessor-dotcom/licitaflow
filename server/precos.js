@@ -50,7 +50,49 @@ export function precosPorUnidade(linhas) {
 
 /** Agrupa as compras por unidade de fornecimento e calcula as estatísticas de preço unitário. */
 export function resumirPrecos(compras) {
-  const linhas = compras.map(linhaDeCompra).filter(precoValido)
+  return resumirLinhas(compras.map(linhaDeCompra).filter(precoValido))
+}
+
+const semAcento = (s) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim()
+const numero = (v) => { const n = Number(String(v ?? '').replace(',', '.')); return v !== '' && v != null && Number.isFinite(n) ? n : null }
+
+/** Filtros do histórico que valem sobre as compras já consultadas (a fonte só filtra por UF e período). */
+export function lerFiltrosPreco(q = {}) {
+  const lista = (v) => String(v ?? '').split(',').map((x) => x.trim()).filter(Boolean).slice(0, 30)
+  const texto = (v) => String(v ?? '').slice(0, 80).trim()
+  return {
+    modalidades: lista(q.mod).map(Number).filter((m) => Number.isInteger(m) && m >= 0 && m < 100),
+    unidades: lista(q.un).map((u) => u.toUpperCase().slice(0, 30)),
+    municipio: texto(q.mun), orgao: texto(q.org), fornecedor: texto(q.forn), marca: texto(q.marca),
+    precoMin: numero(q.pmin), precoMax: numero(q.pmax), qtdMin: numero(q.qmin), comMarca: q.commarca === '1',
+  }
+}
+export const temFiltroPreco = (f) => !!(f.modalidades.length || f.unidades.length || f.municipio || f.orgao || f.fornecedor || f.marca || f.precoMin != null || f.precoMax != null || f.qtdMin != null || f.comMarca)
+
+export function filtrarLinhas(linhas, f) {
+  const contem = (valor, termo) => !termo || semAcento(valor).includes(semAcento(termo))
+  return linhas.filter((l) =>
+    (!f.modalidades.length || f.modalidades.includes(Number(l.modalidade))) &&
+    (!f.unidades.length || f.unidades.includes(l.unidade)) &&
+    (!f.municipio || semAcento(l.municipio) === semAcento(f.municipio)) &&
+    contem(`${l.orgao ?? ''} ${l.unidadeCompradora ?? ''} ${l.uasg ?? ''}`, f.orgao) &&
+    contem(`${l.fornecedor ?? ''} ${l.cnpj ?? ''}`, f.fornecedor) &&
+    contem(l.marca, f.marca) && (!f.comMarca || !!l.marca) &&
+    (f.precoMin == null || l.preco >= f.precoMin) && (f.precoMax == null || l.preco <= f.precoMax) &&
+    (f.qtdMin == null || (l.quantidade ?? 0) >= f.qtdMin))
+}
+
+/** Valores que existem nas compras consultadas, com a quantidade de cada, para os chips dos filtros. */
+export function opcoesFiltro(linhas) {
+  const contar = (chave) => {
+    const m = new Map()
+    for (const l of linhas) { const v = l[chave]; if (v != null && v !== '') m.set(v, (m.get(v) ?? 0) + 1) }
+    return [...m.entries()].map(([valor, n]) => ({ valor, n })).sort((a, b) => b.n - a.n)
+  }
+  return { modalidades: contar('modalidade'), unidades: contar('unidade').slice(0, 20), municipios: contar('municipio').slice(0, 40) }
+}
+
+export function resumirLinhas(linhas) {
   const unidades = precosPorUnidade(linhas)
   const marcas = {}
   for (const l of linhas) if (l.marca) marcas[l.marca.toUpperCase()] = (marcas[l.marca.toUpperCase()] ?? 0) + 1
@@ -100,10 +142,16 @@ export default async function handler(req, res) {
     const usuario = await usuarioLogado(base, anon, token)
     if (!usuario) return res.status(401).json({ error: 'Entre na sua conta' })
     if (excedeuLimite('precos', usuario)) return res.status(429).json({ error: 'Muitas consultas em pouco tempo. Aguarde um minuto e tente de novo.' })
-    const corpo = await emCache('precos', `${tipo}|${codigo}|${uf}|${de}|${ate}`, 10 * 60_000, async () => {
+    // A fonte é consultada uma vez por item, UF e período; os demais filtros valem sobre as compras guardadas,
+    // e o resumo (mediana, marcas) é refeito só com as compras que passaram no filtro.
+    const base10 = await emCache('precos', `${tipo}|${codigo}|${uf}|${de}|${ate}`, 10 * 60_000, async () => {
       const { todas, incompleto } = await buscarCompras(tipo, codigo, { uf, de, ate })
-      return { tipo, codigo, incompleto, ...resumirPrecos(todas) }
+      const linhas = todas.map(linhaDeCompra).filter(precoValido).sort((a, b) => String(b.data).localeCompare(String(a.data)))
+      return { incompleto, linhas, opcoes: opcoesFiltro(linhas) }
     })
+    const filtros = lerFiltrosPreco(q)
+    const filtradas = temFiltroPreco(filtros) ? filtrarLinhas(base10.linhas, filtros) : base10.linhas
+    const corpo = { tipo, codigo, incompleto: base10.incompleto, semFiltro: base10.linhas.length, opcoes: base10.opcoes, ...resumirLinhas(filtradas) }
     // Todas as propostas (não só a homologada) das compras que alguém trouxe do Compras.gov.br pelo botão favorito.
     const guardadas = await propostasGuardadas(base, anon, token, corpo.compras.map((c) => c.idCompra))
     guardarNoNavegador(res, 600)

@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
-import { CalendarRange, MapPin, Package, Search, Tag, Wrench } from 'lucide-react'
+import { Building2, CalendarRange, Coins, Gavel, MapPin, Package, Ruler, Search, Tag, Wrench } from 'lucide-react'
 import MenuFiltros, { ChipFiltro, SecaoFiltro } from '@/components/MenuFiltros'
 import BotaoInverterOrdem from '@/components/BotaoInverterOrdem'
 import { Badge, Button, CabecalhoPagina, Card, Carregando, Input, Select, Vazio } from '@/components/ui'
-import { buscarCatalogo, historicoPrecos, type ItemCatalogo } from '@/lib/precos'
+import { buscarCatalogo, CHAVES_FILTRO_PRECO, historicoPrecos, MODALIDADES_SIASG, type FiltrosPreco, type HistoricoPrecos as HistoricoPrecosT, type ItemCatalogo } from '@/lib/precos'
 import { formatarData, formatarMoeda } from '@/lib/format'
 import { normalizar } from '@/lib/portais'
 import CartaoCompraPreco from '@/components/CartaoCompraPreco'
@@ -37,6 +37,21 @@ export default function HistoricoPrecos() {
     ? { tipo: sp.get('item')![0] === 'S' ? 'S' : 'M', codigo, nome: sp.get('nome') ?? `Item ${codigo}`, classe: sp.get('classe') ?? '' } : null
   const umAno = new Date(); umAno.setFullYear(umAno.getFullYear() - 1)
   const filtros = { uf: UFS.includes(sp.get('uf') ?? '') ? sp.get('uf')! : '', de: dataDe(sp.get('de'), iso(umAno)), ate: dataDe(sp.get('ate'), iso(new Date())) }
+  // Demais filtros (modalidade, unidade, município, órgão, fornecedor, marca, preço, quantidade): valem sobre as compras consultadas.
+  const extras = Object.fromEntries(CHAVES_FILTRO_PRECO.map((k) => [k, sp.get(k) ?? ''])) as FiltrosPreco
+  type Rascunho = typeof filtros & FiltrosPreco
+  const doEndereco = (): Rascunho => ({ ...filtros, ...extras })
+  // Na janela de filtros as escolhas ficam num rascunho; "Aplicar e buscar" leva ao endereço (e à consulta).
+  const [rascunho, setRascunho] = useState<Rascunho>(doEndereco)
+  const chaveEndereco = sp.toString()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => setRascunho(doEndereco()), [chaveEndereco])
+  const alternar = (k: 'mod' | 'un', v: string) => setRascunho((r) => {
+    const atual = r[k] ? r[k].split(',') : []
+    return { ...r, [k]: (atual.includes(v) ? atual.filter((x) => x !== v) : [...atual, v]).join(',') }
+  })
+  const extrasAtivos = (extras.mod ? 1 : 0) + (extras.un ? 1 : 0) + [extras.mun, extras.org, extras.forn, extras.marca, extras.pmin || extras.pmax, extras.qmin, extras.commarca].filter(Boolean).length
+  const limparTudo = () => mudar({ uf: null, ...Object.fromEntries(CHAVES_FILTRO_PRECO.map((k) => [k, null])), pg: null })
   const refino = sp.get('r') ?? '', antigasPrimeiro = sp.get('ordem') === 'antigas'
   const [termo, setTermo] = useState(pesquisa?.termo ?? ''), [tipo, setTipo] = useState<Tipo>(pesquisa?.tipo ?? '')
 
@@ -52,7 +67,8 @@ export default function HistoricoPrecos() {
   const setAntigasPrimeiro = (v: boolean) => mudar({ ordem: v ? 'antigas' : null, pg: null })
 
   const catalogo = useQuery({ queryKey: ['catalogo', pesquisa], enabled: !!pesquisa, ...GUARDA, retry: 1, queryFn: ({ signal }) => buscarCatalogo(pesquisa!.termo, pesquisa!.tipo, signal) })
-  const precos = useQuery({ queryKey: ['precos', item?.tipo, item?.codigo, filtros], enabled: !!item, ...GUARDA, retry: 1, queryFn: ({ signal }) => historicoPrecos(item!, filtros, signal) })
+  const precos = useQuery<HistoricoPrecosT>({ queryKey: ['precos', item?.tipo, item?.codigo, filtros, extras], enabled: !!item, ...GUARDA, retry: 1, // Ao mudar só os filtros, a tela fica com o resultado anterior até chegar o novo (trocar de item limpa).
+    placeholderData: (anterior: HistoricoPrecosT | undefined, consulta) => consulta?.queryKey[2] === item?.codigo ? anterior : undefined, queryFn: ({ signal }) => historicoPrecos(item!, { ...filtros, ...extras }, signal) })
 
   // Rolagem: guarda ao sair da página e devolve quando a lista já está na tela.
   const restaurou = useRef(false)
@@ -126,22 +142,57 @@ export default function HistoricoPrecos() {
               })}
             </div>
             <span className="text-xs text-muted-foreground">Atualiza ao mudar.</span>
-            <MenuFiltros className="sm:ml-auto" colunas={2} ativos={filtros.uf ? 1 : 0} aoLimpar={() => setFiltros((f) => ({ ...f, uf: '' }))}>
-              <SecaoFiltro icone={MapPin} cor="azul" titulo="Estado do órgão" descricao={filtros.uf ? `Só ${filtros.uf}` : 'Brasil inteiro'}>
-                <div className="grid grid-cols-6 gap-1.5"><ChipFiltro ativo={!filtros.uf} onClick={() => setFiltros((f) => ({ ...f, uf: '' }))} className="col-span-2 rounded-md">Todos</ChipFiltro>
-                  {UFS.map((u) => <ChipFiltro key={u} ativo={filtros.uf === u} onClick={() => setFiltros((f) => ({ ...f, uf: f.uf === u ? '' : u }))} className="rounded-md px-1">{u}</ChipFiltro>)}</div>
+            <MenuFiltros className="sm:ml-auto" colunas={2} ativos={(filtros.uf ? 1 : 0) + extrasAtivos} aoLimpar={limparTudo}
+              rodape={(fechar) => <button type="button" onClick={() => {
+                const r = rascunho
+                mudar({ uf: r.uf || null, de: r.de, ate: r.ate, ...Object.fromEntries(CHAVES_FILTRO_PRECO.map((k) => [k, r[k].trim() || null])), pg: null })
+                fechar()
+              }} className="inline-flex h-10 items-center rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground hover:bg-primary/90 sm:h-9">Aplicar e buscar</button>}>
+              <SecaoFiltro icone={MapPin} cor="azul" titulo="Estado do órgão" descricao={rascunho.uf ? `Só ${rascunho.uf}` : 'Brasil inteiro'}>
+                <div className="grid grid-cols-6 gap-1.5"><ChipFiltro ativo={!rascunho.uf} onClick={() => setRascunho((r) => ({ ...r, uf: '', mun: '' }))} className="col-span-2 rounded-md">Todos</ChipFiltro>
+                  {UFS.map((u) => <ChipFiltro key={u} ativo={rascunho.uf === u} onClick={() => setRascunho((r) => ({ ...r, uf: r.uf === u ? '' : u, mun: '' }))} className="rounded-md px-1">{u}</ChipFiltro>)}</div>
               </SecaoFiltro>
+              {filtros.uf && !!precos.data?.opcoes?.municipios.length && rascunho.uf === filtros.uf &&
+                <SecaoFiltro icone={MapPin} cor="azul" titulo={`Município (${filtros.uf})`} descricao="Cidades com compras no período">
+                  <div className="flex max-h-40 flex-wrap gap-1.5 overflow-y-auto"><ChipFiltro ativo={!rascunho.mun} onClick={() => setRascunho((r) => ({ ...r, mun: '' }))} className="rounded-md">Todos</ChipFiltro>
+                    {precos.data.opcoes.municipios.map((m) => <ChipFiltro key={m.valor} ativo={rascunho.mun === m.valor} onClick={() => setRascunho((r) => ({ ...r, mun: r.mun === m.valor ? '' : m.valor }))} className="rounded-md">{m.valor} · {m.n}</ChipFiltro>)}</div>
+                </SecaoFiltro>}
               <SecaoFiltro icone={CalendarRange} cor="verde" titulo="Período personalizado" descricao="Compras dos últimos 6 anos">
                 <div className="grid grid-cols-2 gap-2 px-1">
-                  <label className="text-xs"><span className="mb-1 block font-medium">Compras de</span><Input type="date" value={filtros.de} min={limiteAntigo} max={filtros.ate} onChange={(e) => setFiltros((f) => ({ ...f, de: e.target.value < limiteAntigo ? limiteAntigo : e.target.value }))} /></label>
-                  <label className="text-xs"><span className="mb-1 block font-medium">Até</span><Input type="date" value={filtros.ate} min={filtros.de} onChange={(e) => setFiltros((f) => ({ ...f, ate: e.target.value }))} /></label>
+                  <label className="text-xs"><span className="mb-1 block font-medium">Compras de</span><Input type="date" value={rascunho.de} min={limiteAntigo} max={rascunho.ate} onChange={(e) => setRascunho((r) => ({ ...r, de: e.target.value < limiteAntigo ? limiteAntigo : e.target.value }))} /></label>
+                  <label className="text-xs"><span className="mb-1 block font-medium">Até</span><Input type="date" value={rascunho.ate} min={rascunho.de} onChange={(e) => setRascunho((r) => ({ ...r, ate: e.target.value }))} /></label>
+                </div>
+              </SecaoFiltro>
+              <SecaoFiltro icone={Gavel} cor="violeta" titulo="Modalidade da compra" descricao={rascunho.mod ? `${rascunho.mod.split(',').length} marcada(s)` : 'Todas'}>
+                <div className="flex flex-wrap gap-1.5">{(precos.data?.opcoes?.modalidades.length ? precos.data.opcoes.modalidades : Object.keys(MODALIDADES_SIASG).map((m) => ({ valor: Number(m), n: 0 }))).map((m) =>
+                  <ChipFiltro key={m.valor} ativo={rascunho.mod.split(',').includes(String(m.valor))} onClick={() => alternar('mod', String(m.valor))} className="rounded-md">{MODALIDADES_SIASG[m.valor] ?? `Modalidade ${m.valor}`}{m.n ? ` · ${m.n}` : ''}</ChipFiltro>)}</div>
+              </SecaoFiltro>
+              {!!precos.data?.opcoes?.unidades.length && <SecaoFiltro icone={Ruler} cor="ambar" titulo="Unidade de fornecimento" descricao="Compare preços na mesma unidade (UN, CX, PCT…)">
+                <div className="flex flex-wrap gap-1.5">{precos.data.opcoes.unidades.map((u) =>
+                  <ChipFiltro key={u.valor} ativo={rascunho.un.split(',').includes(u.valor)} onClick={() => alternar('un', u.valor)} className="rounded-md">{u.valor} · {u.n}</ChipFiltro>)}</div>
+              </SecaoFiltro>}
+              <SecaoFiltro icone={Coins} cor="verde" titulo="Preço unitário e quantidade" descricao="Tire valores fora da curva ou compras pequenas">
+                <div className="grid grid-cols-3 gap-2 px-1">
+                  <label className="text-xs"><span className="mb-1 block font-medium">Preço mín. (R$)</span><Input inputMode="decimal" value={rascunho.pmin} onChange={(e) => setRascunho((r) => ({ ...r, pmin: e.target.value }))} /></label>
+                  <label className="text-xs"><span className="mb-1 block font-medium">Preço máx. (R$)</span><Input inputMode="decimal" value={rascunho.pmax} onChange={(e) => setRascunho((r) => ({ ...r, pmax: e.target.value }))} /></label>
+                  <label className="text-xs"><span className="mb-1 block font-medium">Qtd. mínima</span><Input inputMode="numeric" value={rascunho.qmin} onChange={(e) => setRascunho((r) => ({ ...r, qmin: e.target.value }))} /></label>
+                </div>
+              </SecaoFiltro>
+              <SecaoFiltro icone={Building2} cor="rosa" titulo="Órgão, fornecedor e marca" descricao="Parte do nome, CNPJ ou UASG">
+                <div className="space-y-2 px-1">
+                  <Input aria-label="Órgão comprador" placeholder="Órgão ou UASG (ex.: Exército, 160001)" value={rascunho.org} maxLength={80} onChange={(e) => setRascunho((r) => ({ ...r, org: e.target.value }))} />
+                  <Input aria-label="Fornecedor" placeholder="Fornecedor ou CNPJ" value={rascunho.forn} maxLength={80} onChange={(e) => setRascunho((r) => ({ ...r, forn: e.target.value }))} />
+                  <Input aria-label="Marca" placeholder="Marca (ex.: Chamex, Report)" value={rascunho.marca} maxLength={80} onChange={(e) => setRascunho((r) => ({ ...r, marca: e.target.value }))} />
+                  <ChipFiltro ativo={rascunho.commarca === '1'} onClick={() => setRascunho((r) => ({ ...r, commarca: r.commarca === '1' ? '' : '1' }))} className="rounded-md">Só compras com marca informada</ChipFiltro>
                 </div>
               </SecaoFiltro>
             </MenuFiltros>
           </Card>
 
           {precos.isLoading ? <Carregando texto="Consultando os preços…" /> : precos.isError ? <Card className="p-4 text-sm">{(precos.error as Error).message} <button className="font-semibold text-primary underline" onClick={() => precos.refetch()}>Tentar novamente</button></Card> : precos.data && <>
-            {precos.data.total === 0 ? <Vazio titulo="Nenhuma compra no período" texto="Amplie o período ou tire o filtro de UF." /> : <>
+            {precos.data.total === 0 ? extrasAtivos > 0 && precos.data.semFiltro
+              ? <Card className="p-6 text-center text-sm"><p className="font-semibold">Nenhuma das {precos.data.semFiltro} compras do período passou nos filtros</p><button type="button" onClick={limparTudo} className="mt-2 font-semibold text-primary underline">Limpar filtros</button></Card>
+              : <Vazio titulo="Nenhuma compra no período" texto="Amplie o período ou tire o filtro de UF." /> : <>
               <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {precos.data.unidades.slice(0, 3).map((u) => (
                   <Card key={u.unidade} className="p-5">
@@ -156,10 +207,10 @@ export default function HistoricoPrecos() {
                   </Card>
                 ))}
               </div>
-              {precos.data.marcas.length > 0 && <div className="mb-5"><p className="mb-2 text-sm font-medium">Marcas mais vendidas</p><div className="flex flex-wrap gap-2">{precos.data.marcas.map((m) => <Badge key={m.marca} cor="azul">{m.marca} · {m.n}</Badge>)}</div></div>}
+              {precos.data.marcas.length > 0 && <div className="mb-5"><p className="mb-2 text-sm font-medium">Marcas mais vendidas</p><div className="flex flex-wrap gap-2">{precos.data.marcas.map((m) => <button key={m.marca} type="button" title={`Ver só ${m.marca}`} onClick={() => mudar({ marca: extras.marca === m.marca ? null : m.marca, pg: null })}><Badge cor={extras.marca === m.marca ? 'verde' : 'azul'}>{m.marca} · {m.n}</Badge></button>)}</div></div>}
               <Card className="p-4 sm:p-5">
                 <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <h2 className="font-semibold">Compras ({compras.length}{precos.data.compras.length < precos.data.total ? ` das ${precos.data.compras.length} mais recentes` : ''})</h2>
+                  <h2 className="font-semibold">Compras ({compras.length}{precos.data.compras.length < precos.data.total ? ` das ${precos.data.compras.length} mais recentes` : ''}){extrasAtivos > 0 && precos.data.semFiltro ? <span className="ml-1 text-sm font-normal text-muted-foreground">· {precos.data.total} de {precos.data.semFiltro} passaram nos filtros</span> : null}</h2>
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                     <BotaoInverterOrdem invertido={antigasPrimeiro} aoMudar={setAntigasPrimeiro} normal="Mais recentes primeiro" inverso="Mais antigas primeiro" />
                     <Input className="sm:w-72" placeholder="Filtrar por descrição, marca ou fornecedor" value={refino} onChange={(e) => setRefino(e.target.value)} />

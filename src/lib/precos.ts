@@ -17,7 +17,15 @@ export interface PropostaPreco {
 export interface HistoricoPrecos {
   tipo: 'M' | 'S'; codigo: number; incompleto: boolean; total: number
   unidades: EstatisticaUnidade[]; marcas: { marca: string; n: number }[]; compras: CompraPreco[]
+  /** Compras consultadas antes dos filtros (o total já vem filtrado). */
+  semFiltro?: number
+  /** Valores que existem nas compras consultadas, para os chips dos filtros. */
+  opcoes?: { modalidades: { valor: number; n: number }[]; unidades: { valor: string; n: number }[]; municipios: { valor: string; n: number }[] }
 }
+
+/** Filtros do histórico que valem sobre as compras consultadas, com as chaves do endereço da página. */
+export const CHAVES_FILTRO_PRECO = ['mod', 'un', 'mun', 'org', 'forn', 'marca', 'pmin', 'pmax', 'qmin', 'commarca'] as const
+export type FiltrosPreco = Record<(typeof CHAVES_FILTRO_PRECO)[number], string>
 
 /**
  * Nomes do dia a dia que o catálogo do governo chama de outro jeito (ex.: o papel A4 é "PAPEL PARA IMPRESSÃO
@@ -59,7 +67,7 @@ export async function buscarCatalogo(termo: string, tipo: '' | 'M' | 'S', signal
   return { ...data, data: [...extras, ...(data.data as ItemCatalogo[]).filter((i) => !chaves.has(`${i.tipo}${i.codigo}`))] }
 }
 
-export async function historicoPrecos(item: Pick<ItemCatalogo, 'tipo' | 'codigo'>, filtros: { uf: string; de: string; ate: string }, signal?: AbortSignal): Promise<HistoricoPrecos> {
+export async function historicoPrecos(item: Pick<ItemCatalogo, 'tipo' | 'codigo'>, filtros: Record<string, string>, signal?: AbortSignal): Promise<HistoricoPrecos> {
   const { data } = await supabase.auth.getSession()
   if (!data.session) throw new Error('Entre na sua conta para consultar preços.')
   const qs = new URLSearchParams({ tipo: item.tipo, codigo: String(item.codigo) })
@@ -71,7 +79,7 @@ export async function historicoPrecos(item: Pick<ItemCatalogo, 'tipo' | 'codigo'
   return corpo as HistoricoPrecos
 }
 
-const MODALIDADES_SIASG: Record<number, string> = { 1: 'Convite', 2: 'Tomada de preços', 3: 'Concorrência', 4: 'Concurso', 5: 'Pregão eletrônico', 6: 'Dispensa', 7: 'Inexigibilidade', 20: 'Concorrência eletrônica', 22: 'Leilão' }
+export const MODALIDADES_SIASG: Record<number, string> ={ 1: 'Convite', 2: 'Tomada de preços', 3: 'Concorrência', 4: 'Concurso', 5: 'Pregão eletrônico', 6: 'Dispensa', 7: 'Inexigibilidade', 20: 'Concorrência eletrônica', 22: 'Leilão' }
 /** Nome da modalidade (código do Compras.gov) e número/ano da compra a partir do código idCompra (UASG+modalidade+número+ano). */
 export function identificacaoCompra(idCompra: string, modalidade: number | null) {
   const m = /^(\d{6})(\d{2})(\d{5})(\d{4})$/.exec(idCompra)

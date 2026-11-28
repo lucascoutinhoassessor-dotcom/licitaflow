@@ -53,3 +53,36 @@ describe('código da compra', () => {
     expect(idCompraDe({})).toBe('')
   })
 })
+
+describe('filtros do histórico de preços', () => {
+  beforeEach(() => { process.env.SUPABASE_URL = 'https://exemplo.supabase.co'; process.env.SUPABASE_ANON_KEY = 'anon' })
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('filtra modalidade, unidade, município, fornecedor, marca, preço e quantidade e refaz a mediana', async () => {
+    const lista = [
+      compra({ precoUnitario: 10, modalidade: 5, municipio: 'Campinas', marca: 'BIC' }),
+      compra({ precoUnitario: 12, modalidade: 5, municipio: 'São Paulo', marca: 'Pilot', nomeFornecedor: 'Papelaria Central', quantidade: 100 }),
+      compra({ precoUnitario: 30, modalidade: 6, municipio: 'Campinas', marca: 'null', siglaUnidadeFornecimento: 'CX' }),
+    ]
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => url.includes('/auth/v1/user') ? new Response('{"id":"u"}') : new Response(JSON.stringify({ resultado: lista, totalPaginas: 1 }))))
+    const pedir = async (extra: Record<string, string>) => {
+      const res = resposta()
+      await handler({ method: 'GET', headers: { authorization: 'Bearer t' }, query: { tipo: 'M', codigo: '777', ...extra } }, res)
+      return res.json.mock.calls[0][0]
+    }
+    const tudo = await pedir({})
+    expect(tudo.total).toBe(3)
+    expect(tudo.opcoes.modalidades).toEqual([{ valor: 5, n: 2 }, { valor: 6, n: 1 }])
+    expect(tudo.opcoes.municipios[0]).toEqual({ valor: 'Campinas', n: 2 })
+    expect((await pedir({ mod: '6' })).compras.map((c: { preco: number }) => c.preco)).toEqual([30])
+    expect((await pedir({ un: 'UN' })).unidades).toEqual([expect.objectContaining({ unidade: 'UN', n: 2, mediana: 11 })])
+    expect((await pedir({ mun: 'sao paulo' })).total).toBe(1)
+    expect((await pedir({ forn: 'central' })).total).toBe(1)
+    expect((await pedir({ marca: 'bic' })).total).toBe(1)
+    expect((await pedir({ commarca: '1' })).total).toBe(2)
+    expect((await pedir({ pmin: '11', pmax: '20' })).total).toBe(1)
+    const qtd = await pedir({ qmin: '50' })
+    expect(qtd.total).toBe(1)
+    expect(qtd.semFiltro).toBe(3)
+  })
+})
